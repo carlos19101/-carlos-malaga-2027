@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseNumber, parseClock, parseDate, parseCSV } from './parse';
+import { parseNumber, parseClock, parseDate, parseCSV, resolveLogSession } from './parse';
 
 describe('parseNumber — locale pl-PL', () => {
   it('przecinek dziesiętny', () => expect(parseNumber('11,17')).toBe(11.17));
@@ -31,5 +31,20 @@ describe('parseDate', () => {
 describe('parseCSV', () => {
   it('obsługuje przecinek wewnątrz cudzysłowu', () => {
     expect(parseCSV('A,B\n"11,17",x\n')[0]).toEqual({ A: '11,17', B: 'x' });
+  });
+});
+describe('resolveLogSession — exact aliases + legacy schema', () => {
+  const aliases = ['session', 'trening', 'type', 'typ treningu', 'activity', 'rodzaj treningu'];
+
+  it('czyta exact-match Typ treningu', () => {
+    expect(resolveLogSession({ Data: '20.08.2026', Godzina: '07:50', 'Typ treningu': 'Bieg' }, aliases)).toBe('Bieg');
+  });
+
+  it('czyta exact-match Activity', () => {
+    expect(resolveLogSession({ Date: '20.08.2026', Time: '', Activity: 'Siła' }, aliases)).toBe('Siła');
+  });
+
+  it('używa trzeciej kolumny tylko jako fallback legacy', () => {
+    expect(resolveLogSession({ Data: '21.08.2026', Godzina: '', 'Rodzaj aktywności': 'Recovery' }, aliases)).toBe('Recovery');
   });
 });

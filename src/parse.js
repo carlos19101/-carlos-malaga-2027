@@ -108,3 +108,19 @@ export function parseDate(value) {
   if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
   return d;
 }
+
+// Training Log historically used the third CSV column for activity type.
+// Keep exact-match aliases as the primary source, then use this bounded
+// positional fallback only for the session label in the Training Log.
+export function resolveLogSession(row, aliases = []) {
+  if (!row || typeof row !== 'object') return '';
+  const wanted = new Set(aliases.map(normalize));
+  const exactKey = Object.keys(row).find((key) => wanted.has(normalize(key)));
+  if (exactKey) {
+    const exact = String(row[exactKey] ?? '').trim();
+    if (exact) return exact;
+  }
+
+  const legacy = Object.values(row)[2];
+  return String(legacy ?? '').trim();
+}

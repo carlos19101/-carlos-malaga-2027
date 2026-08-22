@@ -393,7 +393,8 @@ tbody tr:last-child td { border-bottom: 0; }
   .zone-hero h1,
   .section-hero h1 { font-size: clamp(1.5rem, 7vw, 2.1rem); line-height: 1.02; letter-spacing: -.045em; }
   .hero-panel .hero-copy p { display: none; }
-  .hero-orbit { width: 96px; height: 96px; right: -20px; bottom: -16px; opacity: .5; border-width: 8px; }
+  .hero-with-orbit .hero-copy { padding-right: 72px; }
+  .hero-orbit { width: 88px; height: 88px; right: -30px; bottom: -18px; opacity: .42; border-width: 7px; }
   .hero-orbit b { font-size: 1.1rem; }
   .eyebrow { margin-bottom: 8px; font-size: .62rem; }
   .section-block { margin-bottom: 38px; }

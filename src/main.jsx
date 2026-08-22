@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { normalize, parseCSV, parseDate, parseMetric, parseNumber } from './parse';
+import { normalize, parseCSV, parseDate, parseMetric, parseNumber, resolveLogSession } from './parse';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
@@ -32,7 +32,7 @@ const FIELD_ALIASES = {
   rhr: ['rhr', 'resting hr', 'resting heart rate', 'tetno spoczynkowe'],
   weight: ['weight', 'waga', 'body weight', 'masa'],
   steps: ['steps', 'kroki'],
-  session: ['session', 'workout', 'training', 'trening', 'nazwa', 'title', 'zadanie'],
+  session: ['session', 'workout', 'training', 'trening', 'nazwa', 'title', 'zadanie', 'type', 'typ', 'typ treningu', 'rodzaj', 'rodzaj treningu', 'activity', 'aktywnosc', 'aktywność', 'sport', 'sesja'],
   target: ['target', 'cel', 'focus', 'intensity', 'intensywnosc'],
   notes: ['notes', 'note', 'uwagi', 'opis', 'description'],
   duration: ['duration', 'czas trwania', 'time', 'minutes', 'min'],
@@ -235,7 +235,7 @@ function EmptyState({ title, children }) {
 
 function Hero({ eyebrow, title, children, orbit = true }) {
   return (
-    <section className="hero-panel">
+    <section className={`hero-panel ${orbit ? 'hero-with-orbit' : ''}`}>
       <div className="hero-copy">
         <span className="eyebrow">{eyebrow}</span>
         <h1>{title}</h1>
@@ -360,10 +360,6 @@ function Zones({ feed, log, loading }) {
           );
         })}
       </section>
-      <section className="source-card">
-        <span className="eyebrow">ŹRÓDŁO</span>
-        <p>Mapowanie pól jest jawne i używa wyłącznie exact match. Brak zgodnej kolumny nie może zostać pomylony z inną metryką.</p>
-      </section>
     </>
   );
 }
@@ -392,7 +388,9 @@ function Log({ rows, loading }) {
                 {sorted.map((row, index) => (
                   <tr key={`${getValue(row, 'date', '')}-${index}`}>
                     {columns.map((column) => {
-                      const raw = getValue(row, column.field, '');
+                      const raw = column.field === 'session'
+                        ? resolveLogSession(row, FIELD_ALIASES.session)
+                        : getValue(row, column.field, '');
                       return <td key={column.field}>{raw ? (column.format ? column.format(raw) : raw) : '—'}</td>;
                     })}
                   </tr>
