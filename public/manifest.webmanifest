@@ -1,7 +1,7 @@
 {
   "name": "CARLOS — MÁLAGA 2027",
   "short_name": "CARLOS",
-  "description": "Trening, strefy, log i plan — CARLOS MÁLAGA 2027.",
+  "description": "Decyzja sztabu, regeneracja, obciążenie, trening i plan do Málaga 2027.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

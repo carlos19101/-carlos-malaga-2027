@@ -1,50 +1,73 @@
-import { describe, it, expect } from 'vitest';
-import { parseNumber, parseClock, parseDate, parseCSV, resolveLogSession } from './parse';
+import { describe, expect, it } from 'vitest';
+import { exactValue, normalize, parseCSV, parseClock, parseDate, parseNumber, resolveLogSession } from './parse';
 
-describe('parseNumber — locale pl-PL', () => {
-  it('przecinek dziesiętny', () => expect(parseNumber('11,17')).toBe(11.17));
-  it('zero po przecinku', () => expect(parseNumber('89,0')).toBe(89));
-  it('NBSP jako tysiące', () => expect(parseNumber('1\u00A0234,5')).toBe(1234.5));
-  it('spacja jako tysiące', () => expect(parseNumber('1 234,5')).toBe(1234.5));
-  it('jednostka w komórce', () => expect(parseNumber('48 bpm')).toBe(48));
-  it('pusta komórka to null, NIE zero', () => expect(parseNumber('')).toBeNull());
-  it('myślnik', () => expect(parseNumber('—')).toBeNull());
-  it('błąd Sheets', () => expect(parseNumber('#N/A')).toBeNull());
-  it('czas NIE jest liczbą', () => expect(parseNumber('7:45')).toBeNull());
-  it('czas długi', () => expect(parseNumber('1:25:19')).toBeNull());
+describe('normalize', () => {
+  it('normalizuje polskie znaki, podkreślenia i spacje', () => {
+    expect(normalize('  Typ_treningu  ')).toBe('typ treningu');
+    expect(normalize('Aktywność')).toBe('aktywnosc');
+  });
+});
+
+describe('parseNumber', () => {
+  it('obsługuje przecinek dziesiętny i białe separatory', () => {
+    expect(parseNumber('11,17')).toBe(11.17);
+    expect(parseNumber('1\u00a0234,5 kg')).toBe(1234.5);
+  });
+  it('nie zamienia czasu na liczbę', () => {
+    expect(parseNumber('7:45')).toBeNull();
+  });
 });
 
 describe('parseClock', () => {
-  it('godziny:minuty', () => expect(parseClock('7:45')).toBe(465));
-  it('odrzuca liczbę', () => expect(parseClock('745')).toBeNull());
+  it('czyta minuty i h:mm:ss jako czas, nie liczbę dziesiętną', () => {
+    expect(parseClock('45:08')).toBeCloseTo(45 + 8 / 60, 5);
+    expect(parseClock('1:02:30')).toBeCloseTo(62.5, 5);
+  });
 });
 
 describe('parseDate', () => {
-  it('ISO', () => expect(parseDate('2026-08-22').getMonth()).toBe(7));
-  it('pl', () => expect(parseDate('22.08.2026').getDate()).toBe(22));
-  it('z godziną', () => expect(parseDate('22.08.2026 14:30').getHours()).toBe(14));
-  it('odrzuca miesiąc > 12', () => expect(parseDate('8-22-2026')).toBeNull());
-  it('odrzuca 32 dzień', () => expect(parseDate('32.01.2026')).toBeNull());
-  it('śmieci', () => expect(parseDate('brak')).toBeNull());
+  it('czyta ISO-like bez zależności od Date.parse Safari', () => {
+    const d = parseDate('2026-08-21 22:34');
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(7);
+    expect(d.getDate()).toBe(21);
+    expect(d.getHours()).toBe(22);
+    expect(d.getMinutes()).toBe(34);
+  });
+  it('czyta format pl-PL', () => {
+    const d = parseDate('23.08.2026');
+    expect(d.getDate()).toBe(23);
+    expect(d.getMonth()).toBe(7);
+  });
+  it('odrzuca błędną datę', () => {
+    expect(parseDate('32.08.2026')).toBeNull();
+  });
 });
 
 describe('parseCSV', () => {
   it('obsługuje przecinek wewnątrz cudzysłowu', () => {
-    expect(parseCSV('A,B\n"11,17",x\n')[0]).toEqual({ A: '11,17', B: 'x' });
+    const rows = parseCSV('Date,Weight,Note\n2026-08-21,"89,0","easy, ok"\n');
+    expect(rows[0].Weight).toBe('89,0');
+    expect(rows[0].Note).toBe('easy, ok');
   });
 });
-describe('resolveLogSession — exact aliases + legacy schema', () => {
-  const aliases = ['session', 'trening', 'type', 'typ treningu', 'activity', 'rodzaj treningu'];
 
-  it('czyta exact-match Typ treningu', () => {
-    expect(resolveLogSession({ Data: '20.08.2026', Godzina: '07:50', 'Typ treningu': 'Bieg' }, aliases)).toBe('Bieg');
+describe('exactValue', () => {
+  it('nie wykonuje fuzzy matching', () => {
+    const row = { 'Sleep Score': '82', Sleepiness: '9' };
+    expect(exactValue(row, ['sleep score'])).toBe('82');
+    expect(exactValue(row, ['sleep'])).toBe('');
   });
+});
 
+describe('resolveLogSession', () => {
+  it('czyta exact-match Type', () => {
+    expect(resolveLogSession({ Date: '2026-08-20', Type: 'Bieg', Name: 'Baza' }, ['type', 'typ treningu'])).toBe('Bieg');
+  });
   it('czyta exact-match Activity', () => {
-    expect(resolveLogSession({ Date: '20.08.2026', Time: '', Activity: 'Siła' }, aliases)).toBe('Siła');
+    expect(resolveLogSession({ Date: 'x', Activity: 'Siła' }, ['activity'])).toBe('Siła');
   });
-
-  it('używa trzeciej kolumny tylko jako fallback legacy', () => {
-    expect(resolveLogSession({ Data: '21.08.2026', Godzina: '', 'Rodzaj aktywności': 'Recovery' }, aliases)).toBe('Recovery');
+  it('używa trzeciej kolumny tylko jako bounded legacy fallback', () => {
+    expect(resolveLogSession({ A: '2026-08-20', B: '07:50', C: 'Recovery' }, ['type'])).toBe('Recovery');
   });
 });

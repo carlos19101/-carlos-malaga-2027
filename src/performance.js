@@ -1,0 +1,204 @@
+import { parseMetric } from './parse.js';
+
+export const MALAGA_RACE = {
+  date: '2027-03-07',
+  distanceKm: 21.0975,
+  anchors: [
+    { id: 'A', seconds: 1 * 3600 + 45 * 60 },
+    { id: 'B', seconds: 1 * 3600 + 50 * 60 },
+    { id: 'C', seconds: 2 * 3600 },
+  ],
+};
+
+function n(value) {
+  return parseMetric(value);
+}
+
+export function normalizeCoachStatus(value) {
+  const raw = String(value ?? '').trim().toUpperCase();
+  return ['GREEN', 'YELLOW', 'RED'].includes(raw) ? raw : '';
+}
+
+export function metricDeltaPercent(current, baseline) {
+  const a = n(current);
+  const b = n(baseline);
+  if (a === null || b === null || b === 0) return null;
+  return ((a - b) / b) * 100;
+}
+
+export function classifyCoachStatus({
+  recovery,
+  sleep,
+  hrv,
+  hrv7d,
+  pain,
+  doms,
+  fatigue,
+  dataOk = true,
+}) {
+  if (!dataOk) {
+    return {
+      status: 'RED',
+      title: 'Najpierw popraw dane',
+      recommendation: 'Nie zwiększaj obciążenia na podstawie niepełnego lub niespójnego odczytu.',
+      reasons: ['brak lub anomalia danych krytycznych'],
+      source: 'fallback',
+    };
+  }
+
+  const recoveryN = n(recovery);
+  const sleepN = n(sleep);
+  const painN = n(pain);
+  const domsN = n(doms);
+  const fatigueN = n(fatigue);
+  const hrvDelta = metricDeltaPercent(hrv, hrv7d);
+  const red = [];
+  const yellow = [];
+
+  if (painN !== null && painN >= 4) red.push(`ból ${painN}/10`);
+  else if (painN !== null && painN > 0) yellow.push(`ból ${painN}/10`);
+
+  if (domsN !== null && domsN >= 8) red.push(`DOMS ${domsN}/10`);
+  else if (domsN !== null && domsN >= 5) yellow.push(`DOMS ${domsN}/10`);
+
+  if (fatigueN !== null && fatigueN >= 8) red.push(`zmęczenie ${fatigueN}/10`);
+  else if (fatigueN !== null && fatigueN >= 5) yellow.push(`zmęczenie ${fatigueN}/10`);
+
+  if (recoveryN !== null && recoveryN < 35) red.push(`Recovery ${Math.round(recoveryN)}%`);
+  else if (recoveryN !== null && recoveryN < 65) yellow.push(`Recovery ${Math.round(recoveryN)}%`);
+
+  if (sleepN !== null && sleepN < 55) red.push(`Sleep ${Math.round(sleepN)}%`);
+  else if (sleepN !== null && sleepN < 75) yellow.push(`Sleep ${Math.round(sleepN)}%`);
+
+  if (hrvDelta !== null && hrvDelta <= -20) red.push(`HRV ${Math.round(hrvDelta)}% vs 7d`);
+  else if (hrvDelta !== null && hrvDelta <= -10) yellow.push(`HRV ${Math.round(hrvDelta)}% vs 7d`);
+
+  if (red.length) {
+    return {
+      status: 'RED',
+      title: 'Regeneracja ma pierwszeństwo',
+      recommendation: 'Odpoczynek albo bardzo lekka aktywność. Bez jakościowego biegu i bez dokładania intensywności.',
+      reasons: red,
+      source: 'fallback',
+    };
+  }
+
+  if (yellow.length) {
+    return {
+      status: 'YELLOW',
+      title: 'Trening tylko kontrolowany',
+      recommendation: 'Trzymaj intensywność nisko i nie dokładaj pracy ponad plan. Akcent tylko po potwierdzeniu świeżości.',
+      reasons: yellow,
+      source: 'fallback',
+    };
+  }
+
+  return {
+    status: 'GREEN',
+    title: 'Plan może iść zgodnie z założeniem',
+    recommendation: 'Realizuj zaplanowaną jednostkę w docelowym HR/RPE, bez dokładania pracy ponad plan.',
+    reasons: ['brak czerwonych lub żółtych sygnałów w dostępnych danych'],
+    source: 'fallback',
+  };
+}
+
+export function resolveCoachDecision({ sheetStatus, sheetDecision, fallbackInput }) {
+  const status = normalizeCoachStatus(sheetStatus);
+  const decision = String(sheetDecision ?? '').trim();
+  if (status) {
+    const titles = {
+      GREEN: 'Plan może iść',
+      YELLOW: 'Kontroluj obciążenie',
+      RED: 'Regeneracja ma pierwszeństwo',
+    };
+    return {
+      status,
+      title: titles[status],
+      recommendation: decision || (status === 'GREEN'
+        ? 'Realizuj zaplanowaną jednostkę bez dokładania pracy ponad plan.'
+        : status === 'YELLOW'
+          ? 'Zachowaj rezerwę i wykonuj tylko pracę kontrolowaną.'
+          : 'Priorytetem jest regeneracja; bez dokładania intensywności.'),
+      reasons: [],
+      source: 'head-coach',
+    };
+  }
+  return classifyCoachStatus(fallbackInput);
+}
+
+function startOfDay(value) {
+  const d = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function summarizeLoad(records, now = new Date()) {
+  const today = startOfDay(now);
+  if (!today) return { sum7: 0, sum28: 0, sessions7: 0, sessions28: 0, ratio: null, enoughForRatio: false };
+  const day = 86400000;
+  const valid = records
+    .map((r) => ({ date: startOfDay(r.date), srpe: n(r.srpe) }))
+    .filter((r) => r.date && r.srpe !== null && r.srpe >= 0 && r.date <= today);
+
+  const inWindow = (r, days) => (today - r.date) / day < days;
+  const rows7 = valid.filter((r) => inWindow(r, 7));
+  const rows28 = valid.filter((r) => inWindow(r, 28));
+  const sum = (rows) => rows.reduce((acc, r) => acc + r.srpe, 0);
+  const sum7 = sum(rows7);
+  const sum28 = sum(rows28);
+  const spanDays = rows28.length > 1
+    ? Math.round((Math.max(...rows28.map((r) => r.date.getTime())) - Math.min(...rows28.map((r) => r.date.getTime()))) / day)
+    : 0;
+  const enoughForRatio = rows28.length >= 6 && spanDays >= 14 && sum28 > 0;
+  const weekly28 = sum28 / 4;
+  const ratio = enoughForRatio && weekly28 > 0 ? sum7 / weekly28 : null;
+  return { sum7, sum28, sessions7: rows7.length, sessions28: rows28.length, ratio, enoughForRatio };
+}
+
+export function sourceFreshness(sourceDate, now = new Date(), staleHours = 36) {
+  const src = sourceDate instanceof Date ? sourceDate : new Date(sourceDate);
+  const current = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(src.getTime()) || Number.isNaN(current.getTime())) return { state: 'unknown', ageHours: null };
+  const ageHours = (current - src) / 3600000;
+  if (ageHours < -0.25) return { state: 'future', ageHours };
+  if (ageHours > staleHours) return { state: 'stale', ageHours };
+  return { state: 'fresh', ageHours };
+}
+
+export function daysUntilRace(now = new Date(), raceDate = MALAGA_RACE.date) {
+  const current = startOfDay(now);
+  const target = startOfDay(`${raceDate}T12:00:00`);
+  if (!current || !target) return null;
+  return Math.max(0, Math.ceil((target - current) / 86400000));
+}
+
+function formatDuration(seconds) {
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function formatPace(secondsPerKm) {
+  const total = Math.round(secondsPerKm);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}/km`;
+}
+
+export function raceGoalMatrix() {
+  return MALAGA_RACE.anchors.map((goal) => {
+    const pace = goal.seconds / MALAGA_RACE.distanceKm;
+    const split = (km) => formatDuration(goal.seconds * km / MALAGA_RACE.distanceKm);
+    return {
+      id: goal.id,
+      finish: formatDuration(goal.seconds),
+      pace: formatPace(pace),
+      km5: split(5),
+      km10: split(10),
+      km15: split(15),
+    };
+  });
+}
