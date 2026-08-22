@@ -1,18 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CARLOS Málaga 2027">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CARLOS">
   <defs>
-    <radialGradient id="bg" cx="28%" cy="18%" r="88%">
-      <stop offset="0" stop-color="#222938"/>
-      <stop offset="0.55" stop-color="#0d1118"/>
-      <stop offset="1" stop-color="#050608"/>
-    </radialGradient>
-    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffcf4a"/>
-      <stop offset="0.55" stop-color="#ff7a1a"/>
-      <stop offset="1" stop-color="#ff3d54"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#392d23"/>
+      <stop offset="1" stop-color="#17151a"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
-  <circle cx="256" cy="256" r="170" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="28"/>
-  <path d="M352 174c-25-29-58-44-99-44-74 0-128 52-128 126 0 75 54 128 130 128 43 0 78-16 103-47l-48-38c-14 18-31 27-54 27-39 0-66-28-66-70 0-41 27-68 65-68 21 0 39 8 53 25z" fill="url(#accent)"/>
-  <path d="M329 304h73l-36 63z" fill="#78f5ba"/>
+  <rect width="512" height="512" rx="128" fill="#07090d"/>
+  <rect x="42" y="42" width="428" height="428" rx="112" fill="url(#bg)" stroke="#51483f" stroke-width="10"/>
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#ff7b2a" stroke-width="24" stroke-dasharray="220 710" transform="rotate(-38 256 256)"/>
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#64d8a2" stroke-width="24" stroke-dasharray="135 795" transform="rotate(104 256 256)"/>
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#58c5e8" stroke-width="24" stroke-dasharray="110 820" transform="rotate(156 256 256)"/>
+  <text x="256" y="326" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="210" font-weight="900" fill="#ffd34e">C</text>
 </svg>

@@ -1,61 +1,30 @@
 # CARLOS — MÁLAGA 2027
 
-React + Vite PWA w stylistyce premium dark inspirowanej aplikacjami treningowymi klasy Whoop / Apple Fitness. Aplikacja agreguje dane treningowe z Google Sheets i pokazuje je w czterech zakładkach: **Dashboard**, **Strefy**, **Log** i **Plan**.
+PWA React/Vite do monitorowania treningu i regeneracji zasilana Google Sheets.
 
 ## Dane
 
-Źródło danych:
+- `APP_FEED`
+- `Training Log`
+- `Plan`
+- Google Sheet ID: `1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM`
 
-- Google Sheets ID: `1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM`
-- główny arkusz: `APP_FEED`
-- dodatkowe arkusze: `Training Log`, `Plan`
+Aplikacja pobiera CSV przez Google `gviz`, używa `cache: no-store`, parametru cache-busting, timeoutu `AbortController`, last-known-good w `localStorage` i jawnego mapowania pól exact-match.
 
-Aplikacja pobiera każdy arkusz jako CSV przez publiczny endpoint Google Visualization (`gviz`). Każde żądanie używa parametru cache-busting oraz `cache: no-store`.
-
-Arkusz musi być dostępny do odczytu przez link / publicznie. Projekt nie wymaga i nie zawiera haseł, tokenów, kluczy API ani innych sekretów.
-
-## Odświeżanie
-
-Dane są odświeżane:
-
-1. po pierwszym otwarciu aplikacji,
-2. po powrocie aplikacji na pierwszy plan (`visibilitychange`),
-3. po kliknięciu przycisku **Refresh**.
-
-Błędy pojedynczego arkusza nie blokują pozostałych sekcji — aplikacja zachowuje i wyświetla dane z arkuszy, które udało się pobrać.
-
-## PWA
-
-Projekt zawiera manifest, ikonę SVG i service workera. Service worker buforuje shell aplikacji i statyczne zasoby, ale celowo nie buforuje odpowiedzi Google Sheets, aby dane treningowe mogły pozostać świeże.
-
-## Uruchomienie lokalne
+## Uruchomienie
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Build produkcyjny
+## Testy
 
 ```bash
+npm test
 npm run build
-npm run preview
 ```
 
-Build używa `--base=./`, dzięki czemu statyczne pliki mogą działać również po wdrożeniu pod ścieżką repozytorium (np. GitHub Pages).
+## Ważne
 
-## Struktura
-
-```text
-.
-├── package.json
-├── index.html
-├── README.md
-├── public/
-│   ├── manifest.webmanifest
-│   ├── icon.svg
-│   └── sw.js
-└── src/
-    ├── main.jsx
-    └── styles.css
-```
+Ta wersja realizuje pakiet poprawek integralności danych, offline, iOS safe-area, touch targets, WCAG i service workera. Migracja z publicznego CSV do prywatnego Google Sheet przez uwierzytelnione Vercel API jest kolejnym etapem i nie jest częścią tego patcha.

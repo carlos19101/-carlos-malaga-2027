@@ -7,12 +7,24 @@
     <meta name="color-scheme" content="dark" />
     <meta name="description" content="CARLOS — MÁLAGA 2027: trening, strefy, log i plan w jednej aplikacji PWA." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CARLOS" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
     <title>CARLOS — MÁLAGA 2027</title>
+    <style>
+      html, body { margin: 0; background: #07090d; }
+      #root:empty::before {
+        content: '';
+        display: block;
+        min-height: 100dvh;
+        background:
+          radial-gradient(circle at 18% -4%, rgba(255,123,42,.11), transparent 20rem),
+          #07090d;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
