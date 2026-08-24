@@ -1,9 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { exactKey, exactValue, normalize, parseCSV, parseDate, parseMetric, resolveLogSession } from './parse';
+import {
+  exactKey,
+  exactValue,
+  formatMetricNumber,
+  isRecoveryActivity,
+  normalize,
+  normalizeActivityStatus,
+  parseCSV,
+  parseDate,
+  parseMetric,
+  resolveLogSession,
+  validateDailyFeed,
+} from './parse';
 import {
   daysUntilRace,
   metricDeltaPercent,
+  millisecondsUntilNextLocalMidnight,
   raceGoalMatrix,
   resolveCoachDecision,
   sourceFreshness,
@@ -16,7 +29,6 @@ const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan' };
 const APP_VERSION = 'FINAL 4.0';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
-const AUTO_REFRESH_MS = 90000;
 const MIN_REFRESH_MS = 15000;
 const STALE_AFTER_HOURS = 36;
 
@@ -30,7 +42,9 @@ const TABS = [
 const A = {
   date: ['date', 'data'],
   lastSynced: ['last synced'],
-  recovery: ['recovery', 'readiness'],
+  readiness: ['readiness'],
+  recovery: ['recovery'],
+  bodyBattery: ['body battery', 'body battery score'],
   strain: ['strain'],
   sleep: ['sleep', 'sleep score'],
   hrv: ['hrv'],
@@ -150,34 +164,24 @@ function formatDate(value, withTime = false) {
     : { day: 'numeric', month: 'short' }).format(d);
 }
 
-function formatNumber(value, digits = 0) {
-  const n = parseMetric(value);
-  if (n === null) return '—';
-  return new Intl.NumberFormat('pl-PL', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
-}
-
 function metric(value) {
   const n = parseMetric(value);
   return n === null ? null : n;
 }
 
-function display(value, suffix = '') {
-  if (value === null || value === undefined || String(value).trim() === '') return '—';
-  const raw = String(value).trim();
-  return suffix && !raw.endsWith(suffix) ? `${raw}${suffix}` : raw;
-}
-
 function validateFeed(row) {
-  const missing = [];
-  const suspicious = [];
-  const required = ['recovery', 'sleep', 'hrv', 'rhr', 'weight'];
-  required.forEach((field) => { if (!v(row, field, '')) missing.push(field); });
-  const ranges = { recovery: [0, 100], sleep: [0, 100], hrv: [10, 250], rhr: [30, 120], weight: [50, 160], pain: [0, 10] };
-  Object.entries(ranges).forEach(([field, [lo, hi]]) => {
-    const n = metric(v(row, field, ''));
-    if (n !== null && (n < lo || n > hi)) suspicious.push(`${field}=${n} poza ${lo}–${hi}`);
+  return validateDailyFeed({
+    date: v(row, 'date', ''),
+    status: v(row, 'status', ''),
+    readiness: v(row, 'readiness', ''),
+    recovery: v(row, 'recovery', ''),
+    bodyBattery: v(row, 'bodyBattery', ''),
+    sleep: v(row, 'sleep', ''),
+    hrv: v(row, 'hrv', ''),
+    rhr: v(row, 'rhr', ''),
+    weight: v(row, 'weight', ''),
+    pain: v(row, 'pain', ''),
   });
-  return { ok: missing.length === 0 && suspicious.length === 0, missing, suspicious };
 }
 
 function sourceTime(feedRow) {
@@ -188,14 +192,14 @@ function logLoadRecords(rows) {
   return rows.map((row) => ({ date: rowDate(row), srpe: v(row, 'logSrpe', '') })).filter((r) => r.date);
 }
 
-function getTodayPlan(rows) {
-  const today = new Date();
+function getTodayPlan(rows, now = new Date()) {
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   return rows.find((row) => sameCalendarDay(rowDate(row), today)) || null;
 }
 
-function getUpcomingPlan(rows, limit = 3) {
-  const today = new Date();
+function getUpcomingPlan(rows, limit = 3, now = new Date()) {
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   return sortedRows(rows, 'asc').filter((row) => {
     const d = rowDate(row);
@@ -208,8 +212,26 @@ function StatusChip({ status, children }) {
   return <span className={`status-chip status-${s.toLowerCase() || 'neutral'}`}>{children || s || '—'}</span>;
 }
 
-function Hero({ feedRow }) {
-  const countdown = daysUntilRace();
+function statusTone(status) {
+  if (status === 'DONE' || status === 'GREEN') return 'GREEN';
+  if (status === 'ACTIVE' || status === 'CONDITIONAL' || status === 'YELLOW') return 'YELLOW';
+  if (status === 'RED') return 'RED';
+  return '';
+}
+
+function ActivityBadges({ status, recovery = false }) {
+  const normalizedStatus = normalizeActivityStatus(status);
+  if (!normalizedStatus && !recovery) return null;
+  return (
+    <div className="activity-badges">
+      {normalizedStatus ? <StatusChip status={statusTone(normalizedStatus)}>{normalizedStatus}</StatusChip> : null}
+      {recovery ? <StatusChip status="YELLOW">RECOVERY</StatusChip> : null}
+    </div>
+  );
+}
+
+function Hero({ feedRow, now }) {
+  const countdown = daysUntilRace(now);
   return (
     <section className="race-hero">
       <div>
@@ -229,12 +251,13 @@ function Hero({ feedRow }) {
 function MetricRing({ label, value, note, max = 100, suffix = '%' }) {
   const n = metric(value);
   const progress = n === null ? 0 : Math.max(0, Math.min(100, (n / max) * 100));
+  const formatted = formatMetricNumber(value, { maximumFractionDigits: 0 });
   return (
     <article className="ring-card">
       <div className={`metric-ring ${n === null ? 'metric-empty' : ''}`} style={{ '--progress': `${progress * 3.6}deg` }}>
-        <div><strong>{n === null ? '—' : display(value, suffix)}</strong><span>{label}</span></div>
+        <div><strong>{n === null ? '—' : `${formatted}${suffix}`}</strong><span>{label}</span></div>
       </div>
-      <p>{n === null ? 'brak danych w źródle' : note}</p>
+      <p>{n === null ? 'brak danych' : note}</p>
     </article>
   );
 }
@@ -245,7 +268,7 @@ function StatCard({ label, value, unit = '', note = '', tone = '' }) {
     <article className={`stat-card ${tone ? `tone-${tone}` : ''}`}>
       <span>{label}</span>
       <strong>{empty ? '—' : value}{!empty && unit ? <small> {unit}</small> : null}</strong>
-      <small>{note}</small>
+      <small>{empty ? 'brak danych' : note}</small>
     </article>
   );
 }
@@ -264,7 +287,7 @@ function TodayPlanCard({ row }) {
     <article className="today-plan-card">
       <div className="today-plan-title">
         <div><span>PLAN NA DZIŚ</span><strong>{morning}</strong></div>
-        <StatusChip status={status} />
+        <ActivityBadges status={status} recovery={isRecoveryActivity(morning, status)} />
       </div>
       <div className="today-plan-grid">
         <p><b>Cel HR</b>{v(row, 'planHr', '—')}</p>
@@ -276,12 +299,12 @@ function TodayPlanCard({ row }) {
   );
 }
 
-function Dashboard({ feed, log, plan, loading, freshnessState }) {
+function Dashboard({ feed, log, plan, loading, freshnessState, now }) {
   const row = latestRow(feed);
   const validation = useMemo(() => validateFeed(row), [row]);
-  const loadFallback = useMemo(() => summarizeLoad(logLoadRecords(log)), [log]);
-  const todayPlan = useMemo(() => getTodayPlan(plan), [plan]);
-  const upcoming = useMemo(() => getUpcomingPlan(plan), [plan]);
+  const loadFallback = useMemo(() => summarizeLoad(logLoadRecords(log), now), [log, now]);
+  const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
+  const upcoming = useMemo(() => getUpcomingPlan(plan, 3, now), [plan, now]);
   const matrix = useMemo(() => raceGoalMatrix(), []);
 
   const decision = useMemo(() => resolveCoachDecision({
@@ -300,15 +323,15 @@ function Dashboard({ feed, log, plan, loading, freshnessState }) {
   const ratio = loadFallback.enoughForRatio ? loadFallback.ratio : null;
 
   const sourceSignals = [
-    v(row, 'pain', '') !== '' ? `ból ${v(row, 'pain')}/10` : '',
-    v(row, 'doms', '') !== '' ? `DOMS ${v(row, 'doms')}/10` : '',
-    v(row, 'fatigue', '') !== '' ? `zmęczenie ${v(row, 'fatigue')}/10` : '',
-    hrvDelta !== null ? `HRV ${hrvDelta >= 0 ? '+' : ''}${Math.round(hrvDelta)}% vs 7d` : '',
+    v(row, 'pain', '') !== '' ? `ból ${formatMetricNumber(v(row, 'pain'), { maximumFractionDigits: 1 })}/10` : '',
+    v(row, 'doms', '') !== '' ? `DOMS ${formatMetricNumber(v(row, 'doms'), { maximumFractionDigits: 1 })}/10` : '',
+    v(row, 'fatigue', '') !== '' ? `zmęczenie ${formatMetricNumber(v(row, 'fatigue'), { maximumFractionDigits: 1 })}/10` : '',
+    hrvDelta !== null ? `HRV ${hrvDelta >= 0 ? '+' : ''}${formatMetricNumber(hrvDelta, { maximumFractionDigits: 0 })}% vs 7d` : '',
   ].filter(Boolean);
 
   return (
     <>
-      <Hero feedRow={row} />
+      <Hero feedRow={row} now={now} />
 
       <section className="section-block">
         <div className="section-heading">
@@ -344,13 +367,15 @@ function Dashboard({ feed, log, plan, loading, freshnessState }) {
         ) : null}
         {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : (
           <div className="readiness-grid">
-            <MetricRing label="RECOVERY" value={v(row, 'recovery', '')} note="Garmin readiness / recovery" />
-            <MetricRing label="SLEEP" value={v(row, 'sleep', '')} note="jakość / realizacja snu" />
+            <MetricRing label="READINESS" value={v(row, 'readiness', '')} note="gotowość Garmin" />
+            <MetricRing label="RECOVERY" value={v(row, 'recovery', '')} note="regeneracja" />
+            <MetricRing label="BODY BATTERY" value={v(row, 'bodyBattery', '')} note="energia Garmin" />
             <div className="stats-grid compact-stats">
-              <StatCard label="HRV" value={v(row, 'hrv', '')} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${v(row, 'hrv7d')} ms` : 'nocne HRV'} />
-              <StatCard label="RHR" value={v(row, 'rhr', '')} unit="bpm" note="tętno spoczynkowe" />
-              <StatCard label="WAGA" value={v(row, 'weight', '')} unit="kg" note={v(row, 'weightAvg7d', '') ? `śr. 7d: ${v(row, 'weightAvg7d')} kg` : 'ostatni odczyt'} />
-              <StatCard label="BÓL" value={v(row, 'pain', '')} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
+              <StatCard label="SLEEP" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note="jakość / realizacja snu" />
+              <StatCard label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms` : 'nocne HRV'} />
+              <StatCard label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note="tętno spoczynkowe" />
+              <StatCard label="WAGA" value={formatMetricNumber(v(row, 'weight', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt'} />
+              <StatCard label="BÓL" value={formatMetricNumber(v(row, 'pain', ''), { maximumFractionDigits: 1 })} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
             </div>
           </div>
         )}
@@ -362,12 +387,12 @@ function Dashboard({ feed, log, plan, loading, freshnessState }) {
           <span className="section-aside">sRPE + kilometraż</span>
         </div>
         <div className="load-grid">
-          <StatCard label="BIEG · 7D" value={v(row, 'runKm7d', '')} unit="km" note={`${v(row, 'runCount7d', '—')} biegów`} />
-          <StatCard label="BIEG · 28D" value={v(row, 'runKm28d', '')} unit="km" note="kontekst objętości" />
-          <StatCard label="sRPE · 7D" value={srpe7 ? Math.round(srpe7) : ''} note="wszystkie sesje" />
-          <StatCard label="sRPE · 28D" value={srpe28 ? Math.round(srpe28) : ''} note="wszystkie sesje" />
-          <StatCard label="LOAD RATIO" value={ratio !== null ? ratio.toFixed(2) : ''} note={ratio !== null ? 'informacyjnie: 7d / tyg. ekwiwalent 28d' : 'czeka na dłuższą historię'} />
-          <StatCard label="WAGA · TREND" value={weightDelta !== null ? `${weightDelta >= 0 ? '+' : ''}${formatNumber(weightDelta, 1)}` : ''} unit={weightDelta !== null ? 'kg' : ''} note="śr. 7d vs poprzednie 7d" />
+          <StatCard label="BIEG · 7D" value={formatMetricNumber(v(row, 'runKm7d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatMetricNumber(v(row, 'runCount7d', ''), { maximumFractionDigits: 0, fallback: '—' })} biegów`} />
+          <StatCard label="BIEG · 28D" value={formatMetricNumber(v(row, 'runKm28d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note="kontekst objętości" />
+          <StatCard label="sRPE · 7D" value={srpe7 ? formatMetricNumber(srpe7, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
+          <StatCard label="sRPE · 28D" value={srpe28 ? formatMetricNumber(srpe28, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
+          <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : ''} note={ratio !== null ? 'informacyjnie: 7d / tyg. ekwiwalent 28d' : 'czeka na dłuższą historię'} />
+          <StatCard label="WAGA · TREND" value={weightDelta !== null ? `${weightDelta >= 0 ? '+' : ''}${formatMetricNumber(weightDelta, { maximumFractionDigits: 1, minimumFractionDigits: 1 })}` : ''} unit={weightDelta !== null ? 'kg' : ''} note="śr. 7d vs poprzednie 7d" />
         </div>
         <p className="method-note">Load ratio jest kontekstem, nie automatycznym limitem bezpieczeństwa. Finalny werdykt sztabu ma pierwszeństwo.</p>
       </section>
@@ -375,10 +400,10 @@ function Dashboard({ feed, log, plan, loading, freshnessState }) {
       <section className="section-block">
         <div className="section-heading"><div><span className="eyebrow">OSTATNI BIEG</span><h2>Punkt odniesienia</h2></div></div>
         <article className="last-run-card">
-          <div><span>DYSTANS</span><strong>{display(v(row, 'lastRunDistance', ''), ' km')}</strong></div>
+          <div><span>DYSTANS</span><strong>{v(row, 'lastRunDistance', '') ? `${formatMetricNumber(v(row, 'lastRunDistance'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km` : '—'}</strong></div>
           <div><span>TEMPO</span><strong>{v(row, 'lastRunPace', '—')}</strong></div>
-          <div><span>HR</span><strong>{v(row, 'lastRunHrAvg', '—')} <small>/ {v(row, 'lastRunHrMax', '—')}</small></strong></div>
-          <div><span>RPE</span><strong>{display(v(row, 'lastRunRpe', ''), '/10')}</strong></div>
+          <div><span>HR</span><strong>{formatMetricNumber(v(row, 'lastRunHrAvg', ''), { maximumFractionDigits: 0, fallback: '—' })} <small>/ {formatMetricNumber(v(row, 'lastRunHrMax', ''), { maximumFractionDigits: 0, fallback: '—' })}</small></strong></div>
+          <div><span>RPE</span><strong>{v(row, 'lastRunRpe', '') ? `${formatMetricNumber(v(row, 'lastRunRpe'), { maximumFractionDigits: 1 })}/10` : '—'}</strong></div>
         </article>
       </section>
 
@@ -396,7 +421,7 @@ function Dashboard({ feed, log, plan, loading, freshnessState }) {
           <table className="race-table">
             <thead><tr><th>Anchor</th><th>Meta</th><th>Tempo</th><th>5 km</th><th>10 km</th><th>15 km</th></tr></thead>
             <tbody>{matrix.map((goal) => (
-              <tr key={goal.id}><td><b>{goal.id}</b></td><td>{goal.finish}</td><td>{goal.pace}</td><td>{goal.km5}</td><td>{goal.km10}</td><td>{goal.km15}</td></tr>
+              <tr key={goal.id}><td data-label="Anchor"><b>{goal.id}</b></td><td data-label="Meta">{goal.finish}</td><td data-label="Tempo">{goal.pace}</td><td data-label="5 km">{goal.km5}</td><td data-label="10 km">{goal.km10}</td><td data-label="15 km">{goal.km15}</td></tr>
             ))}</tbody>
           </table>
         </div>
@@ -419,10 +444,10 @@ function Dashboard({ feed, log, plan, loading, freshnessState }) {
 function Zones({ feed, loading }) {
   const row = latestRow(feed);
   const anchors = [
-    ['HRmax', v(row, 'hrmax', ''), 'bpm'],
-    ['LT1', v(row, 'lt1', ''), 'bpm'],
-    ['LT2 / LTHR', v(row, 'lt2', ''), 'bpm'],
-    ['Threshold Power', v(row, 'thresholdPower', ''), 'W'],
+    ['HRmax', formatMetricNumber(v(row, 'hrmax', ''), { maximumFractionDigits: 0 }), 'bpm'],
+    ['LT1', formatMetricNumber(v(row, 'lt1', ''), { maximumFractionDigits: 0 }), 'bpm'],
+    ['LT2 / LTHR', formatMetricNumber(v(row, 'lt2', ''), { maximumFractionDigits: 0 }), 'bpm'],
+    ['Threshold Power', formatMetricNumber(v(row, 'thresholdPower', ''), { maximumFractionDigits: 0 }), 'W'],
   ];
   return (
     <>
@@ -451,20 +476,22 @@ function LogCard({ row }) {
   const duration = v(row, 'logDuration', '');
   const hrAvg = v(row, 'logHrAvg', '');
   const hrMax = v(row, 'logHrMax', '');
-  const status = v(row, 'logStatus', '');
+  const rawStatus = v(row, 'logStatus', '');
+  const status = normalizeActivityStatus(rawStatus);
+  const recovery = isRecoveryActivity(type, rawStatus);
   return (
     <article className="log-card">
       <div className="log-card-head">
         <div><span>{formatDate(v(row, 'date', ''))}{v(row, 'logTime', '') ? ` · ${v(row, 'logTime')}` : ''}</span><strong>{name}</strong><small>{type || '—'}</small></div>
-        {status ? <StatusChip status={status === 'DONE' ? 'GREEN' : status === 'RECOVERY' ? 'YELLOW' : ''}>{status}</StatusChip> : null}
+        <ActivityBadges status={status} recovery={recovery} />
       </div>
       <div className="log-metrics">
-        <p><b>Dystans</b>{distance ? `${distance} km` : '—'}</p>
+        <p><b>Dystans</b>{distance ? `${formatMetricNumber(distance, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km` : '—'}</p>
         <p><b>Czas</b>{duration || '—'}</p>
         <p><b>Tempo</b>{v(row, 'logPace', '—')}</p>
-        <p><b>HR</b>{hrAvg ? `${hrAvg}${hrMax ? ` / ${hrMax}` : ''}` : '—'}</p>
-        <p><b>RPE</b>{v(row, 'logRpe', '—')}</p>
-        <p><b>sRPE</b>{v(row, 'logSrpe', '—')}</p>
+        <p><b>HR</b>{hrAvg ? `${formatMetricNumber(hrAvg, { maximumFractionDigits: 0 })}${hrMax ? ` / ${formatMetricNumber(hrMax, { maximumFractionDigits: 0 })}` : ''}` : '—'}</p>
+        <p><b>RPE</b>{formatMetricNumber(v(row, 'logRpe', ''), { maximumFractionDigits: 1, fallback: '—' })}</p>
+        <p><b>sRPE</b>{formatMetricNumber(v(row, 'logSrpe', ''), { maximumFractionDigits: 0, fallback: '—' })}</p>
       </div>
       {v(row, 'logNotes', '') ? <p className="log-note">{v(row, 'logNotes')}</p> : null}
     </article>
@@ -485,25 +512,28 @@ function Log({ rows, loading }) {
 
 function PlanMini({ row }) {
   const date = rowDate(row);
+  const status = v(row, 'planStatus', 'PLANNED');
+  const session = v(row, 'planMorning', v(row, 'planSession', 'Sesja'));
   return (
     <article className="plan-mini">
       <div><b>{date ? formatDate(date) : '—'}</b><small>{v(row, 'planDay', '')}</small></div>
-      <div><strong>{v(row, 'planMorning', v(row, 'planSession', 'Sesja'))}</strong><p>{v(row, 'planHr', '') || v(row, 'planNotes', 'Brak dodatkowych uwag')}</p></div>
-      <StatusChip status={v(row, 'planStatus', '') === 'DONE' ? 'GREEN' : v(row, 'planStatus', '') === 'ACTIVE' || v(row, 'planStatus', '') === 'CONDITIONAL' ? 'YELLOW' : ''}>{v(row, 'planStatus', 'PLANNED')}</StatusChip>
+      <div><strong>{session}</strong><p>{v(row, 'planHr', '') || v(row, 'planNotes', 'Brak dodatkowych uwag')}</p></div>
+      <ActivityBadges status={status} recovery={isRecoveryActivity(session, status)} />
     </article>
   );
 }
 
-function PlanCard({ row }) {
+function PlanCard({ row, now }) {
   const date = rowDate(row);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = new Date(now); today.setHours(0, 0, 0, 0);
   const isToday = date && sameCalendarDay(date, today);
   const status = v(row, 'planStatus', 'PLANNED');
+  const session = v(row, 'planMorning', v(row, 'planSession', 'Sesja'));
   return (
     <article className={`plan-card ${isToday ? 'plan-today' : ''}`}>
       <div className="plan-date-box"><strong>{date ? formatDate(date) : v(row, 'date', '—')}</strong><small>{v(row, 'planDay', '')}</small></div>
       <div className="plan-card-main">
-        <div className="plan-card-title"><strong>{v(row, 'planMorning', v(row, 'planSession', 'Sesja'))}</strong><StatusChip status={status === 'DONE' ? 'GREEN' : status === 'ACTIVE' || status === 'CONDITIONAL' ? 'YELLOW' : ''}>{status}</StatusChip></div>
+        <div className="plan-card-title"><strong>{session}</strong><ActivityBadges status={status} recovery={isRecoveryActivity(session, status)} /></div>
         <div className="plan-details">
           <p><b>Później</b>{v(row, 'planLater', '—')}</p>
           <p><b>Cel HR</b>{v(row, 'planHr', '—')}</p>
@@ -515,16 +545,16 @@ function PlanCard({ row }) {
   );
 }
 
-function Plan({ rows, loading }) {
+function Plan({ rows, loading, now }) {
   const dated = useMemo(() => sortedRows(rows.filter((r) => rowDate(r)), 'asc'), [rows]);
   const undated = useMemo(() => rows.filter((r) => !rowDate(r)), [rows]);
   return (
     <>
       <section className="section-hero"><span className="eyebrow">DROGA DO CELU</span><h1>Plan</h1><p>Mikrocykl jest adaptacyjny. Status Head Coacha i regeneracja mogą zmienić wykonanie jednostki bez zmiany celu całego bloku.</p></section>
       <section className="section-block plan-list">
-        {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : dated.map((row, i) => <PlanCard row={row} key={`${v(row, 'date', '')}-${i}`} />)}
+        {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : dated.map((row, i) => <PlanCard row={row} now={now} key={`${v(row, 'date', '')}-${i}`} />)}
       </section>
-      {undated.length ? <section className="section-block"><div className="section-heading"><div><span className="eyebrow">DALEJ</span><h2>Do ustalenia</h2></div></div><div className="plan-list">{undated.map((row, i) => <PlanCard row={row} key={`u-${i}`} />)}</div></section> : null}
+      {undated.length ? <section className="section-block"><div className="section-heading"><div><span className="eyebrow">DALEJ</span><h2>Do ustalenia</h2></div></div><div className="plan-list">{undated.map((row, i) => <PlanCard row={row} now={now} key={`u-${i}`} />)}</div></section> : null}
     </>
   );
 }
@@ -537,6 +567,7 @@ function App() {
   const [networkSyncedAt, setNetworkSyncedAt] = useState(null);
   const [errors, setErrors] = useState({});
   const [fromCache, setFromCache] = useState(false);
+  const [calendarNow, setCalendarNow] = useState(() => new Date());
   const dataRef = useRef(data);
   const inFlight = useRef(null);
   const lastAttempt = useRef(0);
@@ -591,21 +622,43 @@ function App() {
   }, [refresh]);
 
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
-    const onFocus = () => refresh();
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      setCalendarNow(new Date());
+      refresh();
+    };
+    const onFocus = () => { setCalendarNow(new Date()); refresh(); };
     const onOnline = () => refresh({ force: true });
-    const onPageShow = (event) => { if (event.persisted) refresh({ force: true }); };
+    const onPageShow = () => { setCalendarNow(new Date()); refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
     window.addEventListener('pageshow', onPageShow);
-    const interval = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, AUTO_REFRESH_MS);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('pageshow', onPageShow);
-      clearInterval(interval);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    let active = true;
+    let midnightTimer;
+    const scheduleNextMidnight = () => {
+      const delay = millisecondsUntilNextLocalMidnight(new Date());
+      if (delay === null) return;
+      midnightTimer = window.setTimeout(() => {
+        if (!active) return;
+        setCalendarNow(new Date());
+        refresh({ force: true });
+        scheduleNextMidnight();
+      }, delay);
+    };
+    scheduleNextMidnight();
+    return () => {
+      active = false;
+      window.clearTimeout(midnightTimer);
     };
   }, [refresh]);
 
@@ -623,7 +676,7 @@ function App() {
 
   const feedRow = latestRow(data.feed);
   const sourceAt = sourceTime(feedRow);
-  const freshness = sourceFreshness(sourceAt, new Date(), STALE_AFTER_HOURS);
+  const freshness = sourceFreshness(sourceAt, calendarNow, STALE_AFTER_HOURS);
   const errorCount = Object.keys(errors).length;
   const offline = errorCount === Object.keys(SHEETS).length;
   const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
@@ -654,10 +707,10 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} loading={loading} freshnessState={freshness.state} />}
+        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} loading={loading} freshnessState={freshness.state} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
         {tab === 'log' && <Log rows={data.log} loading={loading} />}
-        {tab === 'plan' && <Plan rows={data.plan} loading={loading} />}
+        {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>
 
       <footer className="app-footer"><span>{APP_VERSION}</span><span>{networkSyncedAt ? `sieć: ${formatDate(new Date(networkSyncedAt), true)}` : 'brak synchronizacji sieciowej'}</span></footer>

@@ -3,6 +3,7 @@ import {
   classifyCoachStatus,
   daysUntilRace,
   metricDeltaPercent,
+  millisecondsUntilNextLocalMidnight,
   raceGoalMatrix,
   resolveCoachDecision,
   sourceFreshness,
@@ -79,5 +80,23 @@ describe('Málaga race matrix', () => {
       if (previousTimezone === undefined) delete process.env.TZ;
       else process.env.TZ = previousTimezone;
     }
+  });
+});
+
+describe('local midnight rollover', () => {
+  it('planuje najbliższą lokalną północ także w dniu zmiany DST', () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Europe/Warsaw';
+    try {
+      const now = new Date(2026, 9, 25, 0, 30, 0, 0);
+      expect(millisecondsUntilNextLocalMidnight(now)).toBe(24.5 * 60 * 60 * 1000);
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
+  });
+
+  it('odrzuca nieprawidłową datę timera', () => {
+    expect(millisecondsUntilNextLocalMidnight('invalid')).toBeNull();
   });
 });

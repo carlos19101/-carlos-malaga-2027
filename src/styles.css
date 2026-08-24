@@ -20,8 +20,8 @@
 }
 
 * { box-sizing: border-box; }
-html { min-height: 100%; background: var(--bg); }
-body { min-width: 320px; min-height: 100dvh; margin: 0; background: radial-gradient(circle at 10% -5%, rgba(240,120,34,.08), transparent 27rem), var(--bg); }
+html { min-height: 100%; overflow-x: hidden; background: var(--bg); }
+body { min-width: 320px; min-height: 100dvh; margin: 0; overflow-x: hidden; background: radial-gradient(circle at 10% -5%, rgba(240,120,34,.08), transparent 27rem), var(--bg); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -203,6 +203,7 @@ main {
 .status-green { border-color: rgba(100,216,162,.30); background: rgba(100,216,162,.10); color: #a9f5cf; }
 .status-yellow { border-color: rgba(243,200,70,.32); background: rgba(243,200,70,.10); color: #ffe18c; }
 .status-red { border-color: rgba(239,72,103,.34); background: rgba(239,72,103,.10); color: #ff9fb0; }
+.activity-badges { display: flex; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
 
 .coach-card {
   min-height: 230px;
@@ -241,7 +242,7 @@ main {
 .today-plan-card > small { display: block; margin-top: 16px; color: var(--muted); line-height: 1.5; }
 .empty-today p { margin: 14px 0 0; color: var(--muted); }
 
-.readiness-grid { display: grid; grid-template-columns: repeat(2, minmax(0, .9fr)) 1.7fr; gap: 15px; }
+.readiness-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
 .ring-card {
   min-height: 220px;
   padding: 24px;
@@ -268,7 +269,7 @@ main {
 .metric-empty::before { background: none; border: 3px dashed rgba(255,255,255,.14); -webkit-mask: none; mask: none; }
 .ring-card p { margin: 0; color: var(--muted); text-align: center; font-size: .76rem; }
 .stats-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
-.compact-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.compact-stats { grid-column: 1 / -1; grid-template-columns: repeat(5, minmax(0,1fr)); }
 .stat-card {
   min-height: 172px;
   padding: 22px;
@@ -301,6 +302,7 @@ main {
 
 .goal-chips { margin-bottom: 14px; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
 .goal-chips span { min-height: 60px; padding: 13px 16px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: #dfe3ea; }
+.goal-chips span { min-width: 0; overflow-wrap: anywhere; }
 .goal-chips b { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,255,255,.07); }
 .race-table-shell { overflow-x: auto; border: 1px solid var(--line); border-radius: 24px; background: var(--panel); }
 table { width: 100%; border-collapse: collapse; min-width: 670px; }
@@ -322,10 +324,12 @@ tbody tr:last-child td { border-bottom: 0; }
   background: var(--panel);
 }
 .plan-mini > div:first-child { display: grid; gap: 3px; }
+.plan-mini > div { min-width: 0; }
 .plan-mini > div:first-child b { font-size: .9rem; }
 .plan-mini > div:first-child small { color: var(--muted); }
 .plan-mini > div:nth-child(2) strong { display: block; }
 .plan-mini > div:nth-child(2) p { margin: 5px 0 0; color: var(--muted); font-size: .74rem; }
+.plan-mini strong, .plan-mini p { overflow-wrap: anywhere; }
 
 .section-hero {
   min-height: 210px;
@@ -406,8 +410,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .mobile-nav { display: none; }
 
 @media (max-width: 980px) {
-  .readiness-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .compact-stats { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .readiness-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .compact-stats { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0,1fr)); }
   .load-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .anchor-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .log-list { grid-template-columns: 1fr; }
@@ -494,11 +498,18 @@ tbody tr:last-child td { border-bottom: 0; }
 
   .goal-chips { grid-template-columns: 1fr; gap: 7px; }
   .goal-chips span { min-height: 52px; }
-  .race-table-shell { border-radius: 21px; }
-  th, td { padding: 16px 18px; }
+  .race-table-shell { overflow: visible; border: 0; border-radius: 0; background: transparent; }
+  .race-table { min-width: 0; display: block; }
+  .race-table thead { display: none; }
+  .race-table tbody { display: grid; gap: 9px; }
+  .race-table tr { padding: 10px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+  .race-table td { min-width: 0; padding: 9px 10px; display: grid; gap: 4px; border: 0; overflow-wrap: anywhere; }
+  .race-table td::before { content: attr(data-label); color: #aab2c2; font-size: .56rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
 
-  .plan-mini { grid-template-columns: 60px 1fr; padding: 13px; border-radius: 18px; gap: 12px; }
-  .plan-mini .status-chip { grid-column: 2; justify-self: start; min-height: 29px; }
+  .plan-preview, .plan-list, .race-goals { min-width: 0; max-width: 100%; }
+  .plan-mini { grid-template-columns: 1fr; padding: 14px; border-radius: 18px; gap: 10px; }
+  .plan-mini .activity-badges { justify-self: start; justify-content: flex-start; }
+  .plan-mini .status-chip { min-height: 29px; }
 
   .section-hero { min-height: 160px; margin-bottom: 30px; padding: 23px; border-radius: 24px; }
   .section-hero h1 { font-size: 2.2rem; }
@@ -515,9 +526,10 @@ tbody tr:last-child td { border-bottom: 0; }
   .log-metrics { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
   .log-metrics p { padding: 8px; font-size: .72rem; }
 
-  .plan-card { min-height: 0; padding: 16px; grid-template-columns: 82px 1fr; gap: 13px; border-radius: 22px; }
-  .plan-date-box { min-height: 84px; border-radius: 17px; }
+  .plan-card { min-width: 0; min-height: 0; padding: 16px; grid-template-columns: 1fr; gap: 13px; border-radius: 22px; }
+  .plan-date-box { min-height: 0; padding: 12px 14px; display: flex; justify-content: space-between; border-radius: 17px; text-align: left; }
   .plan-card-title { flex-direction: column; gap: 8px; }
+  .plan-card-title .activity-badges { justify-content: flex-start; }
   .plan-details { grid-template-columns: 1fr; gap: 7px; }
   .plan-card-main > small { font-size: .72rem; }
 

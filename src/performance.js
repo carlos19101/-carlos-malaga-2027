@@ -174,6 +174,14 @@ export function daysUntilRace(now = new Date(), raceDate = MALAGA_RACE.date) {
   return Math.max(0, calendarDay(target) - calendarDay(current));
 }
 
+export function millisecondsUntilNextLocalMidnight(now = new Date()) {
+  const current = now instanceof Date ? new Date(now) : new Date(now);
+  if (Number.isNaN(current.getTime())) return null;
+  const next = new Date(current);
+  next.setHours(24, 0, 0, 0);
+  return next - current;
+}
+
 function formatDuration(seconds) {
   const total = Math.round(seconds);
   const h = Math.floor(total / 3600);

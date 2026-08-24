@@ -79,6 +79,16 @@ export function parseNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+export function formatMetricNumber(value, {
+  maximumFractionDigits = 2,
+  minimumFractionDigits = 0,
+  fallback = '',
+} = {}) {
+  const n = parseNumber(value);
+  if (n === null) return fallback;
+  return new Intl.NumberFormat('pl-PL', { maximumFractionDigits, minimumFractionDigits }).format(n);
+}
+
 export function parseMetric(value) {
   return parseNumber(value) ?? parseClock(value);
 }
@@ -111,6 +121,52 @@ export function parseDate(value) {
   year = Number(year);
   if (year < 100) year += 2000;
   return validLocalDate(year, month, day, Number(hh), Number(mm));
+}
+
+export function normalizeActivityStatus(value) {
+  const status = String(value ?? '').trim().toUpperCase();
+  return status === 'RECOVERY' ? 'DONE' : status;
+}
+
+export function isRecoveryActivity(type, status = '') {
+  const containsRecovery = (value) => /(^|[\s/])recovery($|[\s/])/.test(normalize(value));
+  return containsRecovery(type) || containsRecovery(status);
+}
+
+export function validateDailyFeed(values = {}) {
+  const hasText = (value) => {
+    const raw = String(value ?? '').trim();
+    return raw !== '' && !/^(?:—|-|#N\/A|N\/A|null|undefined)$/i.test(raw);
+  };
+  const required = [
+    ['status', 'Status', hasText],
+    ['hrv', 'HRV', (value) => parseNumber(value) !== null],
+    ['rhr', 'RHR', (value) => parseNumber(value) !== null],
+    ['weight', 'Weight', (value) => parseNumber(value) !== null],
+    ['date', 'data', (value) => parseDate(value) !== null],
+  ];
+  const missing = required
+    .filter(([field, , present]) => !present(values[field]))
+    .map(([, label]) => label);
+  const suspicious = [];
+  const ranges = {
+    readiness: ['Readiness', 0, 100],
+    recovery: ['Recovery', 0, 100],
+    bodyBattery: ['Body Battery', 0, 100],
+    sleep: ['Sleep', 0, 100],
+    hrv: ['HRV', 10, 250],
+    rhr: ['RHR', 30, 120],
+    weight: ['Weight', 50, 160],
+    pain: ['Pain', 0, 10],
+  };
+  Object.entries(ranges).forEach(([field, [label, lo, hi]]) => {
+    const raw = String(values[field] ?? '').trim();
+    if (!raw) return;
+    const n = parseNumber(raw);
+    if (n === null) suspicious.push(`${label}: nieprawidłowa liczba`);
+    else if (n < lo || n > hi) suspicious.push(`${label}=${n} poza ${lo}–${hi}`);
+  });
+  return { ok: missing.length === 0 && suspicious.length === 0, missing, suspicious };
 }
 
 export function exactKey(row, aliases = []) {
