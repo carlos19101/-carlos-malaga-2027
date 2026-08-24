@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  buildSheetCsvUrl,
   exactKey,
   exactValue,
   formatMetricNumber,
@@ -114,7 +115,7 @@ const ZONES = [
 ];
 
 function sheetUrl(sheetName) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${Date.now()}`;
+  return buildSheetCsvUrl(SHEET_ID, sheetName);
 }
 
 async function fetchSheet(sheetName, signal) {
@@ -263,7 +264,7 @@ function MetricRing({ label, value, note, max = 100, suffix = '%' }) {
 }
 
 function StatCard({ label, value, unit = '', note = '', tone = '' }) {
-  const empty = value === null || value === undefined || String(value).trim() === '';
+  const empty = value === null || value === undefined || /^(?:|—|–|-)$/.test(String(value).trim());
   return (
     <article className={`stat-card ${tone ? `tone-${tone}` : ''}`}>
       <span>{label}</span>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildSheetCsvUrl,
   exactValue,
   formatMetricNumber,
   isRecoveryActivity,
@@ -28,6 +29,11 @@ describe('parseNumber', () => {
   it('nie zamienia czasu na liczbę', () => {
     expect(parseNumber('7:45')).toBeNull();
   });
+  it('traktuje arkuszowe sentinele jako brak wartości', () => {
+    ['—', '–', '-', '#N/A', '#DIV/0!', 'N/A', 'null', 'undefined'].forEach((value) => {
+      expect(parseNumber(value)).toBeNull();
+    });
+  });
 });
 
 describe('formatMetricNumber', () => {
@@ -38,6 +44,19 @@ describe('formatMetricNumber', () => {
   });
   it('usuwa zbędne części dziesiętne z HR', () => {
     expect(formatMetricNumber('162,45', { maximumFractionDigits: 0 })).toBe('162');
+  });
+  it('domyślnie pokazuje kreskę dla braku danych', () => {
+    ['', null, '#N/A', '#DIV/0!'].forEach((value) => {
+      expect(formatMetricNumber(value)).toBe('—');
+    });
+  });
+});
+
+describe('buildSheetCsvUrl', () => {
+  it('wymusza dokładnie jeden wiersz nagłówka GViz', () => {
+    expect(buildSheetCsvUrl('sheet-id', 'Training Log', 123)).toBe(
+      'https://docs.google.com/spreadsheets/d/sheet-id/gviz/tq?tqx=out:csv&sheet=Training%20Log&headers=1&_t=123',
+    );
   });
 });
 
@@ -72,6 +91,10 @@ describe('parseCSV', () => {
     const rows = parseCSV('Date,Weight,Note\n2026-08-21,"89,0","easy, ok"\n');
     expect(rows[0].Weight).toBe('89,0');
     expect(rows[0].Note).toBe('easy, ok');
+  });
+  it('zachowuje verbatim nagłówki Planu używane przez exact-match', () => {
+    const rows = parseCSV('Data,Dzień,Rano,Status\n24.08.2026,Pon,OFF / recovery,YELLOW\n');
+    expect(exactValue(rows[0], ['date', 'data'])).toBe('24.08.2026');
   });
 });
 
@@ -116,6 +139,15 @@ describe('validateDailyFeed', () => {
       readiness: '',
       recovery: '',
       bodyBattery: '',
+    })).toEqual({ ok: true, missing: [], suspicious: [] });
+  });
+
+  it('nie zgłasza DATA ERROR dla nullish sentineli w polach optional', () => {
+    expect(validateDailyFeed({
+      ...required,
+      readiness: '#N/A',
+      recovery: '#DIV/0!',
+      bodyBattery: '–',
     })).toEqual({ ok: true, missing: [], suspicious: [] });
   });
 

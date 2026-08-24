@@ -55,7 +55,17 @@ export function parseCSV(text) {
   });
 }
 
+export function buildSheetCsvUrl(sheetId, sheetName, cacheBuster = Date.now()) {
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&headers=1&_t=${cacheBuster}`;
+}
+
 export const CLOCK_RE = /^\d{1,3}:[0-5]\d(:[0-5]\d)?$/;
+export const NULLISH = /^(?:—|–|-|#N\/A|#DIV\/0!|N\/A|null|undefined)$/i;
+
+export function isNullish(value) {
+  const raw = String(value ?? '').trim();
+  return raw === '' || NULLISH.test(raw);
+}
 
 export function parseClock(value) {
   const raw = String(value ?? '').trim();
@@ -67,7 +77,7 @@ export function parseClock(value) {
 export function parseNumber(value) {
   if (value === null || value === undefined) return null;
   const raw = String(value).trim();
-  if (!raw || raw.includes(':') || /^(?:—|-|#N\/A|N\/A|null|undefined)$/i.test(raw)) return null;
+  if (isNullish(raw) || raw.includes(':')) return null;
 
   const cleaned = raw
     .replace(/[\s\u00a0\u202f]/g, '')
@@ -82,7 +92,7 @@ export function parseNumber(value) {
 export function formatMetricNumber(value, {
   maximumFractionDigits = 2,
   minimumFractionDigits = 0,
-  fallback = '',
+  fallback = '—',
 } = {}) {
   const n = parseNumber(value);
   if (n === null) return fallback;
@@ -135,8 +145,7 @@ export function isRecoveryActivity(type, status = '') {
 
 export function validateDailyFeed(values = {}) {
   const hasText = (value) => {
-    const raw = String(value ?? '').trim();
-    return raw !== '' && !/^(?:—|-|#N\/A|N\/A|null|undefined)$/i.test(raw);
+    return !isNullish(value);
   };
   const required = [
     ['status', 'Status', hasText],
@@ -161,7 +170,7 @@ export function validateDailyFeed(values = {}) {
   };
   Object.entries(ranges).forEach(([field, [label, lo, hi]]) => {
     const raw = String(values[field] ?? '').trim();
-    if (!raw) return;
+    if (isNullish(raw)) return;
     const n = parseNumber(raw);
     if (n === null) suspicious.push(`${label}: nieprawidłowa liczba`);
     else if (n < lo || n > hi) suspicious.push(`${label}=${n} poza ${lo}–${hi}`);
