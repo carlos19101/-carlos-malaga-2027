@@ -170,7 +170,8 @@ export function daysUntilRace(now = new Date(), raceDate = MALAGA_RACE.date) {
   const current = startOfDay(now);
   const target = startOfDay(`${raceDate}T12:00:00`);
   if (!current || !target) return null;
-  return Math.max(0, Math.ceil((target - current) / 86400000));
+  const calendarDay = (date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000;
+  return Math.max(0, calendarDay(target) - calendarDay(current));
 }
 
 function formatDuration(seconds) {

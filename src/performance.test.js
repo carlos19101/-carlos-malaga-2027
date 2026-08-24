@@ -70,4 +70,14 @@ describe('Málaga race matrix', () => {
   it('liczy dni kalendarzowe do 7 marca 2027', () => {
     expect(daysUntilRace(new Date('2026-08-22T20:30:00'))).toBe(197);
   });
+  it('liczy lokalne dni kalendarzowe przez jesienne przejście DST', () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Europe/Warsaw';
+    try {
+      expect(daysUntilRace(new Date('2026-10-24T20:30:00'), '2026-10-26')).toBe(2);
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
+  });
 });
