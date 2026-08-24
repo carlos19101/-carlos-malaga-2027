@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client';
 import {
   buildSheetCsvUrl,
+  datedRowsError,
   exactKey,
   exactValue,
+  findRecentMeasurement,
   formatMetricNumber,
   isRecoveryActivity,
   normalize,
@@ -26,7 +28,8 @@ import {
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
-const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan' };
+const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
+const SHEET_QUERIES = { raw: 'select A,C' };
 const APP_VERSION = 'FINAL 4.0';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
@@ -51,7 +54,7 @@ const A = {
   hrv: ['hrv'],
   hrv7d: ['hrv 7d'],
   rhr: ['rhr'],
-  weight: ['weight', 'waga'],
+  weight: ['weight', 'waga', 'weight kg'],
   weightAvg7d: ['weight avg 7d'],
   weightDelta7d: ['weight delta 7d'],
   steps: ['steps', 'kroki'],
@@ -114,19 +117,22 @@ const ZONES = [
   { key: 'z5', id: 'Z5', name: 'Peak', note: 'wysoka intensywność', color: '#ef4867' },
 ];
 
-function sheetUrl(sheetName) {
-  return buildSheetCsvUrl(SHEET_ID, sheetName);
+function sheetUrl(sheetName, query = '') {
+  return buildSheetCsvUrl(SHEET_ID, sheetName, Date.now(), query);
 }
 
-async function fetchSheet(sheetName, signal) {
-  const response = await fetch(sheetUrl(sheetName), {
+async function fetchSheet(sheetName, signal, query = '') {
+  const response = await fetch(sheetUrl(sheetName, query), {
     cache: 'no-store', signal, headers: { Accept: 'text/csv,text/plain;q=0.9,*/*;q=0.8' },
   });
   if (!response.ok) throw new Error(`${sheetName}: HTTP ${response.status}`);
   const text = await response.text();
   if (!text.trim()) return [];
   if (/^\s*</.test(text) && /<html/i.test(text)) throw new Error(`${sheetName}: HTML zamiast CSV`);
-  return parseCSV(text);
+  const rows = parseCSV(text);
+  const dateError = datedRowsError(rows, A.date, sheetName);
+  if (dateError) throw new Error(`DATA ERROR — ${dateError}`);
+  return rows;
 }
 
 function v(row, field, fallback = '') {
@@ -170,7 +176,7 @@ function metric(value) {
   return n === null ? null : n;
 }
 
-function validateFeed(row) {
+function validateFeed(row, weight = v(row, 'weight', '')) {
   return validateDailyFeed({
     date: v(row, 'date', ''),
     status: v(row, 'status', ''),
@@ -180,9 +186,27 @@ function validateFeed(row) {
     sleep: v(row, 'sleep', ''),
     hrv: v(row, 'hrv', ''),
     rhr: v(row, 'rhr', ''),
-    weight: v(row, 'weight', ''),
+    weight,
     pain: v(row, 'pain', ''),
   });
+}
+
+function resolveWeight(feedRow, rawRows, now) {
+  const current = v(feedRow, 'weight', '');
+  if (metric(current) !== null) return { value: current, date: rowDate(feedRow), ageDays: 0, inherited: false };
+  const recent = findRecentMeasurement(rawRows, {
+    dateAliases: A.date,
+    valueAliases: A.weight,
+    now,
+    maxAgeDays: 7,
+  });
+  return recent ? { ...recent, inherited: true } : null;
+}
+
+function formatNumericDate(value) {
+  const date = value instanceof Date ? value : parseDate(value);
+  if (!date) return '—';
+  return new Intl.DateTimeFormat('pl-PL', { day: '2-digit', month: '2-digit' }).format(date);
 }
 
 function sourceTime(feedRow) {
@@ -300,9 +324,10 @@ function TodayPlanCard({ row }) {
   );
 }
 
-function Dashboard({ feed, log, plan, loading, freshnessState, now }) {
+function Dashboard({ feed, log, plan, raw, loading, freshnessState, now }) {
   const row = latestRow(feed);
-  const validation = useMemo(() => validateFeed(row), [row]);
+  const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
+  const validation = useMemo(() => validateFeed(row, weightReading?.value || ''), [row, weightReading]);
   const loadFallback = useMemo(() => summarizeLoad(logLoadRecords(log), now), [log, now]);
   const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
   const upcoming = useMemo(() => getUpcomingPlan(plan, 3, now), [plan, now]);
@@ -375,7 +400,7 @@ function Dashboard({ feed, log, plan, loading, freshnessState, now }) {
               <StatCard label="SLEEP" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note="jakość / realizacja snu" />
               <StatCard label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms` : 'nocne HRV'} />
               <StatCard label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note="tętno spoczynkowe" />
-              <StatCard label="WAGA" value={formatMetricNumber(v(row, 'weight', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt'} />
+              <StatCard label="WAGA" value={formatMetricNumber(weightReading?.value, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={weightReading?.inherited ? `waga z ${formatNumericDate(weightReading.date)}` : v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt'} />
               <StatCard label="BÓL" value={formatMetricNumber(v(row, 'pain', ''), { maximumFractionDigits: 1 })} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
             </div>
           </div>
@@ -562,7 +587,7 @@ function Plan({ rows, loading, now }) {
 
 function App() {
   const [tab, setTab] = useState('dashboard');
-  const [data, setData] = useState({ feed: [], log: [], plan: [] });
+  const [data, setData] = useState({ feed: [], log: [], plan: [], raw: [] });
   const [loading, setLoading] = useState(true);
   const [checkedAt, setCheckedAt] = useState(null);
   const [networkSyncedAt, setNetworkSyncedAt] = useState(null);
@@ -585,7 +610,7 @@ function App() {
     setLoading(true);
 
     const entries = Object.entries(SHEETS);
-    const results = await Promise.allSettled(entries.map(([, sheet]) => fetchSheet(sheet, controller.signal)));
+    const results = await Promise.allSettled(entries.map(([key, sheet]) => fetchSheet(sheet, controller.signal, SHEET_QUERIES[key] || '')));
     clearTimeout(timer);
     if (inFlight.current !== controller) return;
     inFlight.current = null;
@@ -708,7 +733,7 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} loading={loading} freshnessState={freshness.state} now={calendarNow} />}
+        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
         {tab === 'log' && <Log rows={data.log} loading={loading} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}

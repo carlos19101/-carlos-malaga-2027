@@ -55,8 +55,9 @@ export function parseCSV(text) {
   });
 }
 
-export function buildSheetCsvUrl(sheetId, sheetName, cacheBuster = Date.now()) {
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&headers=1&_t=${cacheBuster}`;
+export function buildSheetCsvUrl(sheetId, sheetName, cacheBuster = Date.now(), query = '') {
+  const queryParam = query ? `&tq=${encodeURIComponent(query)}` : '';
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&headers=1${queryParam}&_t=${cacheBuster}`;
 }
 
 export const CLOCK_RE = /^\d{1,3}:[0-5]\d(:[0-5]\d)?$/;
@@ -189,6 +190,35 @@ export function exactValue(row, aliases = [], fallback = '') {
   if (!key) return fallback;
   const value = String(row[key] ?? '').trim();
   return value === '' ? fallback : value;
+}
+
+export function datedRowsError(rows = [], aliases = ['date', 'data'], label = 'Arkusz') {
+  if (!Array.isArray(rows) || rows.length === 0) return '';
+  const hasDatedRow = rows.some((row) => parseDate(exactValue(row, aliases, '')) !== null);
+  return hasDatedRow ? '' : `${label}: ${rows.length} wierszy, żaden nie ma czytelnej daty`;
+}
+
+export function findRecentMeasurement(rows = [], {
+  dateAliases = ['date', 'data'],
+  valueAliases = [],
+  now = new Date(),
+  maxAgeDays = 7,
+} = {}) {
+  const current = now instanceof Date ? new Date(now) : parseDate(now);
+  if (!current || Number.isNaN(current.getTime()) || maxAgeDays <= 0) return null;
+  const calendarDay = (date) => Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000;
+  const currentDay = calendarDay(current);
+  const candidates = (Array.isArray(rows) ? rows : []).map((row, index) => {
+    const date = parseDate(exactValue(row, dateAliases, ''));
+    const value = exactValue(row, valueAliases, '');
+    if (!date || parseNumber(value) === null) return null;
+    const ageDays = currentDay - calendarDay(date);
+    if (ageDays < 0 || ageDays >= maxAgeDays) return null;
+    return { value, date, ageDays, index };
+  }).filter(Boolean).sort((a, b) => b.date - a.date || b.index - a.index);
+  if (!candidates.length) return null;
+  const { value, date, ageDays } = candidates[0];
+  return { value, date, ageDays };
 }
 
 // Training Log history started with a schema where the activity type was the third CSV column.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildSheetCsvUrl,
+  datedRowsError,
   exactValue,
+  findRecentMeasurement,
   formatMetricNumber,
   isRecoveryActivity,
   normalize,
@@ -58,6 +60,11 @@ describe('buildSheetCsvUrl', () => {
       'https://docs.google.com/spreadsheets/d/sheet-id/gviz/tq?tqx=out:csv&sheet=Training%20Log&headers=1&_t=123',
     );
   });
+  it('ogranicza Raw_Data do potrzebnych kolumn', () => {
+    expect(buildSheetCsvUrl('sheet-id', 'Raw_Data', 123, 'select A,C')).toBe(
+      'https://docs.google.com/spreadsheets/d/sheet-id/gviz/tq?tqx=out:csv&sheet=Raw_Data&headers=1&tq=select%20A%2CC&_t=123',
+    );
+  });
 });
 
 describe('parseClock', () => {
@@ -103,6 +110,42 @@ describe('exactValue', () => {
     const row = { 'Sleep Score': '82', Sleepiness: '9' };
     expect(exactValue(row, ['sleep score'])).toBe('82');
     expect(exactValue(row, ['sleep'])).toBe('');
+  });
+});
+
+describe('datedRowsError', () => {
+  it('alarmuje, gdy niepusty arkusz nie zawiera ani jednej czytelnej daty', () => {
+    expect(datedRowsError([{ 'Data 18.08.2026': 'x' }, { 'Data 19.08.2026': 'y' }], ['date', 'data'], 'Plan'))
+      .toBe('Plan: 2 wierszy, żaden nie ma czytelnej daty');
+  });
+  it('dopuszcza pusty arkusz oraz mieszankę wierszy datowanych i zakresów', () => {
+    expect(datedRowsError([], ['date', 'data'], 'Plan')).toBe('');
+    expect(datedRowsError([{ Data: '24.08.2026' }, { Data: '25–30.08' }], ['date', 'data'], 'Plan')).toBe('');
+  });
+});
+
+describe('findRecentMeasurement', () => {
+  const options = {
+    dateAliases: ['date', 'data'],
+    valueAliases: ['weight kg'],
+    now: new Date(2026, 7, 24, 12),
+    maxAgeDays: 7,
+  };
+
+  it('zwraca ostatni odczyt młodszy niż 7 lokalnych dni', () => {
+    const result = findRecentMeasurement([
+      { Date: '2026-08-21', Weight_kg: '89' },
+      { Date: '2026-08-23', Weight_kg: '89,6' },
+      { Date: '2026-08-24', Weight_kg: '' },
+    ], options);
+    expect(result.value).toBe('89,6');
+    expect(result.ageDays).toBe(1);
+    expect(result.date.getDate()).toBe(23);
+  });
+
+  it('odrzuca odczyt sprzed dokładnie 7 dni i datę przyszłą', () => {
+    expect(findRecentMeasurement([{ Date: '2026-08-17', Weight_kg: '89' }], options)).toBeNull();
+    expect(findRecentMeasurement([{ Date: '2026-08-25', Weight_kg: '89' }], options)).toBeNull();
   });
 });
 
