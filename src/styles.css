@@ -135,6 +135,7 @@ button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 }
 .error-banner { border: 1px solid rgba(243,200,70,.25); background: rgba(243,200,70,.08); color: #f6df9f; }
 .data-quality-banner { width: 100%; margin: 0 0 18px; border: 1px solid rgba(239,72,103,.3); background: rgba(239,72,103,.08); color: #ffc3cd; }
+.data-quality-banner.verifier-warning { border-color: rgba(243,200,70,.3); background: rgba(243,200,70,.08); color: #f6df9f; }
 .error-banner span, .data-quality-banner span { color: var(--muted-2); }
 
 main {

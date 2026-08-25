@@ -25,12 +25,13 @@ import {
   sourceFreshness,
   summarizeLoad,
 } from './performance';
+import { computeVerifierMetrics, crossValidate } from './metrics';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,C' };
-const APP_VERSION = 'FINAL 4.0';
+const APP_VERSION = 'FINAL 4.1';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -217,6 +218,30 @@ function logLoadRecords(rows) {
   return rows.map((row) => ({ date: rowDate(row), srpe: v(row, 'logSrpe', '') })).filter((r) => r.date);
 }
 
+function verifierTrainingRecords(rows) {
+  return rows.map((row) => ({
+    date: v(row, 'date', ''),
+    type: resolveLogSession(row, A.logType),
+    km: v(row, 'logDistance', ''),
+    srpe: v(row, 'logSrpe', ''),
+  }));
+}
+
+function verifierWeightRecords(rows) {
+  return rows.map((row) => ({ date: v(row, 'date', ''), weight: v(row, 'weight', '') }));
+}
+
+function verifierFeedMetrics(row) {
+  return {
+    km7: v(row, 'runKm7d', ''),
+    km28: v(row, 'runKm28d', ''),
+    srpe7: v(row, 'srpe7d', ''),
+    srpe28: v(row, 'srpe28d', ''),
+    sessions7: v(row, 'runCount7d', ''),
+    weight: v(row, 'weight', ''),
+  };
+}
+
 function getTodayPlan(rows, now = new Date()) {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -324,7 +349,27 @@ function TodayPlanCard({ row }) {
   );
 }
 
-function Dashboard({ feed, log, plan, raw, loading, freshnessState, now }) {
+function VerifierBanner({ mismatches }) {
+  if (!mismatches.length) return null;
+  const severity = mismatches.some((item) => item.severity === 'error') ? 'error' : 'warning';
+  const digits = (field) => field.startsWith('km') || field === 'weight' ? 2 : 0;
+  const display = (item, value) => {
+    const formatted = formatMetricNumber(value, { maximumFractionDigits: digits(item.field) });
+    return item.unit ? `${formatted} ${item.unit}` : formatted;
+  };
+  return (
+    <div className={`data-quality-banner verifier-${severity}`} role={severity === 'error' ? 'alert' : 'status'}>
+      <strong>{severity === 'error'
+        ? 'NIEZGODNOŚĆ ŹRÓDEŁ — jedna z wartości jest błędna.'
+        : 'RÓŻNICA ŹRÓDEŁ — sprawdź wartości przed decyzją.'}</strong>
+      {mismatches.map((item) => (
+        <span key={item.field}>{item.label}: APP_FEED {display(item, item.fromFeed)} vs policzone {display(item, item.computed)}</span>
+      ))}
+    </div>
+  );
+}
+
+function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierReady, now }) {
   const row = latestRow(feed);
   const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
   const validation = useMemo(() => validateFeed(row, weightReading?.value || ''), [row, weightReading]);
@@ -332,6 +377,13 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, now }) {
   const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
   const upcoming = useMemo(() => getUpcomingPlan(plan, 3, now), [plan, now]);
   const matrix = useMemo(() => raceGoalMatrix(), []);
+  const verifierEndDate = v(row, 'date', '') || now;
+  const computedMetrics = useMemo(() => computeVerifierMetrics(
+    verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
+  ), [log, raw, verifierEndDate]);
+  const verifierMismatches = useMemo(() => verifierReady
+    ? crossValidate(computedMetrics, verifierFeedMetrics(row))
+    : [], [computedMetrics, row, verifierReady]);
 
   const decision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
@@ -391,6 +443,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, now }) {
             {validation.suspicious.length ? <span>{validation.suspicious.join(' · ')}</span> : null}
           </div>
         ) : null}
+        <VerifierBanner mismatches={verifierMismatches} />
         {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : (
           <div className="readiness-grid">
             <MetricRing label="READINESS" value={v(row, 'readiness', '')} note="gotowość Garmin" />
@@ -733,7 +786,7 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} now={calendarNow} />}
+        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errors.feed && !errors.log && !errors.raw} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
         {tab === 'log' && <Log rows={data.log} loading={loading} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
