@@ -17,6 +17,7 @@ function report(result) {
     normalizedDays: result.days.length,
     currentDate: result.current?.date ?? null,
     current: result.current?.values ?? null,
+    bridgeSignal: result.bridgeSignal,
     metrics: Object.fromEntries(Object.entries(result.metrics).map(([field, metric]) => [field, {
       baseline: {
         ready: metric.baseline.ready,

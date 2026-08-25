@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseline, computeDailyMetrics, normalizeRawData, zScore } from './dailyMetrics.js';
+import { baseline, computeDailyMetrics, normalizeRawData, preCalibrationTrend, zScore } from './dailyMetrics.js';
 
 function raw(date, timestamp, values = {}, source = 'Agent Garmin') {
   return {
@@ -176,5 +176,51 @@ describe('computeDailyMetrics', () => {
     ], '2026-08-25');
     expect(result.current.values.hrv).toBe(60);
     expect(result.days).toHaveLength(1);
+  });
+
+  it('przed kalibracją wykrywa trzy kolejne dni RHR w górę i HRV w dół', () => {
+    const result = computeDailyMetrics([
+      raw('2026-08-23', '2026-08-23 09:00', { rhr: 45, hrv: 70 }),
+      raw('2026-08-24', '2026-08-24 09:00', { rhr: 47, hrv: 65 }),
+      raw('2026-08-25', '2026-08-25 09:00', { rhr: 49, hrv: 60 }),
+    ], '2026-08-25');
+    expect(result.bridgeSignal).toMatchObject({
+      state: 'active', active: true, reason: 'three-day-rhr-up-hrv-down',
+    });
+    expect(result.bridgeSignal.interpretation).toContain('nigdy samodzielnie do STOP');
+  });
+
+  it('reguła pomostowa nie uruchamia się przy luce lub niepełnym zestawie HRV/RHR', () => {
+    const gap = computeDailyMetrics([
+      raw('2026-08-22', '2026-08-22 09:00', { rhr: 45, hrv: 70 }),
+      raw('2026-08-24', '2026-08-24 09:00', { rhr: 47, hrv: 65 }),
+      raw('2026-08-25', '2026-08-25 09:00', { rhr: 49, hrv: 60 }),
+    ], '2026-08-25');
+    expect(gap.bridgeSignal).toMatchObject({ state: 'unavailable', active: false, reason: 'non-consecutive-days' });
+
+    const missing = computeDailyMetrics([
+      raw('2026-08-23', '2026-08-23 09:00', { rhr: 45, hrv: 70 }),
+      raw('2026-08-24', '2026-08-24 09:00', { rhr: 47 }),
+      raw('2026-08-25', '2026-08-25 09:00', { rhr: 49, hrv: 60 }),
+    ], '2026-08-25');
+    expect(missing.bridgeSignal).toMatchObject({ state: 'unavailable', active: false, reason: 'missing-rhr-or-hrv' });
+  });
+
+  it('wyłącza regułę pomostową, gdy baseline HRV i RHR jest gotowy', () => {
+    const days = Array.from({ length: 30 }, (_, index) => raw(
+      `2026-01-${String(index + 1).padStart(2, '0')}`,
+      `2026-01-${String(index + 1).padStart(2, '0')} 09:00`,
+      { rhr: 45 + index / 10, hrv: 80 - index / 10 },
+    ));
+    const result = computeDailyMetrics(days, '2026-01-30');
+    expect(result.metrics.hrv.baseline.ready).toBe(true);
+    expect(result.metrics.rhr.baseline.ready).toBe(true);
+    expect(result.bridgeSignal).toMatchObject({ state: 'disabled', active: false, reason: 'baseline-ready' });
+  });
+});
+
+describe('preCalibrationTrend', () => {
+  it('nie uznaje dwóch dni za trzydniowy trend', () => {
+    expect(preCalibrationTrend([], '2026-08-25')).toMatchObject({ active: false, state: 'unavailable' });
   });
 });

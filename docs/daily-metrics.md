@@ -15,6 +15,10 @@ Każde pole jest rozstrzygane osobno. Wygrywa najnowszy prawidłowy `Timestamp`.
 - przed spełnieniem obu minimów aplikacja pokazuje `KALIBRACJA`, nie z-score;
 - coverage historii wynika z rozpiętości kalendarzowej, a nie liczby dni treningowych lub liczby wpisów.
 
+## Reguła pomostowa przed kalibracją
+
+Dopóki baseline HRV i RHR nie jest gotowy, trzy kolejne dni z rosnącym RHR i spadającym HRV tworzą tymczasowy sygnał do rozważenia `MODIFY`. Reguła jest jawnie oznaczona jako podatna na szum, wymaga samopoczucia i rozgrzewki jako potwierdzenia oraz nigdy samodzielnie nie wydaje `STOP`. Luka dnia albo brak HRV/RHR wyłącza sygnał. Po kalibracji obu baseline'ów reguła pomostowa przestaje działać.
+
 ## Integralność
 
 Jawnie raportowane są: wiersze bez daty, nieczytelny czas, rozjazd `Date`/`Timestamp`, wartości poza zakresem, sprzeczny remis i co najmniej dwudniowa luka w `Raw_Data`. Zwykła aktualizacja odczytu w ciągu dnia jest informacją, a nie alarmem.

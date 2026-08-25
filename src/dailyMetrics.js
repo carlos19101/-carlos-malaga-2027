@@ -224,6 +224,44 @@ export function zScore(value, base) {
   return (numericValue - base.mean) / base.sd;
 }
 
+export function preCalibrationTrend(days = [], evaluationDate = new Date(), options = {}) {
+  const evaluationDay = localDayNumber(evaluationDate);
+  const enabled = options.enabled ?? true;
+  if (!enabled) return { state: 'disabled', active: false, reason: 'baseline-ready', dates: [], evidence: [] };
+  if (evaluationDay === null) return { state: 'unavailable', active: false, reason: 'invalid-date', dates: [], evidence: [] };
+
+  const byDay = new Map((Array.isArray(days) ? days : []).map((day) => [day.dayNumber, day]));
+  const requiredDays = [evaluationDay - 2, evaluationDay - 1, evaluationDay];
+  const selected = requiredDays.map((dayNumber) => byDay.get(dayNumber));
+  if (selected.some((day) => !day)) {
+    return {
+      state: 'unavailable', active: false, reason: 'non-consecutive-days',
+      dates: requiredDays.map(dayKey), evidence: [],
+    };
+  }
+  const evidence = selected.map((day) => ({
+    date: day.date,
+    rhr: parseNumber(day.values?.rhr),
+    hrv: parseNumber(day.values?.hrv),
+  }));
+  if (evidence.some(({ rhr, hrv }) => rhr === null || hrv === null)) {
+    return { state: 'unavailable', active: false, reason: 'missing-rhr-or-hrv', dates: requiredDays.map(dayKey), evidence };
+  }
+  const active = evidence.slice(1).every((point, index) => (
+    point.rhr > evidence[index].rhr && point.hrv < evidence[index].hrv
+  ));
+  return {
+    state: active ? 'active' : 'clear',
+    active,
+    reason: active ? 'three-day-rhr-up-hrv-down' : 'trend-not-confirmed',
+    dates: requiredDays.map(dayKey),
+    evidence,
+    interpretation: active
+      ? 'Tymczasowa, podatna na szum przesłanka do rozważenia MODIFY; nigdy samodzielnie do STOP.'
+      : 'Brak trzydniowego pogorszenia według reguły pomostowej.',
+  };
+}
+
 function dataGapIssues(days, evaluationDay) {
   const historical = days.filter(({ dayNumber }) => dayNumber < evaluationDay);
   if (!historical.length) return [];
@@ -282,6 +320,9 @@ export function computeDailyMetrics(rows = [], evaluationDate = new Date()) {
   }));
   const issues = [...normalized.issues, ...dataGapIssues(usableDays, evaluationDay)];
   const allReady = Object.values(metrics).every((metric) => metric.baseline.ready);
+  const bridgeSignal = preCalibrationTrend(usableDays, evaluationDate, {
+    enabled: !(metrics.hrv.baseline.ready && metrics.rhr.baseline.ready),
+  });
 
   return {
     state: historyDays < 28 ? 'calibrating' : allReady ? 'ready' : 'partial',
@@ -289,6 +330,7 @@ export function computeDailyMetrics(rows = [], evaluationDate = new Date()) {
     historyDays,
     current,
     metrics,
+    bridgeSignal,
     days: usableDays,
     issues,
     undatedSkipped: normalized.undatedSkipped,

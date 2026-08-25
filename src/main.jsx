@@ -33,7 +33,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 4.7';
+const APP_VERSION = 'FINAL 4.8';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -349,6 +349,12 @@ function DailyMetricsStatus({ daily }) {
         <div className={`data-quality-banner verifier-${severity}`} role={severity === 'error' ? 'alert' : 'status'}>
           <strong>RAW_DATA — wykryto problem z integralnością danych.</strong>
           {actionable.slice(0, 4).map((item, index) => <span key={`${item.id}-${item.date || 'row'}-${index}`}>{item.detail}</span>)}
+        </div>
+      ) : null}
+      {daily?.bridgeSignal?.active ? (
+        <div className="data-quality-banner verifier-warning" role="status">
+          <strong>SYGNAŁ POMOSTOWY — rozważ MODIFY, nie STOP.</strong>
+          <span>Przez trzy kolejne dni RHR rosło, a HRV spadało. Reguła jest tymczasowa i podatna na szum; wymaga potwierdzenia samopoczuciem oraz rozgrzewką.</span>
         </div>
       ) : null}
       <p className="method-note"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline 30 dni wyklucza oceniany dzień; przed kalibracją nie pokazujemy z-score.</p>
