@@ -14,8 +14,13 @@ const LIVE_HEADERS = {
     'Date', 'Time', 'Type', 'Name', 'Distance_km', 'Duration_min', 'Duration_text', 'Pace', 'HR_avg',
     'HR_max', 'Power_avg', 'Power_max', 'RPE', 'sRPE', 'Pain', 'Garmin_Load', 'TE_Aerobic',
     'TE_Anaerobic', 'Cadence', 'GCT_ms', 'Notes', 'Source', 'Status', 'Session_ID',
+    'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Time_In_Target_s', 'Time_Above_Target_s',
+    'Time_Below_Target_s', 'HR_Analyzed_Duration_s',
   ],
-  Plan: ['Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session'],
+  Plan: [
+    'Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session',
+    'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Distance_Target_Min_km', 'Distance_Target_Max_km',
+  ],
   Raw_Data: ['Date', 'Weight_kg'],
 };
 
@@ -49,6 +54,20 @@ describe('kontrakty nagłówków Google Sheets', () => {
   it('Plan akceptuje Session jako kontrolowany zamiennik Rano', () => {
     const headers = LIVE_HEADERS.Plan.filter((header) => header !== 'Rano');
     expect(missingContractFields(headers, 'Plan')).toEqual([]);
+  });
+
+  it('brak pola atomowego po migracji łamie kontrakt Training Log', () => {
+    const headers = LIVE_HEADERS['Training Log'].filter((header) => header !== 'HR_Analyzed_Duration_s');
+    expect(missingContractFields(headers, 'Training Log')).toEqual([
+      expect.objectContaining({ id: 'logHrAnalyzedDuration', label: 'HR_Analyzed_Duration_s' }),
+    ]);
+  });
+
+  it('brak celu dystansu po migracji łamie kontrakt Plan', () => {
+    const headers = LIVE_HEADERS.Plan.filter((header) => header !== 'Distance_Target_Max_km');
+    expect(missingContractFields(headers, 'Plan')).toEqual([
+      expect.objectContaining({ id: 'planDistanceTargetMax', label: 'Distance_Target_Max_km' }),
+    ]);
   });
 
   it('zwraca czytelny DATA ERROR dla pobranych wierszy bez wymaganej kolumny', () => {

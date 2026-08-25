@@ -55,6 +55,12 @@ export const A = {
   logNotes: ['notes', 'uwagi'],
   logSource: ['source', 'zrodlo'],
   logStatus: ['status'],
+  logHrTargetMin: ['hr target min bpm'],
+  logHrTargetMax: ['hr target max bpm'],
+  logTimeInTarget: ['time in target s'],
+  logTimeAboveTarget: ['time above target s'],
+  logTimeBelowTarget: ['time below target s'],
+  logHrAnalyzedDuration: ['hr analyzed duration s'],
 
   planDay: ['dzien', 'dzień'],
   planMorning: ['rano'],
@@ -64,6 +70,10 @@ export const A = {
   planStatus: ['status'],
   planNotes: ['uwagi'],
   planSession: ['trening', 'session'],
+  planHrTargetMin: ['hr target min bpm'],
+  planHrTargetMax: ['hr target max bpm'],
+  planDistanceTargetMin: ['distance target min km'],
+  planDistanceTargetMax: ['distance target max km'],
 };
 
 const requirement = (id, label = id, fields = [id]) => ({ id, label, fields });
@@ -120,6 +130,12 @@ export const SHEET_CONTRACTS = {
     requirement('logSrpe', 'sRPE'),
     requirement('logNotes', 'Notes'),
     requirement('logStatus', 'Status'),
+    requirement('logHrTargetMin', 'HR_Target_Min_bpm'),
+    requirement('logHrTargetMax', 'HR_Target_Max_bpm'),
+    requirement('logTimeInTarget', 'Time_In_Target_s'),
+    requirement('logTimeAboveTarget', 'Time_Above_Target_s'),
+    requirement('logTimeBelowTarget', 'Time_Below_Target_s'),
+    requirement('logHrAnalyzedDuration', 'HR_Analyzed_Duration_s'),
   ],
   Plan: [
     requirement('date', 'Data'),
@@ -130,6 +146,10 @@ export const SHEET_CONTRACTS = {
     requirement('planRpe', 'RPE max'),
     requirement('planStatus', 'Status'),
     requirement('planNotes', 'Uwagi'),
+    requirement('planHrTargetMin', 'HR_Target_Min_bpm'),
+    requirement('planHrTargetMax', 'HR_Target_Max_bpm'),
+    requirement('planDistanceTargetMin', 'Distance_Target_Min_km'),
+    requirement('planDistanceTargetMax', 'Distance_Target_Max_km'),
   ],
   Raw_Data: [
     requirement('date', 'Date'),
