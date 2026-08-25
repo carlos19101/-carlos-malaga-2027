@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareVerifierMetrics, computeVerifierMetrics, crossValidate } from './metrics';
+import { compareVerifierMetrics, computeExecution, computeVerifierMetrics, crossValidate } from './metrics';
 
 describe('computeVerifierMetrics', () => {
   const today = new Date(2026, 7, 25, 12);
@@ -128,5 +128,65 @@ describe('crossValidate', () => {
     expect(comparisons.map(({ field, severity }) => [field, severity])).toEqual([
       ['km7', 'ok'], ['km28', 'ok'], ['srpe7', 'ok'], ['srpe28', 'ok'], ['sessions7', 'ok'], ['weight', 'ok'],
     ]);
+  });
+});
+
+describe('computeExecution', () => {
+  const complete = {
+    targetLo: '150', targetHi: '162',
+    timeInTarget: '1169', timeAboveTarget: '1376', timeBelowTarget: '87', analyzedDuration: '2632',
+    actualKm: '6,80067', distanceTargetMin: '5', distanceTargetMax: '6',
+  };
+
+  it('bez atomowego celu HR zwraca no-target i nie zgaduje z tekstu', () => {
+    expect(computeExecution({ ...complete, targetLo: '', targetHi: '' })).toEqual(expect.objectContaining({
+      status: 'no-target', targetLo: null, targetHi: null, hrTargetPct: null,
+    }));
+  });
+
+  it('przy celu, ale bez liczników czasu zwraca no-data', () => {
+    expect(computeExecution({ targetLo: 150, targetHi: 162 })).toEqual(expect.objectContaining({
+      status: 'no-data', targetLo: 150, targetHi: 162, hrTargetPct: null,
+    }));
+  });
+
+  it('liczy realny TCX 23.08 i oznacza przekroczenie', () => {
+    expect(computeExecution(complete)).toEqual(expect.objectContaining({
+      targetLo: 150,
+      targetHi: 162,
+      hrTargetPct: 44.41,
+      aboveTargetPct: 52.28,
+      belowTargetPct: 3.31,
+      timeAboveTarget: 1376,
+      timeBelowTarget: 87,
+      analyzedDuration: 2632,
+      volumePct: 113.34,
+      status: 'over',
+    }));
+  });
+
+  it('sesja w zakresie i objętości ma status ok', () => {
+    expect(computeExecution({
+      ...complete, timeInTarget: 1800, timeAboveTarget: 100, timeBelowTarget: 100,
+      analyzedDuration: 2000, actualKm: 5.5,
+    })).toEqual(expect.objectContaining({ hrTargetPct: 90, volumePct: 91.67, status: 'ok' }));
+  });
+
+  it('duży udział poniżej celu lub za mały dystans daje under', () => {
+    expect(computeExecution({
+      ...complete, timeInTarget: 900, timeAboveTarget: 100, timeBelowTarget: 1000,
+      analyzedDuration: 2000, actualKm: 4,
+    })).toEqual(expect.objectContaining({ belowTargetPct: 50, status: 'under' }));
+  });
+
+  it('niespójna suma liczników daje data-error zamiast procentu', () => {
+    expect(computeExecution({ ...complete, analyzedDuration: 2500 })).toEqual(expect.objectContaining({
+      status: 'data-error', hrTargetPct: null,
+    }));
+  });
+
+  it('brak celu dystansu nie blokuje oceny intensywności', () => {
+    expect(computeExecution({ ...complete, distanceTargetMin: '', distanceTargetMax: '' }))
+      .toEqual(expect.objectContaining({ status: 'over', volumePct: null }));
   });
 });

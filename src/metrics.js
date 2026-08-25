@@ -87,3 +87,96 @@ export function crossValidate(computed = {}, appFeed = {}) {
   return compareVerifierMetrics(computed, appFeed)
     .filter(({ severity }) => severity === 'warning' || severity === 'error');
 }
+
+function executionResult(overrides = {}) {
+  return {
+    targetLo: null,
+    targetHi: null,
+    hrTargetPct: null,
+    aboveTargetPct: null,
+    belowTargetPct: null,
+    timeInTarget: null,
+    timeAboveTarget: null,
+    timeBelowTarget: null,
+    analyzedDuration: null,
+    actualKm: null,
+    distanceTargetMin: null,
+    distanceTargetMax: null,
+    volumePct: null,
+    status: 'no-target',
+    ...overrides,
+  };
+}
+
+function percent(value, total) {
+  return Number(((value / total) * 100).toFixed(2));
+}
+
+export function computeExecution(session = {}) {
+  const targetLo = parseNumber(session.targetLo);
+  const targetHi = parseNumber(session.targetHi);
+  if (targetLo === null || targetHi === null) return executionResult();
+  if (targetLo >= targetHi) return executionResult({ targetLo, targetHi, status: 'data-error' });
+
+  const timeInTarget = parseNumber(session.timeInTarget);
+  const timeAboveTarget = parseNumber(session.timeAboveTarget);
+  const timeBelowTarget = parseNumber(session.timeBelowTarget);
+  const analyzedDuration = parseNumber(session.analyzedDuration);
+  const base = { targetLo, targetHi };
+
+  if ([timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration].some((value) => value === null)
+    || analyzedDuration === 0) {
+    return executionResult({ ...base, status: 'no-data' });
+  }
+  if ([timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration].some((value) => value < 0)
+    || Math.abs(timeInTarget + timeAboveTarget + timeBelowTarget - analyzedDuration) > 1) {
+    return executionResult({
+      ...base, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration, status: 'data-error',
+    });
+  }
+
+  const hrTargetPct = percent(timeInTarget, analyzedDuration);
+  const aboveTargetPct = percent(timeAboveTarget, analyzedDuration);
+  const belowTargetPct = percent(timeBelowTarget, analyzedDuration);
+  const actualKm = parseNumber(session.actualKm);
+  const distanceTargetMin = parseNumber(session.distanceTargetMin);
+  const distanceTargetMax = parseNumber(session.distanceTargetMax);
+  const partialDistanceTarget = (distanceTargetMin === null) !== (distanceTargetMax === null);
+  const invalidDistanceTarget = distanceTargetMin !== null && (
+    distanceTargetMin < 0 || distanceTargetMax <= 0 || distanceTargetMin > distanceTargetMax
+  );
+  if (partialDistanceTarget || invalidDistanceTarget) {
+    return executionResult({
+      ...base, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration,
+      hrTargetPct, aboveTargetPct, belowTargetPct, actualKm, distanceTargetMin, distanceTargetMax,
+      status: 'data-error',
+    });
+  }
+
+  const volumePct = actualKm !== null && distanceTargetMax !== null
+    ? percent(actualKm, distanceTargetMax)
+    : null;
+  const intensityStatus = aboveTargetPct > 40 ? 'over' : belowTargetPct > 40 ? 'under' : 'ok';
+  const volumeStatus = actualKm === null || distanceTargetMin === null
+    ? 'ok'
+    : actualKm > distanceTargetMax ? 'over' : actualKm < distanceTargetMin ? 'under' : 'ok';
+  const status = intensityStatus === 'over' || volumeStatus === 'over'
+    ? 'over'
+    : intensityStatus === 'under' || volumeStatus === 'under' ? 'under' : 'ok';
+
+  return executionResult({
+    ...base,
+    hrTargetPct,
+    aboveTargetPct,
+    belowTargetPct,
+    timeInTarget,
+    timeAboveTarget,
+    timeBelowTarget,
+    analyzedDuration,
+    actualKm,
+    distanceTargetMin,
+    distanceTargetMax,
+    volumePct,
+    status,
+  });
+}

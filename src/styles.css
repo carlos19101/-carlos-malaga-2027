@@ -300,6 +300,20 @@ main {
 .last-run-card span { color: #aab2c2; font-size: .62rem; font-weight: 850; letter-spacing: .15em; }
 .last-run-card strong { margin-top: 9px; font-size: 1.7rem; font-variant-numeric: tabular-nums; }
 .last-run-card strong small { color: var(--muted-2); font-size: .8rem; }
+.execution-card { margin-top: 12px; padding: 18px; border: 1px solid rgba(255,255,255,.1); border-radius: 22px; background: rgba(255,255,255,.025); }
+.execution-over { border-color: rgba(243,200,70,.32); background: rgba(243,200,70,.06); }
+.execution-under, .execution-no-data, .execution-no-target { border-color: rgba(88,197,232,.24); }
+.execution-data-error { border-color: rgba(239,72,103,.34); background: rgba(239,72,103,.07); }
+.execution-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+.execution-heading span { display: block; color: #aab2c2; font-size: .62rem; font-weight: 850; letter-spacing: .13em; }
+.execution-heading strong { display: block; margin-top: 7px; font-size: 1rem; }
+.execution-heading > small { max-width: 290px; color: var(--muted); text-align: right; line-height: 1.4; }
+.execution-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+.execution-grid p { margin: 0; padding: 12px; border-radius: 14px; background: rgba(255,255,255,.04); }
+.execution-grid b, .execution-grid small { display: block; color: var(--muted); }
+.execution-grid b { font-size: .57rem; letter-spacing: .08em; }
+.execution-grid strong { display: block; margin: 6px 0 3px; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.execution-grid small { font-size: .68rem; line-height: 1.35; }
 
 .goal-chips { margin-bottom: 14px; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
 .goal-chips span { min-height: 60px; padding: 13px 16px; display: flex; align-items: center; gap: 11px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: #dfe3ea; }
@@ -496,6 +510,9 @@ tbody tr:last-child td { border-bottom: 0; }
   .last-run-card > div:nth-child(odd) { border-right: 1px solid rgba(255,255,255,.07); }
   .last-run-card > div:nth-child(3), .last-run-card > div:nth-child(4) { border-bottom: 0; }
   .last-run-card strong { font-size: 1.35rem; }
+  .execution-heading { align-items: start; flex-direction: column; }
+  .execution-heading > small { text-align: left; }
+  .execution-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 
   .goal-chips { grid-template-columns: 1fr; gap: 7px; }
   .goal-chips span { min-height: 52px; }

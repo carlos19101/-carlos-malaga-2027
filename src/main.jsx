@@ -25,14 +25,14 @@ import {
   sourceFreshness,
   summarizeLoad,
 } from './performance';
-import { computeVerifierMetrics, crossValidate } from './metrics';
+import { computeExecution, computeVerifierMetrics, crossValidate } from './metrics';
 import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,C' };
-const APP_VERSION = 'FINAL 4.3';
+const APP_VERSION = 'FINAL 4.4';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -179,6 +179,31 @@ function verifierFeedMetrics(row) {
   };
 }
 
+function isRunLogRow(row) {
+  return ['bieg', 'run', 'running'].includes(normalize(resolveLogSession(row, A.logType)));
+}
+
+function planForLogRow(planRows, logRow) {
+  const date = logRow ? rowDate(logRow) : null;
+  if (!date) return null;
+  return planRows.find((planRow) => sameCalendarDay(rowDate(planRow), date)) || null;
+}
+
+function executionInput(logRow, planRow) {
+  if (!logRow) return {};
+  return {
+    targetLo: v(logRow, 'logHrTargetMin', ''),
+    targetHi: v(logRow, 'logHrTargetMax', ''),
+    timeInTarget: v(logRow, 'logTimeInTarget', ''),
+    timeAboveTarget: v(logRow, 'logTimeAboveTarget', ''),
+    timeBelowTarget: v(logRow, 'logTimeBelowTarget', ''),
+    analyzedDuration: v(logRow, 'logHrAnalyzedDuration', ''),
+    actualKm: v(logRow, 'logDistance', ''),
+    distanceTargetMin: planRow ? v(planRow, 'planDistanceTargetMin', '') : '',
+    distanceTargetMax: planRow ? v(planRow, 'planDistanceTargetMax', '') : '',
+  };
+}
+
 function getTodayPlan(rows, now = new Date()) {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
@@ -306,6 +331,47 @@ function VerifierBanner({ mismatches }) {
   );
 }
 
+function executionDuration(value) {
+  const seconds = Math.max(0, Math.round(Number(value) || 0));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function ExecutionCard({ execution }) {
+  const unavailable = {
+    'no-target': 'BRAK CELU — Execution wymaga atomowego zakresu HR.',
+    'no-data': 'BRAK DANYCH — wykonania intensywności nie można zweryfikować.',
+    'data-error': 'DATA ERROR — atomowe czasy Execution są niespójne.',
+  };
+  if (unavailable[execution.status]) {
+    return <article className={`execution-card execution-${execution.status}`}><strong>{unavailable[execution.status]}</strong></article>;
+  }
+
+  const verdict = {
+    ok: 'OK — wykonanie zgodne z celem',
+    over: 'OVER — sesja kosztowniejsza niż plan',
+    under: 'UNDER — bodziec poniżej planu',
+  }[execution.status];
+  const volumeNote = execution.volumePct === null
+    ? 'brak atomowego celu dystansu'
+    : `${formatMetricNumber(execution.actualKm, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} / max ${formatMetricNumber(execution.distanceTargetMax, { maximumFractionDigits: 2 })} km`;
+
+  return (
+    <article className={`execution-card execution-${execution.status}`}>
+      <div className="execution-heading">
+        <div><span>EXECUTION · CEL HR {execution.targetLo}–{execution.targetHi} BPM</span><strong>{verdict}</strong></div>
+        <small>Wyliczone z danych atomowych, nie ze średniego HR.</small>
+      </div>
+      <div className="execution-grid">
+        <p><b>W OKNIE</b><strong>{formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(execution.timeInTarget)}</small></p>
+        <p><b>PONAD CELEM</b><strong>{formatMetricNumber(execution.aboveTargetPct, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(execution.timeAboveTarget)}</small></p>
+        <p><b>PONIŻEJ CELU</b><strong>{formatMetricNumber(execution.belowTargetPct, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(execution.timeBelowTarget)}</small></p>
+        <p><b>OBJĘTOŚĆ</b><strong>{execution.volumePct === null ? '—' : `${formatMetricNumber(execution.volumePct, { maximumFractionDigits: 1 })}%`}</strong><small>{volumeNote}</small></p>
+      </div>
+    </article>
+  );
+}
+
 function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierReady, now }) {
   const row = latestRow(feed);
   const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
@@ -321,6 +387,9 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const verifierMismatches = useMemo(() => verifierReady
     ? crossValidate(computedMetrics, verifierFeedMetrics(row))
     : [], [computedMetrics, row, verifierReady]);
+  const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
+  const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
+  const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
 
   const decision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
@@ -421,6 +490,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           <div><span>HR</span><strong>{formatMetricNumber(v(row, 'lastRunHrAvg', ''), { maximumFractionDigits: 0, fallback: '—' })} <small>/ {formatMetricNumber(v(row, 'lastRunHrMax', ''), { maximumFractionDigits: 0, fallback: '—' })}</small></strong></div>
           <div><span>RPE</span><strong>{v(row, 'lastRunRpe', '') ? `${formatMetricNumber(v(row, 'lastRunRpe'), { maximumFractionDigits: 1 })}/10` : '—'}</strong></div>
         </article>
+        <ExecutionCard execution={execution} />
       </section>
 
       <section className="section-block race-goals">
