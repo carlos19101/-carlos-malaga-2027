@@ -152,6 +152,16 @@ main {
 .muted-copy, .method-note { color: var(--muted); line-height: 1.55; }
 .method-note { margin: 13px 2px 0; font-size: .72rem; }
 
+.decision-journal-list { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.decision-journal-card { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); }
+.decision-journal-heading { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
+.decision-journal-heading > div > span, .decision-journal-heading small { display: block; }
+.decision-journal-heading > div > span { color: var(--muted-2); font-size: .72rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.decision-journal-heading small, .decision-no-evidence { margin-top: 5px; color: var(--muted); font-size: .66rem; }
+.decision-evidence { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+.decision-evidence span { padding: 6px 9px; border-radius: 999px; background: rgba(255,255,255,.055); color: #c8ced9; font-size: .66rem; font-variant-numeric: tabular-nums; }
+.decision-journal-card > p { margin: 15px 0 0; color: #dfe3ea; font-size: .82rem; line-height: 1.55; overflow-wrap: anywhere; }
+
 .race-hero {
   position: relative;
   min-height: 260px;
@@ -489,6 +499,9 @@ tbody tr:last-child td { border-bottom: 0; }
   .coach-card > div:first-child > p { font-size: .86rem; }
   .coach-context { padding: 16px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.09); }
   .coach-context p { font-size: .78rem; }
+
+  .decision-journal-list { grid-template-columns: 1fr; }
+  .decision-journal-card { padding: 17px; border-radius: 19px; }
 
   .today-plan-card { padding: 20px; border-radius: 23px; }
   .today-plan-title strong, .today-plan-card > div:first-child > strong { font-size: 1.35rem; }

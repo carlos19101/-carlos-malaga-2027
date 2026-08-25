@@ -29,7 +29,7 @@ function dayKey(dayNumber) {
   return new Date(dayNumber * 86400000).toISOString().slice(0, 10);
 }
 
-function parseRawTimestamp(value) {
+export function parseRawTimestamp(value) {
   const date = parseDate(value);
   if (!date) return null;
   const seconds = String(value ?? '').match(/[ T]\d{1,2}:\d{2}:(\d{2})(?:[.,]\d+)?(?:\s|$)/)?.[1];

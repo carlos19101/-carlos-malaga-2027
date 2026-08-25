@@ -34,6 +34,10 @@ Idempotentny importer dopasowuje sesję po `Session_ID`, blokuje konflikty i gen
 
 Silnik normalizuje wiele wpisów `Raw_Data` do wartości dziennych, wyklucza oceniany dzień z baseline'u i pozostaje w stanie `KALIBRACJA` do zebrania 28 dni historii oraz minimum 14 próbek metryki. Metodologia i audyt danych na żywo: [`docs/daily-metrics.md`](docs/daily-metrics.md).
 
+## Dziennik decyzji
+
+Dashboard pokazuje chronologię werdyktów Head Coacha wraz z dowodami, które faktycznie istniały w chwili decyzji. Reguły czasowe i komenda audytowa: [`docs/decision-journal.md`](docs/decision-journal.md).
+
 ## Ważne
 
 Ta wersja realizuje pakiet poprawek integralności danych, offline, iOS safe-area, touch targets, WCAG i service workera. Migracja z publicznego CSV do prywatnego Google Sheet przez uwierzytelnione Vercel API jest kolejnym etapem i nie jest częścią tego patcha.

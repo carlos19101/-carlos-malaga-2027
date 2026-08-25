@@ -21,7 +21,11 @@ const LIVE_HEADERS = {
     'Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session',
     'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Distance_Target_Min_km', 'Distance_Target_Max_km',
   ],
-  Raw_Data: ['Date', 'Timestamp', 'Weight_kg', 'RHR_bpm', 'HRV_night_ms', 'Sleep_min', 'Sleep_score', 'Source'],
+  Raw_Data: [
+    'Date', 'Timestamp', 'Weight_kg', 'RHR_bpm', 'HRV_night_ms', 'Sleep_min', 'Sleep_score',
+    'BodyBattery_gain', 'Readiness_Garmin', 'Pain_0_10', 'DOMS_0_10', 'Fatigue_0_10',
+    'Coach_Status', 'Coach_Decision', 'Source', 'BodyBattery_current',
+  ],
 };
 
 describe('kontrakty nagłówków Google Sheets', () => {
@@ -81,6 +85,13 @@ describe('kontrakty nagłówków Google Sheets', () => {
     const headers = LIVE_HEADERS.Raw_Data.filter((header) => header !== 'HRV_night_ms');
     expect(missingContractFields(headers, 'Raw_Data')).toEqual([
       expect.objectContaining({ id: 'rawHrv', label: 'HRV_night_ms' }),
+    ]);
+  });
+
+  it('brak rekomendacji Head Coacha łamie kontrakt dziennika decyzji', () => {
+    const headers = LIVE_HEADERS.Raw_Data.filter((header) => header !== 'Coach_Decision');
+    expect(missingContractFields(headers, 'Raw_Data')).toEqual([
+      expect.objectContaining({ id: 'rawCoachDecision', label: 'Coach_Decision' }),
     ]);
   });
 

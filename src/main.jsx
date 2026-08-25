@@ -26,13 +26,14 @@ import {
 } from './performance';
 import { computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
+import { buildDecisionJournal } from './decisionJournal';
 import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
-const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,T' };
-const APP_VERSION = 'FINAL 4.6';
+const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
+const APP_VERSION = 'FINAL 4.7';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -355,6 +356,41 @@ function DailyMetricsStatus({ daily }) {
   );
 }
 
+function journalEvidenceText(item) {
+  const value = formatMetricNumber(item.value, { maximumFractionDigits: item.field === 'weight' ? 2 : 0 });
+  const suffix = item.unit?.startsWith('/') ? item.unit : item.unit ? ` ${item.unit}` : '';
+  return `${item.label} ${value}${suffix}`;
+}
+
+function DecisionJournal({ journal }) {
+  if (!journal.entries.length) return null;
+  return (
+    <section className="section-block">
+      <div className="section-heading">
+        <div><span className="eyebrow">DZIENNIK DECYZJI</span><h2>Co wiedział sztab</h2></div>
+        <span className="section-aside">dowody dostępne w chwili decyzji</span>
+      </div>
+      <div className="decision-journal-list">
+        {journal.entries.map((entry) => (
+          <article className="decision-journal-card" key={entry.id}>
+            <div className="decision-journal-heading">
+              <div><span>{formatDate(entry.timestamp, true)}</span><small>{entry.source || 'źródło niepodane'}</small></div>
+              <StatusChip status={entry.status} />
+            </div>
+            {entry.evidence.length ? (
+              <div className="decision-evidence" aria-label="Dowody">
+                {entry.evidence.map((item) => <span key={item.field}>{journalEvidenceText(item)}</span>)}
+              </div>
+            ) : <small className="decision-no-evidence">Brak atomowych dowodów dostępnych przed tą decyzją.</small>}
+            <p>{entry.recommendation || 'Status bez zapisanej rekomendacji.'}</p>
+          </article>
+        ))}
+      </div>
+      <p className="method-note">DOWODY są ograniczone czasowo: późniejszy pomiar z tego samego dnia nie jest dopisywany wstecz do wcześniejszej decyzji. Tekst rekomendacji pozostaje cytatem ze źródła.</p>
+    </section>
+  );
+}
+
 function executionDuration(value) {
   const seconds = Math.max(0, Math.round(Number(value) || 0));
   const minutes = Math.floor(seconds / 60);
@@ -406,6 +442,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const matrix = useMemo(() => raceGoalMatrix(), []);
   const verifierEndDate = v(row, 'date', '') || now;
   const daily = useMemo(() => computeDailyMetrics(raw, verifierEndDate), [raw, verifierEndDate]);
+  const journal = useMemo(() => buildDecisionJournal(raw, { limit: 4 }), [raw]);
   const computedMetrics = useMemo(() => computeVerifierMetrics(
     verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
   ), [log, raw, verifierEndDate]);
@@ -464,6 +501,8 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       <section className="section-block">
         <TodayPlanCard row={todayPlan} />
       </section>
+
+      <DecisionJournal journal={journal} />
 
       <section className="section-block">
         <div className="section-heading"><div><span className="eyebrow">DZISIAJ</span><h2>Sygnały organizmu</h2></div></div>
