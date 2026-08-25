@@ -7,7 +7,6 @@ PWA React/Vite do monitorowania treningu i regeneracji zasilana Google Sheets.
 - `APP_FEED`
 - `Training Log`
 - `Plan`
-- Google Sheet ID: `1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM`
 
 Aplikacja pobiera CSV przez Google `gviz`, używa `cache: no-store`, parametru cache-busting, timeoutu `AbortController`, last-known-good w `localStorage` i jawnego mapowania pól exact-match.
 
