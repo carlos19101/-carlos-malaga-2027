@@ -30,6 +30,10 @@ Wersjonowany analizator TCX oblicza atomowe czasy wykonania na podstawie rzeczyw
 
 Idempotentny importer dopasowuje sesję po `Session_ID`, blokuje konflikty i generuje precyzyjny zapis atomów do Training Log. Instrukcja: [`docs/tcx-import.md`](docs/tcx-import.md).
 
+## Daily Metrics
+
+Silnik normalizuje wiele wpisów `Raw_Data` do wartości dziennych, wyklucza oceniany dzień z baseline'u i pozostaje w stanie `KALIBRACJA` do zebrania 28 dni historii oraz minimum 14 próbek metryki. Metodologia i audyt danych na żywo: [`docs/daily-metrics.md`](docs/daily-metrics.md).
+
 ## Ważne
 
 Ta wersja realizuje pakiet poprawek integralności danych, offline, iOS safe-area, touch targets, WCAG i service workera. Migracja z publicznego CSV do prywatnego Google Sheet przez uwierzytelnione Vercel API jest kolejnym etapem i nie jest częścią tego patcha.

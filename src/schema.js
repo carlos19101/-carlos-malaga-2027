@@ -12,6 +12,13 @@ export const A = {
   hrv7d: ['hrv 7d'],
   rhr: ['rhr'],
   weight: ['weight', 'waga', 'weight kg'],
+  rawTimestamp: ['timestamp'],
+  rawWeight: ['weight kg'],
+  rawRhr: ['rhr bpm'],
+  rawHrv: ['hrv night ms'],
+  rawSleepMinutes: ['sleep min'],
+  rawSleepScore: ['sleep score'],
+  rawSource: ['source'],
   weightAvg7d: ['weight avg 7d'],
   weightDelta7d: ['weight delta 7d'],
   steps: ['steps', 'kroki'],
@@ -155,7 +162,13 @@ export const SHEET_CONTRACTS = {
   ],
   Raw_Data: [
     requirement('date', 'Date'),
-    requirement('weight', 'Weight_kg'),
+    requirement('rawTimestamp', 'Timestamp'),
+    requirement('rawWeight', 'Weight_kg'),
+    requirement('rawRhr', 'RHR_bpm'),
+    requirement('rawHrv', 'HRV_night_ms'),
+    requirement('rawSleepMinutes', 'Sleep_min'),
+    requirement('rawSleepScore', 'Sleep_score'),
+    requirement('rawSource', 'Source'),
   ],
 };
 

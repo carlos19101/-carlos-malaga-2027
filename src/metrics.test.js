@@ -1,5 +1,74 @@
 import { describe, expect, it } from 'vitest';
-import { compareVerifierMetrics, computeExecution, computeVerifierMetrics, crossValidate } from './metrics';
+import {
+  compareVerifierMetrics,
+  computeExecution,
+  computeLoad,
+  computeVerifierMetrics,
+  crossValidate,
+  rollingWindow,
+} from './metrics';
+
+describe('rollingWindow', () => {
+  it('ma domknięte granice i raportuje niedatowane wiersze', () => {
+    const result = rollingWindow([
+      { date: '2026-08-19', km: 1, srpe: 10, minutes: 10 },
+      { date: '2026-08-25', km: 2, srpe: 20, minutes: 20 },
+      { date: '2026-08-18', km: 100, srpe: 1000, minutes: 1000 },
+      { date: '', km: 100, srpe: 1000, minutes: 1000 },
+    ], new Date(2026, 7, 25, 12), 7);
+    expect(result).toMatchObject({
+      from: '2026-08-19', to: '2026-08-25', sessions: 2,
+      km: 3, srpe: 30, minutes: 30, undatedSkipped: 1,
+    });
+  });
+
+  it('coverage mierzy rozpiętość dostępnej historii, nie liczbę dni treningowych', () => {
+    const result = rollingWindow([
+      { date: '2026-07-29', srpe: 10 },
+      { date: '2026-08-25', srpe: 20 },
+    ], new Date(2026, 7, 25, 12), 28);
+    expect(result).toMatchObject({ availabilityDays: 28, daysWithData: 2, coverage: 1, dataDayCoverage: 2 / 28 });
+  });
+
+  it('pusty log zwraca zera, nie NaN', () => {
+    expect(rollingWindow([], new Date(2026, 7, 25, 12), 7)).toMatchObject({
+      availabilityDays: 0, coverage: 0, sessions: 0, km: 0, srpe: 0, minutes: 0,
+    });
+  });
+});
+
+describe('computeLoad', () => {
+  it('siedem dni historii daje null i kalibrację 7/28', () => {
+    const rows = Array.from({ length: 7 }, (_, index) => ({ date: `2026-08-${19 + index}`, srpe: 100 }));
+    expect(computeLoad(rows, new Date(2026, 7, 25, 12))).toMatchObject({
+      srpe7: 700, loadRatio: null, ratioStatus: 'calibrating', calibrationDays: '7/28',
+    });
+  });
+
+  it('ratio jest uncoupled: dni 8–28 nie zawierają ostrego tygodnia', () => {
+    const rows = [];
+    for (let day = 1; day <= 28; day += 1) {
+      rows.push({ date: `2026-01-${String(day).padStart(2, '0')}`, srpe: day <= 21 ? 100 : 300 });
+    }
+    const result = computeLoad(rows, '2026-01-28');
+    expect(result).toMatchObject({
+      srpe7: 2100,
+      srpe28: 4200,
+      chronic: { srpe: 2100, weeklyAverage: 700 },
+      loadRatio: 3,
+      ratioStatus: 'ok',
+      calibrationDays: '28/28',
+    });
+  });
+
+  it('pełna rozpiętość przy rzadkich treningach nadal kończy kalibrację', () => {
+    const result = computeLoad([
+      { date: '2026-01-01', srpe: 300 },
+      { date: '2026-01-28', srpe: 300 },
+    ], '2026-01-28');
+    expect(result).toMatchObject({ calibrationDays: '28/28', ratioStatus: 'ok', loadRatio: 3 });
+  });
+});
 
 describe('computeVerifierMetrics', () => {
   const today = new Date(2026, 7, 25, 12);

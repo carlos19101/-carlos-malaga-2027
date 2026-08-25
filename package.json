@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "tcx:analyze": "node tools/tcx-analyze.js",
-    "tcx:import": "node tools/tcx-import.js"
+    "tcx:import": "node tools/tcx-import.js",
+    "metrics:daily": "node tools/daily-metrics.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

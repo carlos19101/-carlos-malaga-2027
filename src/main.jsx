@@ -23,16 +23,16 @@ import {
   raceGoalMatrix,
   resolveCoachDecision,
   sourceFreshness,
-  summarizeLoad,
 } from './performance';
-import { computeExecution, computeVerifierMetrics, crossValidate } from './metrics';
+import { computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
+import { computeDailyMetrics } from './dailyMetrics';
 import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
-const SHEET_QUERIES = { raw: 'select A,C' };
-const APP_VERSION = 'FINAL 4.5';
+const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,T' };
+const APP_VERSION = 'FINAL 4.6';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -149,10 +149,6 @@ function formatNumericDate(value) {
 
 function sourceTime(feedRow) {
   return parseDate(v(feedRow, 'lastSynced', '')) || parseDate(v(feedRow, 'date', ''));
-}
-
-function logLoadRecords(rows) {
-  return rows.map((row) => ({ date: rowDate(row), srpe: v(row, 'logSrpe', '') })).filter((r) => r.date);
 }
 
 function verifierTrainingRecords(rows) {
@@ -331,6 +327,34 @@ function VerifierBanner({ mismatches }) {
   );
 }
 
+function dailyMetricNote(daily, field, prefix = '') {
+  const metricState = daily?.metrics?.[field];
+  const metricBaseline = metricState?.baseline;
+  if (!metricBaseline) return prefix;
+  const baselineNote = !metricBaseline.ready
+    ? `baseline: KALIBRACJA ${metricBaseline.calibrationDays} · n=${metricBaseline.n}`
+    : metricState.zScore === null
+      ? `baseline gotowy · n=${metricBaseline.n}`
+      : `${metricState.zScore >= 0 ? '+' : ''}${formatMetricNumber(metricState.zScore, { maximumFractionDigits: 2 })} SD vs baseline · n=${metricBaseline.n}`;
+  return [prefix, baselineNote].filter(Boolean).join(' · ');
+}
+
+function DailyMetricsStatus({ daily }) {
+  const actionable = (daily?.issues || []).filter(({ severity }) => severity === 'error' || severity === 'warning');
+  const severity = actionable.some(({ severity: itemSeverity }) => itemSeverity === 'error') ? 'error' : 'warning';
+  return (
+    <>
+      {actionable.length ? (
+        <div className={`data-quality-banner verifier-${severity}`} role={severity === 'error' ? 'alert' : 'status'}>
+          <strong>RAW_DATA — wykryto problem z integralnością danych.</strong>
+          {actionable.slice(0, 4).map((item, index) => <span key={`${item.id}-${item.date || 'row'}-${index}`}>{item.detail}</span>)}
+        </div>
+      ) : null}
+      <p className="method-note"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline 30 dni wyklucza oceniany dzień; przed kalibracją nie pokazujemy z-score.</p>
+    </>
+  );
+}
+
 function executionDuration(value) {
   const seconds = Math.max(0, Math.round(Number(value) || 0));
   const minutes = Math.floor(seconds / 60);
@@ -376,11 +400,12 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const row = latestRow(feed);
   const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
   const validation = useMemo(() => validateFeed(row, weightReading?.value || ''), [row, weightReading]);
-  const loadFallback = useMemo(() => summarizeLoad(logLoadRecords(log), now), [log, now]);
+  const loadComputed = useMemo(() => computeLoad(verifierTrainingRecords(log), now), [log, now]);
   const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
   const upcoming = useMemo(() => getUpcomingPlan(plan, 3, now), [plan, now]);
   const matrix = useMemo(() => raceGoalMatrix(), []);
   const verifierEndDate = v(row, 'date', '') || now;
+  const daily = useMemo(() => computeDailyMetrics(raw, verifierEndDate), [raw, verifierEndDate]);
   const computedMetrics = useMemo(() => computeVerifierMetrics(
     verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
   ), [log, raw, verifierEndDate]);
@@ -402,9 +427,9 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
 
   const hrvDelta = metricDeltaPercent(v(row, 'hrv', ''), v(row, 'hrv7d', ''));
   const weightDelta = metric(v(row, 'weightDelta7d', ''));
-  const srpe7 = metric(v(row, 'srpe7d', '')) ?? loadFallback.sum7;
-  const srpe28 = metric(v(row, 'srpe28d', '')) ?? loadFallback.sum28;
-  const ratio = loadFallback.enoughForRatio ? loadFallback.ratio : null;
+  const srpe7 = metric(v(row, 'srpe7d', '')) ?? loadComputed.srpe7;
+  const srpe28 = metric(v(row, 'srpe28d', '')) ?? loadComputed.srpe28;
+  const ratio = loadComputed.loadRatio;
 
   const sourceSignals = [
     v(row, 'pain', '') !== '' ? `ból ${formatMetricNumber(v(row, 'pain'), { maximumFractionDigits: 1 })}/10` : '',
@@ -450,16 +475,17 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           </div>
         ) : null}
         <VerifierBanner mismatches={verifierMismatches} />
+        <DailyMetricsStatus daily={daily} />
         {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : (
           <div className="readiness-grid">
             <MetricRing label="READINESS" value={v(row, 'readiness', '')} note="gotowość Garmin" />
             <MetricRing label="RECOVERY" value={v(row, 'recovery', '')} note="regeneracja" />
             <MetricRing label="BODY BATTERY" value={v(row, 'bodyBattery', '')} note="energia Garmin" />
             <div className="stats-grid compact-stats">
-              <StatCard label="SLEEP" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note="jakość / realizacja snu" />
-              <StatCard label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms` : 'nocne HRV'} />
-              <StatCard label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note="tętno spoczynkowe" />
-              <StatCard label="WAGA" value={formatMetricNumber(weightReading?.value, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={weightReading?.inherited ? `waga z ${formatNumericDate(weightReading.date)}` : v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt'} />
+              <StatCard label="SLEEP" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note={dailyMetricNote(daily, 'sleepScore', 'jakość / realizacja snu')} />
+              <StatCard label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={dailyMetricNote(daily, 'hrv', v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms` : 'nocne HRV')} />
+              <StatCard label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note={dailyMetricNote(daily, 'rhr', 'tętno spoczynkowe')} />
+              <StatCard label="WAGA" value={formatMetricNumber(weightReading?.value, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={dailyMetricNote(daily, 'weight', weightReading?.inherited ? `waga z ${formatNumericDate(weightReading.date)}` : v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt')} />
               <StatCard label="BÓL" value={formatMetricNumber(v(row, 'pain', ''), { maximumFractionDigits: 1 })} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
             </div>
           </div>
@@ -476,7 +502,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           <StatCard label="BIEG · 28D" value={formatMetricNumber(v(row, 'runKm28d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note="kontekst objętości" />
           <StatCard label="sRPE · 7D" value={srpe7 ? formatMetricNumber(srpe7, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
           <StatCard label="sRPE · 28D" value={srpe28 ? formatMetricNumber(srpe28, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
-          <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : ''} note={ratio !== null ? 'informacyjnie: 7d / tyg. ekwiwalent 28d' : 'czeka na dłuższą historię'} />
+          <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : ''} note={ratio !== null ? '7d / średnia tygodniowa z dni 8–28' : `kalibracja ${loadComputed.calibrationDays}`} />
           <StatCard label="WAGA · TREND" value={weightDelta !== null ? `${weightDelta >= 0 ? '+' : ''}${formatMetricNumber(weightDelta, { maximumFractionDigits: 1, minimumFractionDigits: 1 })}` : ''} unit={weightDelta !== null ? 'kg' : ''} note="śr. 7d vs poprzednie 7d" />
         </div>
         <p className="method-note">Load ratio jest kontekstem, nie automatycznym limitem bezpieczeństwa. Finalny werdykt sztabu ma pierwszeństwo.</p>

@@ -21,7 +21,7 @@ const LIVE_HEADERS = {
     'Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session',
     'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Distance_Target_Min_km', 'Distance_Target_Max_km',
   ],
-  Raw_Data: ['Date', 'Weight_kg'],
+  Raw_Data: ['Date', 'Timestamp', 'Weight_kg', 'RHR_bpm', 'HRV_night_ms', 'Sleep_min', 'Sleep_score', 'Source'],
 };
 
 describe('kontrakty nagłówków Google Sheets', () => {
@@ -74,6 +74,13 @@ describe('kontrakty nagłówków Google Sheets', () => {
     const headers = LIVE_HEADERS.Plan.filter((header) => header !== 'Distance_Target_Max_km');
     expect(missingContractFields(headers, 'Plan')).toEqual([
       expect.objectContaining({ id: 'planDistanceTargetMax', label: 'Distance_Target_Max_km' }),
+    ]);
+  });
+
+  it('brak atomowego HRV łamie kontrakt Daily Metrics w Raw_Data', () => {
+    const headers = LIVE_HEADERS.Raw_Data.filter((header) => header !== 'HRV_night_ms');
+    expect(missingContractFields(headers, 'Raw_Data')).toEqual([
+      expect.objectContaining({ id: 'rawHrv', label: 'HRV_night_ms' }),
     ]);
   });
 

@@ -27,6 +27,92 @@ function sum(rows, field) {
   return rows.reduce((total, row) => total + (row[field] ?? 0), 0);
 }
 
+export function rollingWindow(rows = [], endDate = new Date(), days = 7) {
+  const endDay = localDayNumber(endDate);
+  if (endDay === null || !Number.isInteger(days) || days <= 0) {
+    return {
+      from: null, to: null, days: Math.max(0, Number(days) || 0), availabilityDays: 0,
+      daysWithData: 0, coverage: 0, dataDayCoverage: 0, sessions: 0,
+      km: 0, srpe: 0, minutes: 0, undatedSkipped: 0,
+    };
+  }
+
+  let undatedSkipped = 0;
+  const valid = (Array.isArray(rows) ? rows : []).map((row) => {
+    const day = localDayNumber(row.date);
+    if (day === null) {
+      undatedSkipped += 1;
+      return null;
+    }
+    return {
+      day,
+      km: parseNumber(row.km) ?? 0,
+      srpe: parseNumber(row.srpe) ?? 0,
+      minutes: parseNumber(row.minutes) ?? 0,
+    };
+  }).filter(Boolean).filter(({ day }) => day <= endDay);
+  const fromDay = endDay - days + 1;
+  const windowRows = valid.filter(({ day }) => day >= fromDay);
+  const oldestDay = valid.length ? Math.min(...valid.map(({ day }) => day)) : null;
+  const availabilityStart = oldestDay === null ? null : Math.max(oldestDay, fromDay);
+  const availabilityDays = availabilityStart === null ? 0 : endDay - availabilityStart + 1;
+  const daysWithData = new Set(windowRows.map(({ day }) => day)).size;
+
+  return {
+    from: new Date(fromDay * 86400000).toISOString().slice(0, 10),
+    to: new Date(endDay * 86400000).toISOString().slice(0, 10),
+    days,
+    availabilityDays,
+    daysWithData,
+    coverage: availabilityDays / days,
+    dataDayCoverage: daysWithData / days,
+    sessions: windowRows.length,
+    km: sum(windowRows, 'km'),
+    srpe: sum(windowRows, 'srpe'),
+    minutes: sum(windowRows, 'minutes'),
+    undatedSkipped,
+  };
+}
+
+export function computeLoad(trainingLog = [], today = new Date()) {
+  const endDay = localDayNumber(today);
+  const acute = rollingWindow(trainingLog, today, 7);
+  const full = rollingWindow(trainingLog, today, 28);
+  if (endDay === null) {
+    return {
+      km7: 0, km28: 0, srpe7: 0, srpe28: 0, sessions7: 0, sessions28: 0,
+      loadRatio: null, ratioStatus: 'calibrating', calibrationDays: '0/28',
+      acute, chronic: { srpe: 0, weeklyAverage: 0 }, undatedSkipped: full.undatedSkipped,
+    };
+  }
+
+  const chronicRows = (Array.isArray(trainingLog) ? trainingLog : []).map((row) => ({
+    day: localDayNumber(row.date),
+    srpe: parseNumber(row.srpe) ?? 0,
+  })).filter(({ day }) => day !== null && day >= endDay - 27 && day <= endDay - 7);
+  const chronicSrpe = sum(chronicRows, 'srpe');
+  const chronicWeeklyAverage = chronicSrpe / 3;
+  const calibrated = full.availabilityDays >= 28;
+  const loadRatio = calibrated && chronicWeeklyAverage > 0
+    ? Number((acute.srpe / chronicWeeklyAverage).toFixed(4))
+    : null;
+
+  return {
+    km7: acute.km,
+    km28: full.km,
+    srpe7: acute.srpe,
+    srpe28: full.srpe,
+    sessions7: acute.sessions,
+    sessions28: full.sessions,
+    loadRatio,
+    ratioStatus: !calibrated ? 'calibrating' : chronicWeeklyAverage > 0 ? 'ok' : 'no-chronic-load',
+    calibrationDays: `${Math.min(full.availabilityDays, 28)}/28`,
+    acute,
+    chronic: { srpe: chronicSrpe, weeklyAverage: chronicWeeklyAverage },
+    undatedSkipped: full.undatedSkipped,
+  };
+}
+
 export function computeVerifierMetrics(trainingRows = [], rawRows = [], today = new Date()) {
   const endDay = localDayNumber(today);
   if (endDay === null) {
