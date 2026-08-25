@@ -1,0 +1,154 @@
+import { normalize } from './parse.js';
+
+export const A = {
+  date: ['date', 'data'],
+  lastSynced: ['last synced'],
+  readiness: ['readiness'],
+  recovery: ['recovery'],
+  bodyBattery: ['body battery', 'body battery score'],
+  strain: ['strain'],
+  sleep: ['sleep', 'sleep score'],
+  hrv: ['hrv'],
+  hrv7d: ['hrv 7d'],
+  rhr: ['rhr'],
+  weight: ['weight', 'waga', 'weight kg'],
+  weightAvg7d: ['weight avg 7d'],
+  weightDelta7d: ['weight delta 7d'],
+  steps: ['steps', 'kroki'],
+  status: ['status'],
+  decision: ['decision'],
+  pain: ['pain'],
+  doms: ['doms'],
+  fatigue: ['fatigue'],
+  hrmax: ['hrmax'],
+  lt1: ['lt1'],
+  lt2: ['lt2'],
+  thresholdPower: ['threshold power'],
+  z1: ['z1'], z2: ['z2'], z3: ['z3'], z4: ['z4'], z5: ['z5'],
+  runKm7d: ['run km 7d'],
+  runKm28d: ['run km 28d'],
+  runCount7d: ['run count 7d'],
+  srpe7d: ['srpe 7d'],
+  srpe28d: ['srpe 28d'],
+  lastRunDistance: ['last run distance'],
+  lastRunPace: ['last run pace'],
+  lastRunHrAvg: ['last run hr avg'],
+  lastRunHrMax: ['last run hr max'],
+  lastRunRpe: ['last run rpe'],
+  phase: ['phase'],
+  goalA: ['goal a'], goalB: ['goal b'], goalC: ['goal c'],
+  mainGoal: ['main goal'],
+
+  logTime: ['time', 'czas'],
+  logType: ['type', 'typ', 'typ treningu', 'activity'],
+  logName: ['name', 'nazwa'],
+  logDistance: ['distance km', 'distance_km', 'distance'],
+  logDuration: ['duration text', 'duration_text', 'duration', 'czas trwania'],
+  logPace: ['pace', 'tempo'],
+  logHrAvg: ['hr avg', 'hr_avg'],
+  logHrMax: ['hr max', 'hr_max'],
+  logPowerAvg: ['power avg', 'power_avg'],
+  logRpe: ['rpe'],
+  logSrpe: ['srpe'],
+  logPain: ['pain'],
+  logLoad: ['garmin load', 'garmin_load'],
+  logNotes: ['notes', 'uwagi'],
+  logSource: ['source', 'zrodlo'],
+  logStatus: ['status'],
+
+  planDay: ['dzien', 'dzień'],
+  planMorning: ['rano'],
+  planLater: ['pozniej', 'później'],
+  planHr: ['cel hr'],
+  planRpe: ['rpe max'],
+  planStatus: ['status'],
+  planNotes: ['uwagi'],
+  planSession: ['trening', 'session'],
+};
+
+const requirement = (id, label = id, fields = [id]) => ({ id, label, fields });
+
+export const SHEET_CONTRACTS = {
+  APP_FEED: [
+    requirement('date', 'Date'),
+    requirement('lastSynced', 'Last Synced'),
+    requirement('readiness', 'Readiness'),
+    requirement('recovery', 'Recovery'),
+    requirement('bodyBattery', 'Body Battery'),
+    requirement('sleep', 'Sleep'),
+    requirement('hrv', 'HRV'),
+    requirement('hrv7d', 'HRV 7d'),
+    requirement('rhr', 'RHR'),
+    requirement('weight', 'Weight'),
+    requirement('weightAvg7d', 'Weight avg 7d'),
+    requirement('weightDelta7d', 'Weight delta 7d'),
+    requirement('status', 'Status'),
+    requirement('decision', 'Decision'),
+    requirement('pain', 'Pain'),
+    requirement('doms', 'DOMS'),
+    requirement('fatigue', 'Fatigue'),
+    requirement('hrmax', 'HRmax'),
+    requirement('lt1', 'LT1'),
+    requirement('lt2', 'LT2'),
+    requirement('thresholdPower', 'Threshold Power'),
+    requirement('z1', 'Z1'), requirement('z2', 'Z2'), requirement('z3', 'Z3'),
+    requirement('z4', 'Z4'), requirement('z5', 'Z5'),
+    requirement('runKm7d', 'Run km 7d'),
+    requirement('runKm28d', 'Run km 28d'),
+    requirement('runCount7d', 'Run count 7d'),
+    requirement('srpe7d', 'sRPE 7d'),
+    requirement('srpe28d', 'sRPE 28d'),
+    requirement('lastRunDistance', 'Last Run Distance'),
+    requirement('lastRunPace', 'Last Run Pace'),
+    requirement('lastRunHrAvg', 'Last Run HR Avg'),
+    requirement('lastRunHrMax', 'Last Run HR Max'),
+    requirement('lastRunRpe', 'Last Run RPE'),
+    requirement('phase', 'Phase'),
+    requirement('goalA', 'Goal A'), requirement('goalB', 'Goal B'), requirement('goalC', 'Goal C'),
+  ],
+  'Training Log': [
+    requirement('date', 'Date'),
+    requirement('logTime', 'Time'),
+    requirement('logType', 'Type'),
+    requirement('logName', 'Name'),
+    requirement('logDistance', 'Distance'),
+    requirement('logDuration', 'Duration'),
+    requirement('logPace', 'Pace'),
+    requirement('logHrAvg', 'HR avg'),
+    requirement('logHrMax', 'HR max'),
+    requirement('logRpe', 'RPE'),
+    requirement('logSrpe', 'sRPE'),
+    requirement('logNotes', 'Notes'),
+    requirement('logStatus', 'Status'),
+  ],
+  Plan: [
+    requirement('date', 'Data'),
+    requirement('planDay', 'Dzień'),
+    requirement('planSession', 'Rano lub Session', ['planMorning', 'planSession']),
+    requirement('planLater', 'Później'),
+    requirement('planHr', 'Cel HR'),
+    requirement('planRpe', 'RPE max'),
+    requirement('planStatus', 'Status'),
+    requirement('planNotes', 'Uwagi'),
+  ],
+  Raw_Data: [
+    requirement('date', 'Date'),
+    requirement('weight', 'Weight_kg'),
+  ],
+};
+
+function aliasesFor(requirementItem) {
+  return requirementItem.fields.flatMap((field) => A[field] || []);
+}
+
+export function missingContractFields(headers = [], sheetName = '') {
+  const contract = SHEET_CONTRACTS[sheetName] || [];
+  const normalizedHeaders = new Set(headers.map(normalize));
+  return contract.filter((item) => !aliasesFor(item).some((alias) => normalizedHeaders.has(normalize(alias))));
+}
+
+export function sheetContractError(rows = [], sheetName = '') {
+  if (!Array.isArray(rows) || rows.length === 0) return '';
+  const missing = missingContractFields(Object.keys(rows[0] || {}), sheetName);
+  return missing.length ? `${sheetName}: brak kolumn kontraktu: ${missing.map(({ label }) => label).join(', ')}` : '';
+}

@@ -26,12 +26,13 @@ import {
   summarizeLoad,
 } from './performance';
 import { computeVerifierMetrics, crossValidate } from './metrics';
+import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,C' };
-const APP_VERSION = 'FINAL 4.1';
+const APP_VERSION = 'FINAL 4.2';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -43,72 +44,6 @@ const TABS = [
   { id: 'log', label: 'Log', icon: '≡' },
   { id: 'plan', label: 'Plan', icon: '◇' },
 ];
-
-const A = {
-  date: ['date', 'data'],
-  lastSynced: ['last synced'],
-  readiness: ['readiness'],
-  recovery: ['recovery'],
-  bodyBattery: ['body battery', 'body battery score'],
-  strain: ['strain'],
-  sleep: ['sleep', 'sleep score'],
-  hrv: ['hrv'],
-  hrv7d: ['hrv 7d'],
-  rhr: ['rhr'],
-  weight: ['weight', 'waga', 'weight kg'],
-  weightAvg7d: ['weight avg 7d'],
-  weightDelta7d: ['weight delta 7d'],
-  steps: ['steps', 'kroki'],
-  status: ['status'],
-  decision: ['decision'],
-  pain: ['pain'],
-  doms: ['doms'],
-  fatigue: ['fatigue'],
-  hrmax: ['hrmax'],
-  lt1: ['lt1'],
-  lt2: ['lt2'],
-  thresholdPower: ['threshold power'],
-  z1: ['z1'], z2: ['z2'], z3: ['z3'], z4: ['z4'], z5: ['z5'],
-  runKm7d: ['run km 7d'],
-  runKm28d: ['run km 28d'],
-  runCount7d: ['run count 7d'],
-  srpe7d: ['srpe 7d'],
-  srpe28d: ['srpe 28d'],
-  lastRunDistance: ['last run distance'],
-  lastRunPace: ['last run pace'],
-  lastRunHrAvg: ['last run hr avg'],
-  lastRunHrMax: ['last run hr max'],
-  lastRunRpe: ['last run rpe'],
-  phase: ['phase'],
-  goalA: ['goal a'], goalB: ['goal b'], goalC: ['goal c'],
-  mainGoal: ['main goal'],
-
-  logTime: ['time', 'czas'],
-  logType: ['type', 'typ', 'typ treningu', 'activity'],
-  logName: ['name', 'nazwa'],
-  logDistance: ['distance km', 'distance_km', 'distance'],
-  logDuration: ['duration text', 'duration_text', 'duration', 'czas trwania'],
-  logPace: ['pace', 'tempo'],
-  logHrAvg: ['hr avg', 'hr_avg'],
-  logHrMax: ['hr max', 'hr_max'],
-  logPowerAvg: ['power avg', 'power_avg'],
-  logRpe: ['rpe'],
-  logSrpe: ['srpe'],
-  logPain: ['pain'],
-  logLoad: ['garmin load', 'garmin_load'],
-  logNotes: ['notes', 'uwagi'],
-  logSource: ['source', 'zrodlo'],
-  logStatus: ['status'],
-
-  planDay: ['dzien', 'dzień'],
-  planMorning: ['rano'],
-  planLater: ['pozniej', 'później'],
-  planHr: ['cel hr'],
-  planRpe: ['rpe max'],
-  planStatus: ['status'],
-  planNotes: ['uwagi'],
-  planSession: ['trening', 'session'],
-};
 
 const ZONES = [
   { key: 'z1', id: 'Z1', name: 'Recovery', note: 'bardzo lekko', color: '#58c5e8' },
@@ -131,6 +66,8 @@ async function fetchSheet(sheetName, signal, query = '') {
   if (!text.trim()) return [];
   if (/^\s*</.test(text) && /<html/i.test(text)) throw new Error(`${sheetName}: HTML zamiast CSV`);
   const rows = parseCSV(text);
+  const contractError = sheetContractError(rows, sheetName);
+  if (contractError) throw new Error(`DATA ERROR — ${contractError}`);
   const dateError = datedRowsError(rows, A.date, sheetName);
   if (dateError) throw new Error(`DATA ERROR — ${dateError}`);
   return rows;
