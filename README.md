@@ -46,6 +46,10 @@ Dashboard pokazuje chronologię werdyktów Head Coacha wraz z dowodami, które f
 
 Dashboard rozdziela dowody, interpretację i rekomendację czterech ról CORE. Specjaliści warunkowi pojawiają się tylko po spełnieniu jawnego warunku, a `SPÓR` tylko przy rzeczywiście różnych kierunkach domeny i Head Coacha. Metodologia i granice: [`docs/staff-panel.md`](docs/staff-panel.md).
 
+## Prywatny odczyt
+
+Po konfiguracji service account i sekretów globalna sesja HttpOnly zastępuje publiczny `gviz` jednym uwierzytelnionym endpointem Vercela dla czterech arkuszy. Zasady bezpiecznego przełączenia, snapshotu i aktywacji produkcyjnej: [`docs/private-data.md`](docs/private-data.md).
+
 ## Ważne
 
-Ta wersja realizuje pakiet poprawek integralności danych, offline, iOS safe-area, touch targets, WCAG i service workera. Migracja z publicznego CSV do prywatnego Google Sheet przez uwierzytelnione Vercel API jest kolejnym etapem i nie jest częścią tego patcha.
+Kod prywatnego transportu jest wdrożony kompatybilnie wstecz. Dopóki produkcja raportuje `configured:false`, aplikacja używa publicznego `gviz`. Pełne zamknięcie wymaga ustawienia sekretów, pozytywnego smoke-checku i ręcznego odebrania publicznego dostępu do Google Sheet.

@@ -10,6 +10,7 @@
   --muted: #8f98aa;
   --muted-2: #b1b8c5;
   --orange: #f07822;
+  --cyan: #58c5e8;
   --green: #64d8a2;
   --yellow: #f3c846;
   --red: #ef4867;
@@ -82,8 +83,8 @@ button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   font-weight: 750;
 }
 .desktop-nav button.active { background: rgba(255,255,255,.07); color: #fff; }
+.topbar-actions { justify-self: end; display: flex; align-items: center; gap: 8px; }
 .refresh-button {
-  justify-self: end;
   min-width: 48px;
   min-height: 48px;
   padding: 0 15px;
@@ -99,8 +100,48 @@ button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .refresh-button:disabled { opacity: .6; cursor: wait; }
 .refresh-button span { font-size: 1.45rem; line-height: 1; }
 .refresh-button b { font-size: .75rem; }
+.logout-button {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  background: rgba(255,255,255,.025);
+  color: var(--muted-2);
+  cursor: pointer;
+  font-size: 1.25rem;
+}
 .spin { display: inline-block; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.auth-shell {
+  min-height: 100dvh;
+  padding: max(24px, var(--safe-top)) max(20px, var(--safe-right)) max(24px, var(--safe-bottom)) max(20px, var(--safe-left));
+  display: grid;
+  place-items: center;
+}
+.auth-card {
+  width: min(480px, 100%);
+  padding: 34px;
+  display: grid;
+  gap: 22px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(240,120,34,.07), transparent 42%), var(--panel);
+  box-shadow: 0 30px 90px rgba(0,0,0,.34);
+}
+.auth-card h1 { margin: 7px 0 0; font-size: clamp(1.8rem, 7vw, 3rem); line-height: 1; letter-spacing: -.045em; }
+.auth-card > p, .auth-card form > p { margin: 0; color: var(--muted-2); line-height: 1.55; }
+.auth-card form { display: grid; gap: 15px; }
+.auth-card label { display: grid; gap: 7px; }
+.auth-card label span { color: #aab2c2; font-size: .62rem; font-weight: 850; letter-spacing: .12em; }
+.auth-card input { width: 100%; min-height: 50px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; outline: none; background: rgba(7,10,15,.75); }
+.auth-card input:focus { border-color: rgba(88,197,232,.68); box-shadow: 0 0 0 3px rgba(88,197,232,.1); }
+.auth-card button { min-height: 48px; padding: 0 18px; border: 0; border-radius: 14px; background: var(--cyan); color: #071017; cursor: pointer; font-weight: 900; }
+.auth-card button:disabled { opacity: .6; cursor: wait; }
+.auth-card form small { color: #ffb0be; line-height: 1.4; }
+.auth-card footer { padding-top: 4px; color: #636b79; font-size: .62rem; letter-spacing: .1em; }
 
 .sync-strip {
   min-height: 44px;
@@ -534,6 +575,9 @@ tbody tr:last-child td { border-bottom: 0; }
   .brand small { font-size: .6rem; }
   .refresh-button { min-width: 46px; min-height: 46px; padding: 0 12px; }
   .refresh-button b { display: none; }
+  .topbar-actions { gap: 6px; }
+  .logout-button { width: 42px; height: 42px; }
+  .auth-card { padding: 24px; border-radius: 25px; }
   .sync-strip { padding-left: max(18px, var(--safe-left)); padding-right: max(18px, var(--safe-right)); font-size: .68rem; }
   .sync-strip > span:last-child { width: 100%; margin-left: 18px; }
   .error-banner { width: 100%; margin-top: 0; border-left: 0; border-right: 0; border-radius: 0; }

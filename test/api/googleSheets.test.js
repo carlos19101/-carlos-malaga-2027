@@ -1,6 +1,6 @@
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { createGoogleAssertion, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { createGoogleAssertion, readApplicationTables, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
 
 function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
@@ -58,5 +58,36 @@ describe('Google Sheets service account', () => {
       { range: "'Training Log'!C2", values: [[3]] },
       { range: "'Training Log'!G2", values: [[2]] },
     ]));
+  });
+
+  it('pobiera cztery arkusze jednym prywatnym batchGet', async () => {
+    const { privateKey } = keyPair();
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'private-read-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, {
+        valueRanges: [
+          { values: [['Date'], ['2026-08-25']] },
+          { values: [['Date'], ['2026-08-25']] },
+          { values: [['Data'], ['2026-08-25']] },
+          { values: [['Date'], ['2026-08-25']] },
+        ],
+      }));
+    const result = await readApplicationTables({
+      env: {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: 'private-read@example.test',
+        GOOGLE_PRIVATE_KEY: privateKey,
+        GOOGLE_SHEET_ID: 'private-sheet',
+      },
+      fetchImpl,
+    });
+    expect(Object.keys(result)).toEqual(['feed', 'log', 'plan', 'raw']);
+    expect(result.plan[0]).toEqual(['Data']);
+    const [url, options] = fetchImpl.mock.calls[1];
+    expect(url).toContain('/values:batchGet?');
+    expect(url).toContain('valueRenderOption=FORMATTED_VALUE');
+    expect(new URL(url).searchParams.getAll('ranges')).toEqual([
+      "'APP_FEED'", "'Training Log'", "'Plan'", "'Raw_Data'",
+    ]);
+    expect(options.headers.Authorization).toBe('Bearer private-read-token');
   });
 });

@@ -28,7 +28,8 @@ import { computeExecution, computeLoad, computeVerifierMetrics, crossValidate } 
 import { computeDailyMetrics } from './dailyMetrics';
 import { buildDecisionJournal } from './decisionJournal';
 import { buildStaffPanel } from './staffPanel';
-import { feedbackLogin, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi';
+import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi';
 import {
   createTrainingFeedback,
   enqueueTrainingFeedback,
@@ -41,11 +42,12 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.0';
+const APP_VERSION = 'FINAL 5.1';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
 const STALE_AFTER_HOURS = 36;
+const EMPTY_DATA = { feed: [], log: [], plan: [], raw: [] };
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '◉' },
@@ -898,24 +900,97 @@ function Plan({ rows, loading, now }) {
   );
 }
 
+function AccessGate({ access, onLogin, onRetry }) {
+  const [passcode, setPasscode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    const result = await onLogin(passcode);
+    if (!result.ok) {
+      setMessage(result.status === 401
+        ? 'Nieprawidłowy passcode.'
+        : result.status === 0 ? 'Brak połączenia z serwerem.' : 'Nie udało się rozpocząć sesji.');
+    } else {
+      setPasscode('');
+    }
+    setBusy(false);
+  };
+
+  const checking = !access.checked;
+  const unavailable = access.checked && access.configured === null;
+  return (
+    <div className="auth-shell">
+      <section className="auth-card">
+        <span className="brand-mark">C</span>
+        <div><span className="eyebrow">CARLOS · MÁLAGA 2027</span><h1>{checking ? 'Sprawdzam dostęp' : unavailable ? 'Nie można sprawdzić sesji' : 'Prywatny dostęp'}</h1></div>
+        {checking ? <p>Łączę aplikację z bezpiecznym endpointem danych.</p> : unavailable ? (
+          <>
+            <p>Nie przełączam się awaryjnie na publiczny odczyt, dopóki stan prywatnego endpointu jest nieznany.</p>
+            <button type="button" onClick={onRetry}>Spróbuj ponownie</button>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <p>Passcode tworzy siedmiodniową sesję HttpOnly. Nie trafia do bundla ani pamięci aplikacji.</p>
+            <label><span>PASSCODE</span><input type="password" value={passcode} onChange={(event) => setPasscode(event.target.value)} autoComplete="current-password" required /></label>
+            <button type="submit" disabled={busy}>{busy ? 'Otwieram…' : 'Otwórz dashboard'}</button>
+            {message ? <small role="status">{message}</small> : null}
+          </form>
+        )}
+        <footer>{APP_VERSION}</footer>
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [tab, setTab] = useState('dashboard');
-  const [data, setData] = useState({ feed: [], log: [], plan: [], raw: [] });
+  const [data, setData] = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [checkedAt, setCheckedAt] = useState(null);
   const [networkSyncedAt, setNetworkSyncedAt] = useState(null);
   const [errors, setErrors] = useState({});
   const [fromCache, setFromCache] = useState(false);
   const [calendarNow, setCalendarNow] = useState(() => new Date());
-  const [feedbackAccess, setFeedbackAccess] = useState({ checked: false, configured: false, authenticated: false });
+  const [feedbackAccess, setFeedbackAccess] = useState({ checked: false, configured: null, authenticated: false, error: '' });
   const [feedbackQueueCount, setFeedbackQueueCount] = useState(0);
   const dataRef = useRef(data);
+  const accessRef = useRef(feedbackAccess);
   const inFlight = useRef(null);
   const lastAttempt = useRef(0);
 
   useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { accessRef.current = feedbackAccess; }, [feedbackAccess]);
+
+  const commitAccess = useCallback((next) => {
+    accessRef.current = next;
+    setFeedbackAccess(next);
+  }, []);
+
+  const restoreSnapshot = useCallback((mode) => {
+    try {
+      const raw = localStorage.getItem(SNAPSHOT_KEY);
+      const snapshot = parseApplicationSnapshot(raw, mode);
+      if (snapshot) {
+        setData(snapshot.data);
+        dataRef.current = snapshot.data;
+        setNetworkSyncedAt(snapshot.at || null);
+        setFromCache(true);
+        return true;
+      }
+    } catch { /* ignore corrupted local snapshot */ }
+    return false;
+  }, []);
 
   const refresh = useCallback(async ({ force = false } = {}) => {
+    const access = accessRef.current;
+    if (!access.checked || access.configured === null || (access.configured && !access.authenticated)) {
+      setLoading(false);
+      return;
+    }
     if (!force && Date.now() - lastAttempt.current < MIN_REFRESH_MS) return;
     lastAttempt.current = Date.now();
     if (inFlight.current) inFlight.current.abort();
@@ -924,20 +999,35 @@ function App() {
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     setLoading(true);
 
-    const entries = Object.entries(SHEETS);
-    const results = await Promise.allSettled(entries.map(([key, sheet]) => fetchSheet(sheet, controller.signal, SHEET_QUERIES[key] || '')));
-    clearTimeout(timer);
-    if (inFlight.current !== controller) return;
-    inFlight.current = null;
-
     const merged = { ...dataRef.current };
     const nextErrors = {};
     let anyOk = false;
-    results.forEach((result, index) => {
-      const [key, sheet] = entries[index];
-      if (result.status === 'fulfilled') { merged[key] = result.value; anyOk = true; }
-      else nextErrors[key] = result.reason?.name === 'AbortError' ? `${sheet}: timeout` : result.reason?.message || `${sheet}: błąd`;
-    });
+    if (access.configured) {
+      try {
+        Object.assign(merged, await fetchPrivateApplicationData(controller.signal));
+        anyOk = true;
+      } catch (error) {
+        nextErrors.private = error?.name === 'AbortError'
+          ? 'Prywatny endpoint: timeout'
+          : error?.status === 401 || error?.status === 403
+            ? 'Sesja wygasła — zaloguj się ponownie.'
+            : error?.message || 'Prywatny endpoint: błąd';
+        if (error?.status === 401 || error?.status === 403) {
+          commitAccess({ ...accessRef.current, checked: true, configured: true, authenticated: false, error: 'session-expired' });
+        }
+      }
+    } else {
+      const entries = Object.entries(SHEETS);
+      const results = await Promise.allSettled(entries.map(([key, sheet]) => fetchSheet(sheet, controller.signal, SHEET_QUERIES[key] || '')));
+      results.forEach((result, index) => {
+        const [key, sheet] = entries[index];
+        if (result.status === 'fulfilled') { merged[key] = result.value; anyOk = true; }
+        else nextErrors[key] = result.reason?.name === 'AbortError' ? `${sheet}: timeout` : result.reason?.message || `${sheet}: błąd`;
+      });
+    }
+    clearTimeout(timer);
+    if (inFlight.current !== controller) return;
+    inFlight.current = null;
 
     const now = Date.now();
     setData(merged);
@@ -946,39 +1036,60 @@ function App() {
     if (anyOk) {
       setNetworkSyncedAt(now);
       setFromCache(false);
-      try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ data: merged, at: now })); } catch { /* optional */ }
+      try {
+        localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+          data: merged, at: now, mode: access.configured ? 'private' : 'public',
+        }));
+      } catch { /* optional */ }
     }
     setLoading(false);
-  }, []);
+  }, [commitAccess]);
 
   const checkFeedbackAccess = useCallback(async () => {
     const result = await feedbackSessionStatus();
-    setFeedbackAccess({
-      checked: true,
-      configured: Boolean(result.configured),
-      authenticated: Boolean(result.authenticated),
+    const reachable = result.ok && result.status === 200;
+    commitAccess(reachable ? {
+      checked: true, configured: Boolean(result.configured), authenticated: Boolean(result.authenticated), error: '',
+    } : {
+      checked: true, configured: null, authenticated: false, error: result.error || 'session-unavailable',
     });
     return result;
-  }, []);
+  }, [commitAccess]);
 
   const syncFeedback = useCallback(async () => {
     const result = await flushTrainingFeedbackQueue(localStorage, sendTrainingFeedback);
     setFeedbackQueueCount(result.remaining.length);
     if (result.blocked === 'auth') {
-      setFeedbackAccess((current) => ({ ...current, authenticated: false }));
+      commitAccess({ ...accessRef.current, authenticated: false, error: 'session-expired' });
     }
     if (result.synced.length) refresh({ force: true });
     return result;
-  }, [refresh]);
+  }, [commitAccess, refresh]);
 
   const loginFeedback = useCallback(async (passcode) => {
     const result = await feedbackLogin(passcode);
     if (result.ok && result.authenticated) {
-      setFeedbackAccess({ checked: true, configured: true, authenticated: true });
-      await syncFeedback();
+      commitAccess({ checked: true, configured: true, authenticated: true, error: '' });
+      restoreSnapshot('private');
+      const syncResult = await syncFeedback();
+      if (!syncResult.synced.length) await refresh({ force: true });
     }
     return result;
-  }, [syncFeedback]);
+  }, [commitAccess, refresh, restoreSnapshot, syncFeedback]);
+
+  const logout = useCallback(async () => {
+    await feedbackLogout();
+    try { localStorage.removeItem(SNAPSHOT_KEY); } catch { /* optional */ }
+    if (inFlight.current) inFlight.current.abort();
+    dataRef.current = EMPTY_DATA;
+    setData(EMPTY_DATA);
+    setErrors({});
+    setCheckedAt(null);
+    setNetworkSyncedAt(null);
+    setFromCache(false);
+    setLoading(false);
+    commitAccess({ checked: true, configured: true, authenticated: false, error: '' });
+  }, [commitAccess]);
 
   const submitFeedback = useCallback(async (input) => {
     const feedback = createTrainingFeedback(input);
@@ -988,30 +1099,39 @@ function App() {
   }, [syncFeedback]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(SNAPSHOT_KEY);
-      const snap = raw ? JSON.parse(raw) : null;
-      if (snap?.data) {
-        setData(snap.data); dataRef.current = snap.data; setNetworkSyncedAt(snap.at || null); setFromCache(true);
-      }
-    } catch { /* ignore corrupted local snapshot */ }
-    refresh({ force: true });
-  }, [refresh]);
-
-  useEffect(() => {
     setFeedbackQueueCount(readFeedbackQueue(localStorage).length);
-    checkFeedbackAccess();
-  }, [checkFeedbackAccess]);
+    let active = true;
+    checkFeedbackAccess().then((result) => {
+      if (!active) return;
+      if (!(result.ok && result.status === 200)) {
+        setLoading(false);
+        return;
+      }
+      if (!result.configured) {
+        restoreSnapshot('public');
+        refresh({ force: true });
+      } else if (result.authenticated) {
+        restoreSnapshot('private');
+        refresh({ force: true });
+        syncFeedback();
+      } else {
+        setLoading(false);
+      }
+    });
+    return () => { active = false; };
+  }, [checkFeedbackAccess, refresh, restoreSnapshot, syncFeedback]);
 
   useEffect(() => {
     const onFeedbackOnline = () => {
       checkFeedbackAccess().then((result) => {
+        if (!(result.ok && result.status === 200)) return;
         if (result.authenticated) syncFeedback();
+        refresh({ force: true });
       });
     };
     window.addEventListener('online', onFeedbackOnline);
     return () => window.removeEventListener('online', onFeedbackOnline);
-  }, [checkFeedbackAccess, syncFeedback]);
+  }, [checkFeedbackAccess, refresh, syncFeedback]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -1020,16 +1140,13 @@ function App() {
       refresh();
     };
     const onFocus = () => { setCalendarNow(new Date()); refresh(); };
-    const onOnline = () => refresh({ force: true });
     const onPageShow = () => { setCalendarNow(new Date()); refresh(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onFocus);
-    window.addEventListener('online', onOnline);
     window.addEventListener('pageshow', onPageShow);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onFocus);
-      window.removeEventListener('online', onOnline);
       window.removeEventListener('pageshow', onPageShow);
     };
   }, [refresh]);
@@ -1066,11 +1183,35 @@ function App() {
     return () => window.removeEventListener('load', register);
   }, []);
 
+  const retryAccess = async () => {
+    commitAccess({ checked: false, configured: null, authenticated: false, error: '' });
+    setLoading(true);
+    const result = await checkFeedbackAccess();
+    if (!(result.ok && result.status === 200)) {
+      setLoading(false);
+      return;
+    }
+    if (!result.configured) {
+      restoreSnapshot('public');
+      refresh({ force: true });
+    } else if (result.authenticated) {
+      restoreSnapshot('private');
+      refresh({ force: true });
+    } else {
+      setLoading(false);
+    }
+  };
+
+  if (!feedbackAccess.checked || feedbackAccess.configured === null
+    || (feedbackAccess.configured && !feedbackAccess.authenticated)) {
+    return <AccessGate access={feedbackAccess} onLogin={loginFeedback} onRetry={retryAccess} />;
+  }
+
   const feedRow = latestRow(data.feed);
   const sourceAt = sourceTime(feedRow);
   const freshness = sourceFreshness(sourceAt, calendarNow, STALE_AFTER_HOURS);
   const errorCount = Object.keys(errors).length;
-  const offline = errorCount === Object.keys(SHEETS).length;
+  const offline = Boolean(errors.private) || errorCount === Object.keys(SHEETS).length;
   const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
   const statusLabel = {
     live: 'Dane aktualne', partial: 'Dane częściowe', stale: 'Dane źródłowe są stare', offline: 'Offline — lokalna kopia',
@@ -1085,9 +1226,12 @@ function App() {
         <nav className="desktop-nav" aria-label="Nawigacja">
           {TABS.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}</button>)}
         </nav>
-        <button className="refresh-button" onClick={() => refresh({ force: true })} disabled={loading} aria-label="Odśwież dane">
-          <span className={loading ? 'spin' : ''}>↻</span><b>{loading ? 'Sync' : 'Odśwież'}</b>
-        </button>
+        <div className="topbar-actions">
+          {feedbackAccess.configured ? <button className="logout-button" onClick={logout} aria-label="Wyloguj" title="Wyloguj">⇥</button> : null}
+          <button className="refresh-button" onClick={() => refresh({ force: true })} disabled={loading} aria-label="Odśwież dane">
+            <span className={loading ? 'spin' : ''}>↻</span><b>{loading ? 'Sync' : 'Odśwież'}</b>
+          </button>
+        </div>
       </header>
 
       <div className={`sync-strip sync-${status}`} aria-live="polite">
@@ -1099,7 +1243,7 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errors.feed && !errors.log && !errors.raw} now={calendarNow} />}
+        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
         {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}

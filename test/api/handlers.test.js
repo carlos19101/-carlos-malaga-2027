@@ -1,6 +1,9 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import sessionHandler from '../../api/session.js';
 import feedbackHandler from '../../api/training-feedback.js';
+import dataHandler from '../../api/data.js';
+import { createSessionToken, SESSION_COOKIE } from '../../api/_lib/session.js';
 
 function responseMock() {
   return {
@@ -8,6 +11,10 @@ function responseMock() {
     setHeader(name, value) { this.headers[name] = value; },
     end(value) { this.body = JSON.parse(value); },
   };
+}
+
+function jsonResponse(status, body) {
+  return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
 }
 
 function configuredEnvironment() {
@@ -19,7 +26,10 @@ function configuredEnvironment() {
   vi.stubEnv('APP_ORIGIN', 'https://carlos-malaga-2027.vercel.app');
 }
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 describe('/api/session', () => {
   it('GET jawnie raportuje brak konfiguracji', async () => {
@@ -70,5 +80,50 @@ describe('/api/training-feedback', () => {
     await feedbackHandler({ method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' }, body: {} }, response);
     expect(response.statusCode).toBe(401);
     expect(response.body.error).toBe('authentication-required');
+  });
+});
+
+describe('/api/data', () => {
+  it('jawnie odrzuca prywatny odczyt bez konfiguracji', async () => {
+    ['APP_PASSCODE', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
+      .forEach((name) => vi.stubEnv(name, ''));
+    const response = responseMock();
+    await dataHandler({ method: 'GET', headers: {} }, response);
+    expect(response.statusCode).toBe(503);
+    expect(response.body.error).toBe('private-data-not-configured');
+  });
+
+  it('przy konfiguracji nie ujawnia danych bez sesji', async () => {
+    configuredEnvironment();
+    const response = responseMock();
+    await dataHandler({ method: 'GET', headers: {} }, response);
+    expect(response.statusCode).toBe(401);
+    expect(response.body.error).toBe('authentication-required');
+  });
+
+  it('nie dopuszcza metod innych niż GET', async () => {
+    const response = responseMock();
+    await dataHandler({ method: 'POST', headers: {} }, response);
+    expect(response.statusCode).toBe(405);
+    expect(response.headers.Allow).toBe('GET');
+  });
+
+  it('z ważną sesją zwraca cztery prywatne tabele bez cache', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    configuredEnvironment();
+    vi.stubEnv('GOOGLE_PRIVATE_KEY', privateKey.export({ type: 'pkcs8', format: 'pem' }).toString());
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'endpoint-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, {
+        valueRanges: ['feed', 'log', 'plan', 'raw'].map((key) => ({ values: [[key], ['value']] })),
+      }));
+    vi.stubGlobal('fetch', fetchImpl);
+    const token = createSessionToken('session-secret-long-enough', { nonce: 'handler-test' });
+    const response = responseMock();
+    await dataHandler({ method: 'GET', headers: { cookie: `${SESSION_COOKIE}=${token}` } }, response);
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toMatchObject({ ok: true, transport: 'google-sheets-api' });
+    expect(Object.keys(response.body.tables)).toEqual(['feed', 'log', 'plan', 'raw']);
+    expect(response.headers['Cache-Control']).toBe('no-store');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { feedbackLogin, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi.js';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi.js';
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
@@ -29,5 +29,11 @@ describe('feedbackApi', () => {
   it('zamienia błąd sieci na kontrolowany status offline', async () => {
     expect(await sendTrainingFeedback({}, vi.fn().mockRejectedValue(new Error('offline'))))
       .toEqual({ ok: false, status: 0, error: 'offline' });
+  });
+
+  it('wylogowuje sesję żądaniem DELETE bez body', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(response(200, { ok: true }));
+    expect(await feedbackLogout(fetchImpl)).toMatchObject({ ok: true, status: 200 });
+    expect(fetchImpl).toHaveBeenCalledWith('/api/session', expect.objectContaining({ method: 'DELETE' }));
   });
 });

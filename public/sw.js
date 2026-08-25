@@ -1,4 +1,4 @@
-const CACHE_NAME = 'carlos-malaga-2027-final-v6';
+const CACHE_NAME = 'carlos-malaga-2027-final-v7';
 const APP_SHELL = [
   './',
   './index.html',

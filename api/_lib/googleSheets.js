@@ -1,7 +1,14 @@
-import { createSign } from 'node:crypto';
+import { createHash, createSign } from 'node:crypto';
 import { feedbackBatchData, planTrainingFeedbackUpdate } from '../../src/trainingFeedbackServer.js';
 
 let tokenCache = null;
+
+export const APPLICATION_SHEET_RANGES = {
+  feed: "'APP_FEED'",
+  log: "'Training Log'",
+  plan: "'Plan'",
+  raw: "'Raw_Data'",
+};
 
 function base64urlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -26,7 +33,12 @@ export function createGoogleAssertion({ email, privateKey, now = new Date() }) {
 
 async function accessToken(env = process.env, fetchImpl = fetch) {
   const now = Date.now();
-  if (tokenCache?.expiresAt > now + 60000) return tokenCache.value;
+  const identity = createHash('sha256')
+    .update(String(env.GOOGLE_SERVICE_ACCOUNT_EMAIL || ''))
+    .update('\0')
+    .update(String(env.GOOGLE_PRIVATE_KEY || ''))
+    .digest('hex');
+  if (tokenCache?.identity === identity && tokenCache.expiresAt > now + 60000) return tokenCache.value;
   const assertion = createGoogleAssertion({
     email: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     privateKey: env.GOOGLE_PRIVATE_KEY,
@@ -41,12 +53,39 @@ async function accessToken(env = process.env, fetchImpl = fetch) {
   });
   if (!response.ok) throw new Error(`google-auth-${response.status}`);
   const body = await response.json();
-  tokenCache = { value: body.access_token, expiresAt: now + Number(body.expires_in || 3600) * 1000 };
+  tokenCache = { identity, value: body.access_token, expiresAt: now + Number(body.expires_in || 3600) * 1000 };
   return tokenCache.value;
 }
 
 function valuesUrl(sheetId, range) {
   return `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}`;
+}
+
+function batchValuesUrl(sheetId, ranges) {
+  const params = new URLSearchParams({
+    majorDimension: 'ROWS',
+    valueRenderOption: 'FORMATTED_VALUE',
+    dateTimeRenderOption: 'FORMATTED_STRING',
+  });
+  ranges.forEach((range) => params.append('ranges', range));
+  return `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values:batchGet?${params}`;
+}
+
+export async function readApplicationTables(options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const token = await accessToken(env, fetchImpl);
+  const entries = Object.entries(APPLICATION_SHEET_RANGES);
+  const response = await fetchImpl(batchValuesUrl(env.GOOGLE_SHEET_ID, entries.map(([, range]) => range)), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`google-read-${response.status}`);
+  const body = await response.json();
+  const valueRanges = Array.isArray(body.valueRanges) ? body.valueRanges : [];
+  return Object.fromEntries(entries.map(([key], index) => [
+    key,
+    Array.isArray(valueRanges[index]?.values) ? valueRanges[index].values : [],
+  ]));
 }
 
 export async function updateTrainingFeedback(feedback, options = {}) {
