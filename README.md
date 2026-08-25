@@ -38,6 +38,10 @@ Silnik normalizuje wiele wpisów `Raw_Data` do wartości dziennych, wyklucza oce
 
 Dashboard pokazuje chronologię werdyktów Head Coacha wraz z dowodami, które faktycznie istniały w chwili decyzji. Reguły czasowe i komenda audytowa: [`docs/decision-journal.md`](docs/decision-journal.md).
 
+## Oceń bieg
+
+Ścieżka zapisu aktualizuje istniejącą sesję po `Session_ID`, przelicza sRPE, ma idempotencję, kolejkę offline oraz siedmiodniową sesję HttpOnly. Kontrakt, zachowanie błędów i konfiguracja endpointu: [`docs/training-feedback.md`](docs/training-feedback.md).
+
 ## Ważne
 
 Ta wersja realizuje pakiet poprawek integralności danych, offline, iOS safe-area, touch targets, WCAG i service workera. Migracja z publicznego CSV do prywatnego Google Sheet przez uwierzytelnione Vercel API jest kolejnym etapem i nie jest częścią tego patcha.

@@ -27,13 +27,20 @@ import {
 import { computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
 import { buildDecisionJournal } from './decisionJournal';
+import { feedbackLogin, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi';
+import {
+  createTrainingFeedback,
+  enqueueTrainingFeedback,
+  flushTrainingFeedbackQueue,
+  readFeedbackQueue,
+} from './trainingFeedback';
 import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 4.8';
+const APP_VERSION = 'FINAL 4.9';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -649,17 +656,106 @@ function LogCard({ row }) {
         <p><b>HR</b>{hrAvg ? `${formatMetricNumber(hrAvg, { maximumFractionDigits: 0 })}${hrMax ? ` / ${formatMetricNumber(hrMax, { maximumFractionDigits: 0 })}` : ''}` : '—'}</p>
         <p><b>RPE</b>{formatMetricNumber(v(row, 'logRpe', ''), { maximumFractionDigits: 1, fallback: '—' })}</p>
         <p><b>sRPE</b>{formatMetricNumber(v(row, 'logSrpe', ''), { maximumFractionDigits: 0, fallback: '—' })}</p>
+        {v(row, 'logLegFatigue', '') !== '' ? <p><b>Nogi</b>{formatMetricNumber(v(row, 'logLegFatigue'), { maximumFractionDigits: 1, fallback: '—' })}/10</p> : null}
       </div>
       {v(row, 'logNotes', '') ? <p className="log-note">{v(row, 'logNotes')}</p> : null}
+      {v(row, 'logFeedbackNotes', '') ? <p className="log-note feedback-note"><b>Ocena zawodnika:</b> {v(row, 'logFeedbackNotes')}</p> : null}
     </article>
   );
 }
 
-function Log({ rows, loading }) {
+function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit }) {
+  const [passcode, setPasscode] = useState('');
+  const [values, setValues] = useState({ rpe: '', pain: '', legFatigue: '', notes: '' });
+  const [state, setState] = useState({ busy: false, message: '' });
+
+  useEffect(() => {
+    setValues({
+      rpe: v(target, 'logRpe', ''),
+      pain: v(target, 'logPain', ''),
+      legFatigue: v(target, 'logLegFatigue', ''),
+      notes: v(target, 'logFeedbackNotes', ''),
+    });
+    setState({ busy: false, message: '' });
+  }, [target]);
+
+  if (!access.checked || !access.configured || !target) return null;
+  const sessionId = v(target, 'logSessionId', '');
+  const sessionLabel = `${formatDate(v(target, 'date', ''))} · ${v(target, 'logName', resolveLogSession(target, A.logType) || 'Sesja')}`;
+
+  const submitLogin = async (event) => {
+    event.preventDefault();
+    setState({ busy: true, message: '' });
+    const result = await onLogin(passcode);
+    setState({ busy: false, message: result.ok ? '' : 'Nie udało się odblokować zapisu.' });
+    if (result.ok) setPasscode('');
+  };
+
+  const submitFeedback = async (event) => {
+    event.preventDefault();
+    setState({ busy: true, message: '' });
+    try {
+      const result = await onSubmit({ sessionId, ...values });
+      const message = result.synced.length
+        ? 'Ocena zapisana i potwierdzona przez Training Log.'
+        : result.blocked === 'session-not-ready'
+          ? 'Ocena czeka — sesja nie pojawiła się jeszcze w Training Log.'
+          : 'Ocena zapisana lokalnie i czeka na synchronizację.';
+      setState({ busy: false, message });
+    } catch (error) {
+      const first = Object.values(error.validation || {})[0];
+      setState({ busy: false, message: first || 'Nie udało się przygotować oceny.' });
+    }
+  };
+
+  return (
+    <section className="section-block feedback-section">
+      <div className="section-heading">
+        <div><span className="eyebrow">PO TRENINGU</span><h2>Oceń bieg</h2></div>
+        <span className="section-aside">{queueCount ? `${queueCount} oczekuje` : sessionLabel}</span>
+      </div>
+      {!access.authenticated ? (
+        <form className="feedback-card feedback-login" onSubmit={submitLogin}>
+          <div><strong>Odblokuj zapis</strong><p>Passcode tworzy siedmiodniową sesję HttpOnly. Nie jest zapisywany w aplikacji.</p></div>
+          <label><span>Passcode</span><input type="password" value={passcode} onChange={(event) => setPasscode(event.target.value)} autoComplete="current-password" required /></label>
+          <button type="submit" disabled={state.busy}>{state.busy ? 'Sprawdzam…' : 'Odblokuj'}</button>
+          {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
+        </form>
+      ) : (
+        <form className="feedback-card" onSubmit={submitFeedback}>
+          <div className="feedback-target"><span>SESJA</span><strong>{sessionLabel}</strong><small>{sessionId}</small></div>
+          <div className="feedback-scales">
+            {[
+              ['rpe', 'RPE', 'Jak ciężki był cały trening?'],
+              ['pain', 'Ból', '0 = nic nie boli'],
+              ['legFatigue', 'Zmęczenie nóg', '0 = świeże nogi'],
+            ].map(([field, label, note]) => (
+              <label key={field}>
+                <span>{label}</span>
+                <input type="number" min="0" max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => setValues((current) => ({ ...current, [field]: event.target.value }))} required />
+                <small>{note}</small>
+              </label>
+            ))}
+          </div>
+          <label className="feedback-notes"><span>Notatka opcjonalna</span><textarea maxLength="500" rows="3" value={values.notes} onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))} placeholder="Odczucia, warunki, co zadziałało…" /></label>
+          <div className="feedback-actions">
+            <small>Najpierw zapis lokalny, potem idempotentna synchronizacja po Session_ID.</small>
+            <button type="submit" disabled={state.busy}>{state.busy ? 'Zapisuję…' : 'Zapisz ocenę'}</button>
+          </div>
+          {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
+        </form>
+      )}
+    </section>
+  );
+}
+
+function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit }) {
   const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
+  const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
   return (
     <>
       <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, recovery i później boks są liczone jako realne obciążenie systemu.</p></section>
+      <FeedbackPanel target={feedbackTarget} access={feedbackAccess} queueCount={feedbackQueueCount} onLogin={onFeedbackLogin} onSubmit={onFeedbackSubmit} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
       </section>
@@ -725,6 +821,8 @@ function App() {
   const [errors, setErrors] = useState({});
   const [fromCache, setFromCache] = useState(false);
   const [calendarNow, setCalendarNow] = useState(() => new Date());
+  const [feedbackAccess, setFeedbackAccess] = useState({ checked: false, configured: false, authenticated: false });
+  const [feedbackQueueCount, setFeedbackQueueCount] = useState(0);
   const dataRef = useRef(data);
   const inFlight = useRef(null);
   const lastAttempt = useRef(0);
@@ -767,6 +865,42 @@ function App() {
     setLoading(false);
   }, []);
 
+  const checkFeedbackAccess = useCallback(async () => {
+    const result = await feedbackSessionStatus();
+    setFeedbackAccess({
+      checked: true,
+      configured: Boolean(result.configured),
+      authenticated: Boolean(result.authenticated),
+    });
+    return result;
+  }, []);
+
+  const syncFeedback = useCallback(async () => {
+    const result = await flushTrainingFeedbackQueue(localStorage, sendTrainingFeedback);
+    setFeedbackQueueCount(result.remaining.length);
+    if (result.blocked === 'auth') {
+      setFeedbackAccess((current) => ({ ...current, authenticated: false }));
+    }
+    if (result.synced.length) refresh({ force: true });
+    return result;
+  }, [refresh]);
+
+  const loginFeedback = useCallback(async (passcode) => {
+    const result = await feedbackLogin(passcode);
+    if (result.ok && result.authenticated) {
+      setFeedbackAccess({ checked: true, configured: true, authenticated: true });
+      await syncFeedback();
+    }
+    return result;
+  }, [syncFeedback]);
+
+  const submitFeedback = useCallback(async (input) => {
+    const feedback = createTrainingFeedback(input);
+    const queue = enqueueTrainingFeedback(localStorage, feedback);
+    setFeedbackQueueCount(queue.length);
+    return syncFeedback();
+  }, [syncFeedback]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SNAPSHOT_KEY);
@@ -777,6 +911,21 @@ function App() {
     } catch { /* ignore corrupted local snapshot */ }
     refresh({ force: true });
   }, [refresh]);
+
+  useEffect(() => {
+    setFeedbackQueueCount(readFeedbackQueue(localStorage).length);
+    checkFeedbackAccess();
+  }, [checkFeedbackAccess]);
+
+  useEffect(() => {
+    const onFeedbackOnline = () => {
+      checkFeedbackAccess().then((result) => {
+        if (result.authenticated) syncFeedback();
+      });
+    };
+    window.addEventListener('online', onFeedbackOnline);
+    return () => window.removeEventListener('online', onFeedbackOnline);
+  }, [checkFeedbackAccess, syncFeedback]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -866,7 +1015,7 @@ function App() {
       <main>
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errors.feed && !errors.log && !errors.raw} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
-        {tab === 'log' && <Log rows={data.log} loading={loading} />}
+        {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>
 

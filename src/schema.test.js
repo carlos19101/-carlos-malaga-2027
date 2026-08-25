@@ -15,7 +15,8 @@ const LIVE_HEADERS = {
     'HR_max', 'Power_avg', 'Power_max', 'RPE', 'sRPE', 'Pain', 'Garmin_Load', 'TE_Aerobic',
     'TE_Anaerobic', 'Cadence', 'GCT_ms', 'Notes', 'Source', 'Status', 'Session_ID',
     'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Time_In_Target_s', 'Time_Above_Target_s',
-    'Time_Below_Target_s', 'HR_Analyzed_Duration_s',
+    'Time_Below_Target_s', 'HR_Analyzed_Duration_s', 'Leg_Fatigue_0_10', 'Feedback_ID',
+    'Feedback_Submitted_At', 'Feedback_Notes', 'Feedback_Synced_At',
   ],
   Plan: [
     'Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session',
@@ -71,6 +72,13 @@ describe('kontrakty nagłówków Google Sheets', () => {
     const headers = LIVE_HEADERS['Training Log'].filter((header) => header !== 'Session_ID');
     expect(missingContractFields(headers, 'Training Log')).toEqual([
       expect.objectContaining({ id: 'logSessionId', label: 'Session_ID' }),
+    ]);
+  });
+
+  it('brak Feedback_ID łamie kontrakt formularza treningowego', () => {
+    const headers = LIVE_HEADERS['Training Log'].filter((header) => header !== 'Feedback_ID');
+    expect(missingContractFields(headers, 'Training Log')).toEqual([
+      expect.objectContaining({ id: 'logFeedbackId', label: 'Feedback_ID' }),
     ]);
   });
 

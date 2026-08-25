@@ -1,4 +1,4 @@
-const CACHE_NAME = 'carlos-malaga-2027-final-v4';
+const CACHE_NAME = 'carlos-malaga-2027-final-v5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -70,6 +70,12 @@ self.addEventListener('fetch', (event) => {
 
   // Dane sportowe zawsze mają iść do sieci; fallback danych obsługuje aplikacja przez localStorage.
   if (url.hostname === 'docs.google.com' || url.hostname.endsWith('.googleusercontent.com')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Stan sesji i zapis feedbacku nigdy nie mogą pochodzić z cache service workera.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(request));
     return;
   }
