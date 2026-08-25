@@ -11,7 +11,8 @@
     "tcx:analyze": "node tools/tcx-analyze.js",
     "tcx:import": "node tools/tcx-import.js",
     "metrics:daily": "node tools/daily-metrics.js",
-    "journal:audit": "node tools/decision-journal.js"
+    "journal:audit": "node tools/decision-journal.js",
+    "passcode:generate": "node tools/passcode-generate.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

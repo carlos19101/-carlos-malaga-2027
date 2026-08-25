@@ -33,7 +33,7 @@ export default async function handler(request, response) {
   }
   try {
     const body = await readJson(request, 1024);
-    if (!passcodeMatches(body.passcode, process.env.APP_PASSCODE)) {
+    if (!(await passcodeMatches(body.passcode, process.env.APP_PASSCODE_SCRYPT))) {
       await new Promise((resolve) => setTimeout(resolve, 350));
       sendJson(response, 401, { ok: false, error: 'invalid-passcode' });
       return;

@@ -1,9 +1,15 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import sessionHandler from '../../api/session.js';
 import feedbackHandler from '../../api/training-feedback.js';
 import dataHandler from '../../api/data.js';
-import { createSessionToken, SESSION_COOKIE } from '../../api/_lib/session.js';
+import { createPasscodeVerifier, createSessionToken, SESSION_COOKIE } from '../../api/_lib/session.js';
+
+let passcodeVerifier;
+
+beforeAll(async () => {
+  passcodeVerifier = await createPasscodeVerifier('Carlos-2027-passcode!', { salt: Buffer.alloc(16, 8) });
+});
 
 function responseMock() {
   return {
@@ -18,7 +24,7 @@ function jsonResponse(status, body) {
 }
 
 function configuredEnvironment() {
-  vi.stubEnv('APP_PASSCODE', 'Carlos-2027!');
+  vi.stubEnv('APP_PASSCODE_SCRYPT', passcodeVerifier);
   vi.stubEnv('SESSION_SECRET', 'session-secret-long-enough');
   vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', 'service@example.test');
   vi.stubEnv('GOOGLE_PRIVATE_KEY', 'key');
@@ -33,7 +39,7 @@ afterEach(() => {
 
 describe('/api/session', () => {
   it('GET jawnie raportuje brak konfiguracji', async () => {
-    ['APP_PASSCODE', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
+    ['APP_PASSCODE_SCRYPT', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
       .forEach((name) => vi.stubEnv(name, ''));
     const response = responseMock();
     await sessionHandler({ method: 'GET', headers: {} }, response);
@@ -47,7 +53,7 @@ describe('/api/session', () => {
     const response = responseMock();
     await sessionHandler({
       method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' },
-      body: { passcode: 'Carlos-2027!' },
+      body: { passcode: 'Carlos-2027-passcode!' },
     }, response);
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({ ok: true, authenticated: true });
@@ -55,10 +61,22 @@ describe('/api/session', () => {
     expect(response.headers['Set-Cookie']).toContain('SameSite=Strict');
   });
 
+  it('POST z błędnym passcode nie ustawia sesji', async () => {
+    configuredEnvironment();
+    const response = responseMock();
+    await sessionHandler({
+      method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' },
+      body: { passcode: 'Carlos-2027-wrong!' },
+    }, response);
+    expect(response.statusCode).toBe(401);
+    expect(response.body.error).toBe('invalid-passcode');
+    expect(response.headers['Set-Cookie']).toBeUndefined();
+  });
+
   it('odrzuca obcy Origin przed sprawdzeniem passcode', async () => {
     configuredEnvironment();
     const response = responseMock();
-    await sessionHandler({ method: 'POST', headers: { origin: 'https://evil.example' }, body: { passcode: 'Carlos-2027!' } }, response);
+    await sessionHandler({ method: 'POST', headers: { origin: 'https://evil.example' }, body: { passcode: 'Carlos-2027-passcode!' } }, response);
     expect(response.statusCode).toBe(403);
     expect(response.body.error).toBe('origin-not-allowed');
   });
@@ -66,7 +84,7 @@ describe('/api/session', () => {
 
 describe('/api/training-feedback', () => {
   it('nie próbuje łączyć się z Google bez konfiguracji', async () => {
-    ['APP_PASSCODE', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
+    ['APP_PASSCODE_SCRYPT', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
       .forEach((name) => vi.stubEnv(name, ''));
     const response = responseMock();
     await feedbackHandler({ method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' }, body: {} }, response);
@@ -85,7 +103,7 @@ describe('/api/training-feedback', () => {
 
 describe('/api/data', () => {
   it('jawnie odrzuca prywatny odczyt bez konfiguracji', async () => {
-    ['APP_PASSCODE', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
+    ['APP_PASSCODE_SCRYPT', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
       .forEach((name) => vi.stubEnv(name, ''));
     const response = responseMock();
     await dataHandler({ method: 'GET', headers: {} }, response);

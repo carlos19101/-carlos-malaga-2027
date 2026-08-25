@@ -22,14 +22,14 @@ HTTP 404 oznacza, że sesja nie istnieje jeszcze w Training Log — paczka pozos
 
 ## Sesja
 
-Passcode jest wysyłany wyłącznie do `/api/session`. Po poprawnej weryfikacji serwer ustawia podpisane cookie `HttpOnly; Secure; SameSite=Strict` na siedem dni. Endpoint zapisu dodatkowo wymaga dozwolonego nagłówka `Origin`. Passcode ani sekret sesji nie trafiają do bundla frontendowego ani `localStorage`.
+Passcode jest wysyłany wyłącznie do `/api/session`. Serwer porównuje go z wersjonowanym weryfikatorem `scrypt`; plaintext nie jest przechowywany w zmiennych środowiskowych. Po poprawnej weryfikacji serwer ustawia podpisane cookie `HttpOnly; Secure; SameSite=Strict` na siedem dni. Endpoint zapisu dodatkowo wymaga dozwolonego nagłówka `Origin`. Passcode ani sekret sesji nie trafiają do bundla frontendowego ani `localStorage`.
 
 ## Konfiguracja Vercela
 
 Ustaw zmienne z [`.env.example`](../.env.example) w Production:
 
 - `APP_ORIGIN`
-- `APP_PASSCODE`
+- `APP_PASSCODE_SCRYPT` — wygenerowany przez `npm run passcode:generate`
 - `SESSION_SECRET`
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
 - `GOOGLE_PRIVATE_KEY`

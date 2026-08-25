@@ -1,7 +1,12 @@
-import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 
 export const SESSION_COOKIE = 'carlos_session';
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+const PASSCODE_VERIFIER_VERSION = 'scrypt-v1';
+const PASSCODE_KEY_BYTES = 32;
+const PASSCODE_SALT_BYTES = 16;
+const scrypt = promisify(scryptCallback);
 
 function base64url(value) {
   return Buffer.from(value).toString('base64url');
@@ -43,10 +48,41 @@ export function verifySessionToken(token, secret, options = {}) {
   }
 }
 
-export function passcodeMatches(supplied, expected) {
-  if (!expected || typeof supplied !== 'string') return false;
-  const digest = (value) => createHash('sha256').update(value).digest();
-  return timingSafeEqual(digest(supplied), digest(expected));
+function decodePasscodeVerifier(verifier) {
+  if (typeof verifier !== 'string') return null;
+  const [version, encodedSalt, encodedKey, extra] = verifier.split('$');
+  if (version !== PASSCODE_VERIFIER_VERSION || !encodedSalt || !encodedKey || extra) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(encodedSalt) || !/^[A-Za-z0-9_-]+$/.test(encodedKey)) return null;
+  const salt = Buffer.from(encodedSalt, 'base64url');
+  const key = Buffer.from(encodedKey, 'base64url');
+  return salt.length === PASSCODE_SALT_BYTES && key.length === PASSCODE_KEY_BYTES ? { salt, key } : null;
+}
+
+async function derivePasscodeKey(passcode, salt) {
+  return scrypt(passcode, salt, PASSCODE_KEY_BYTES, {
+    cost: 16384,
+    blockSize: 8,
+    parallelization: 1,
+    maxmem: 32 * 1024 * 1024,
+  });
+}
+
+export async function createPasscodeVerifier(passcode, options = {}) {
+  if (typeof passcode !== 'string' || passcode.length < 20 || passcode.length > 256) {
+    throw new Error('passcode-must-have-20-to-256-characters');
+  }
+  const salt = options.salt ? Buffer.from(options.salt) : randomBytes(PASSCODE_SALT_BYTES);
+  if (salt.length !== PASSCODE_SALT_BYTES) throw new Error('passcode-salt-must-have-16-bytes');
+  const key = await derivePasscodeKey(passcode, salt);
+  return `${PASSCODE_VERIFIER_VERSION}$${salt.toString('base64url')}$${key.toString('base64url')}`;
+}
+
+export async function passcodeMatches(supplied, verifier) {
+  if (typeof supplied !== 'string' || supplied.length > 256) return false;
+  const decoded = decodePasscodeVerifier(verifier);
+  if (!decoded) return false;
+  const suppliedKey = await derivePasscodeKey(supplied, decoded.salt);
+  return timingSafeEqual(suppliedKey, decoded.key);
 }
 
 export function parseCookies(header = '') {
@@ -79,7 +115,7 @@ export function allowedRequestOrigin(request, env = process.env) {
 
 export function serviceConfiguration(env = process.env) {
   const missing = [
-    'APP_PASSCODE', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
+    'APP_PASSCODE_SCRYPT', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL',
     'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID',
   ].filter((name) => !env[name]);
   return { configured: missing.length === 0, missing };
