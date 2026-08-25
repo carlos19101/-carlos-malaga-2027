@@ -27,6 +27,7 @@ import {
 import { computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
 import { buildDecisionJournal } from './decisionJournal';
+import { buildStaffPanel } from './staffPanel';
 import { feedbackLogin, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi';
 import {
   createTrainingFeedback,
@@ -40,7 +41,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 4.9';
+const APP_VERSION = 'FINAL 5.0';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -445,6 +446,64 @@ function ExecutionCard({ execution }) {
   );
 }
 
+function staffEvidenceText(item) {
+  const formatted = typeof item.value === 'number'
+    ? formatMetricNumber(item.value, { maximumFractionDigits: 2 })
+    : String(item.value ?? 'brak danych');
+  const unit = item.unit ? (item.unit.startsWith('/') ? item.unit : ` ${item.unit}`) : '';
+  return `${item.label}: ${formatted}${unit}`;
+}
+
+function StaffRoleCard({ member }) {
+  const tone = ['GREEN', 'YELLOW', 'RED'].includes(member.status) ? member.status : '';
+  return (
+    <article className={`staff-role-card staff-${member.status.toLowerCase()}`}>
+      <div className="staff-role-heading">
+        <div><span>{member.role}</span><small>{member.scope}</small></div>
+        <StatusChip status={tone}>{member.status}</StatusChip>
+      </div>
+      <div className="staff-evidence" aria-label={`Dowody: ${member.role}`}>
+        <b>DOWODY</b>
+        <div>{member.evidence.map((item, index) => <span key={`${item.label}-${index}`}>{staffEvidenceText(item)}</span>)}</div>
+      </div>
+      <div className="staff-conclusion">
+        <p><b>INTERPRETACJA</b>{member.interpretation}</p>
+        <p><b>REKOMENDACJA</b>{member.recommendation}</p>
+      </div>
+    </article>
+  );
+}
+
+function StaffPanel({ panel }) {
+  return (
+    <section className="section-block staff-panel">
+      <div className="section-heading">
+        <div><span className="eyebrow">PANEL SZTABU · 4 CORE</span><h2>Konsultacja domenowa</h2></div>
+        <span className="section-aside">dowody, nie głosowanie</span>
+      </div>
+      {panel.dispute ? (
+        <div className="staff-dispute" role="status">
+          <strong>SPÓR SZTABU — kierunki nie są zgodne.</strong>
+          <div>{panel.dispute.evidence.map((item) => <span key={item.label}>{staffEvidenceText(item)}</span>)}</div>
+          <p>{panel.dispute.interpretation} {panel.dispute.recommendation}</p>
+        </div>
+      ) : null}
+      <div className="staff-grid">
+        {panel.core.map((member) => <StaffRoleCard member={member} key={member.id} />)}
+      </div>
+      {panel.specialists.length ? (
+        <div className="staff-conditional">
+          <div className="staff-conditional-heading"><span>SPECJALIŚCI WARUNKOWI</span><small>uruchomieni przez dane</small></div>
+          <div className="staff-grid">
+            {panel.specialists.map((member) => <StaffRoleCard member={member} key={member.id} />)}
+          </div>
+        </div>
+      ) : null}
+      <p className="method-note">{panel.methodology}</p>
+    </section>
+  );
+}
+
 function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierReady, now }) {
   const row = latestRow(feed);
   const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
@@ -474,6 +533,31 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       pain: v(row, 'pain', ''), doms: v(row, 'doms', ''), fatigue: v(row, 'fatigue', ''), dataOk: validation.ok,
     },
   }), [row, validation.ok]);
+  const staffPanel = useMemo(() => buildStaffPanel({
+    decision,
+    plan: todayPlan ? {
+      session: v(todayPlan, 'planMorning', v(todayPlan, 'planSession', '')),
+      targetHr: v(todayPlan, 'planHr', ''),
+      rpeMax: v(todayPlan, 'planRpe', ''),
+    } : null,
+    execution,
+    daily,
+    recovery: {
+      pain: v(row, 'pain', ''),
+      doms: v(row, 'doms', ''),
+      fatigue: v(row, 'fatigue', ''),
+      sleep: v(row, 'sleep', ''),
+      recovery: v(row, 'recovery', ''),
+      bodyBattery: v(row, 'bodyBattery', ''),
+    },
+    load: loadComputed,
+    integrity: {
+      validation,
+      verifierMismatches,
+      dailyIssues: daily.issues,
+      freshnessState,
+    },
+  }), [decision, todayPlan, execution, daily, row, loadComputed, validation, verifierMismatches, freshnessState]);
 
   const hrvDelta = metricDeltaPercent(v(row, 'hrv', ''), v(row, 'hrv7d', ''));
   const weightDelta = metric(v(row, 'weightDelta7d', ''));
@@ -510,6 +594,8 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           </div>
         </article>
       </section>
+
+      <StaffPanel panel={staffPanel} />
 
       <section className="section-block">
         <TodayPlanCard row={todayPlan} />

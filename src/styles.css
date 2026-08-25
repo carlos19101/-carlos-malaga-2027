@@ -238,6 +238,40 @@ main {
 .coach-context p { margin: 10px 0 0; color: #e3e6ed; line-height: 1.5; font-size: .9rem; }
 .coach-context small { margin-top: 12px; color: #f4d984; line-height: 1.45; }
 
+.staff-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.staff-role-card {
+  min-width: 0;
+  padding: 22px;
+  display: grid;
+  gap: 17px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--panel);
+}
+.staff-green { border-color: rgba(100,216,162,.28); }
+.staff-yellow { border-color: rgba(243,200,70,.32); background: linear-gradient(135deg, rgba(243,200,70,.055), transparent 48%), var(--panel); }
+.staff-red { border-color: rgba(239,72,103,.35); background: linear-gradient(135deg, rgba(239,72,103,.06), transparent 48%), var(--panel); }
+.staff-calibration, .staff-incomplete { border-style: dashed; }
+.staff-role-heading { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
+.staff-role-heading > div { min-width: 0; }
+.staff-role-heading span { display: block; color: #eef1f6; font-size: .74rem; font-weight: 900; letter-spacing: .1em; overflow-wrap: anywhere; }
+.staff-role-heading small { display: block; margin-top: 5px; color: var(--muted); font-size: .68rem; }
+.staff-evidence > b, .staff-conclusion b { display: block; margin-bottom: 8px; color: #aab2c2; font-size: .58rem; letter-spacing: .13em; }
+.staff-evidence > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.staff-evidence span { max-width: 100%; padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,.045); color: #d7dbe4; font-size: .68rem; line-height: 1.35; overflow-wrap: anywhere; }
+.staff-conclusion { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.staff-conclusion p { margin: 0; color: #c6cbd5; font-size: .75rem; line-height: 1.5; }
+.staff-dispute { margin-bottom: 14px; padding: 18px 20px; border: 1px solid rgba(243,200,70,.38); border-radius: 20px; background: rgba(243,200,70,.075); }
+.staff-dispute > strong { display: block; color: #ffe18c; font-size: .83rem; }
+.staff-dispute > div { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 7px; }
+.staff-dispute span { padding: 6px 9px; border-radius: 9px; background: rgba(0,0,0,.18); color: #f2e5b5; font-size: .68rem; }
+.staff-dispute p { margin: 11px 0 0; color: #d7cfae; font-size: .75rem; line-height: 1.5; }
+.staff-conditional { margin-top: 20px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.08); }
+.staff-conditional-heading { margin-bottom: 12px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.staff-conditional-heading span { color: #d9dde6; font-size: .68rem; font-weight: 900; letter-spacing: .13em; }
+.staff-conditional-heading small { color: var(--muted); }
+.staff-panel > .method-note { margin-top: 16px; }
+
 .today-plan-card {
   padding: 26px 28px;
   border: 1px solid var(--line);
@@ -463,6 +497,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .load-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .anchor-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .log-list { grid-template-columns: 1fr; }
+  .staff-conclusion { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 880px) {
@@ -518,6 +553,13 @@ tbody tr:last-child td { border-bottom: 0; }
   .race-hero-side small { font-size: .58rem; }
 
   .coach-card { min-height: 0; padding: 21px; grid-template-columns: 1fr; gap: 17px; border-radius: 24px; }
+  .staff-grid { grid-template-columns: 1fr; }
+  .staff-role-card { padding: 18px; border-radius: 21px; }
+  .staff-role-heading { gap: 10px; }
+  .staff-role-heading .status-chip { min-width: 0; min-height: 32px; padding: 0 9px; font-size: .55rem; }
+  .staff-evidence > div { display: grid; grid-template-columns: 1fr; }
+  .staff-evidence span { width: 100%; }
+  .staff-dispute { padding: 16px; }
   .coach-card > div:first-child > strong { font-size: 1.55rem; }
   .coach-card > div:first-child > p { font-size: .86rem; }
   .coach-context { padding: 16px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.09); }
