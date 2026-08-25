@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "tcx:analyze": "node tools/tcx-analyze.js"
+    "tcx:analyze": "node tools/tcx-analyze.js",
+    "tcx:import": "node tools/tcx-import.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

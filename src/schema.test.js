@@ -63,6 +63,13 @@ describe('kontrakty nagłówków Google Sheets', () => {
     ]);
   });
 
+  it('brak Session_ID łamie idempotentny kontrakt Training Log', () => {
+    const headers = LIVE_HEADERS['Training Log'].filter((header) => header !== 'Session_ID');
+    expect(missingContractFields(headers, 'Training Log')).toEqual([
+      expect.objectContaining({ id: 'logSessionId', label: 'Session_ID' }),
+    ]);
+  });
+
   it('brak celu dystansu po migracji łamie kontrakt Plan', () => {
     const headers = LIVE_HEADERS.Plan.filter((header) => header !== 'Distance_Target_Max_km');
     expect(missingContractFields(headers, 'Plan')).toEqual([

@@ -28,6 +28,8 @@ npm run build
 
 Wersjonowany analizator TCX oblicza atomowe czasy wykonania na podstawie rzeczywistych odstępów między próbkami HR. Metodologia, komenda i oczyszczony przypadek kontrolny są opisane w [`docs/tcx-methodology.md`](docs/tcx-methodology.md).
 
+Idempotentny importer dopasowuje sesję po `Session_ID`, blokuje konflikty i generuje precyzyjny zapis atomów do Training Log. Instrukcja: [`docs/tcx-import.md`](docs/tcx-import.md).
+
 ## Ważne
 
 Ta wersja realizuje pakiet poprawek integralności danych, offline, iOS safe-area, touch targets, WCAG i service workera. Migracja z publicznego CSV do prywatnego Google Sheet przez uwierzytelnione Vercel API jest kolejnym etapem i nie jest częścią tego patcha.

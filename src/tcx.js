@@ -45,7 +45,7 @@ export function analyzeTcx(tcxText, options = {}) {
     ? DEFAULT_MAX_GAP_SECONDS
     : requireFiniteNumber(options.maxGapSeconds, 'maxGapSeconds');
 
-  if (targetMin > targetMax) throw new RangeError('targetMin nie może być większe od targetMax.');
+  if (targetMin >= targetMax) throw new RangeError('targetMin musi być mniejsze od targetMax.');
   if (maxGapSeconds <= 0) throw new RangeError('maxGapSeconds musi być większe od zera.');
 
   const laps = parseTcxLaps(tcxText);

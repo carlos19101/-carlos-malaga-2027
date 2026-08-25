@@ -1,0 +1,265 @@
+import { isNullish, normalize, parseNumber } from './parse.js';
+import { analyzeTcx } from './tcx.js';
+
+export const TCX_IMPORT_SCHEMA = 'carlos.tcx-import.v1';
+export const TCX_IMPORT_HEADERS = [
+  'HR_Target_Min_bpm',
+  'HR_Target_Max_bpm',
+  'Time_In_Target_s',
+  'Time_Above_Target_s',
+  'Time_Below_Target_s',
+  'HR_Analyzed_Duration_s',
+];
+export const SESSION_ID_HEADER = 'Session_ID';
+
+function requiredText(value, label) {
+  const text = String(value ?? '').trim();
+  if (!text) throw new TypeError(`${label} nie może być puste.`);
+  return text;
+}
+
+function valueFingerprint(values) {
+  let hash = 2166136261;
+  for (const character of values.join('|')) {
+    hash ^= character.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+export function createTcxImport(tcxText, options = {}) {
+  const sessionId = requiredText(options.sessionId, 'sessionId');
+  const sourceSha256 = String(options.sourceSha256 ?? '').trim().toUpperCase();
+  const analysis = analyzeTcx(tcxText, {
+    targetMin: options.targetMin,
+    targetMax: options.targetMax,
+    ...(options.maxGapSeconds === undefined ? {} : { maxGapSeconds: options.maxGapSeconds }),
+  });
+  const values = [
+    analysis.targetMin,
+    analysis.targetMax,
+    analysis.timeInTarget,
+    analysis.timeAboveTarget,
+    analysis.timeBelowTarget,
+    analysis.analyzedDuration,
+  ];
+  const idempotencyKey = `tcx-v1-${valueFingerprint([sessionId, sourceSha256 || 'NO_SHA256', ...values])}`;
+
+  return {
+    schema: TCX_IMPORT_SCHEMA,
+    sessionId,
+    sourceSha256: sourceSha256 || null,
+    idempotencyKey,
+    methodology: {
+      intervalOwner: 'previous-trackpoint',
+      inclusiveTarget: true,
+      maxGapSeconds: analysis.maxGapSeconds,
+      lastTrackpointGetsDuration: false,
+    },
+    atomic: Object.fromEntries(TCX_IMPORT_HEADERS.map((header, index) => [header, values[index]])),
+    diagnostics: {
+      lapCount: analysis.lapCount,
+      trackpointCount: analysis.trackpointCount,
+      analyzedIntervals: analysis.analyzedIntervals,
+      excludedGaps: analysis.excludedGaps,
+      excludedDuration: analysis.excludedDuration,
+      nonPositiveIntervals: analysis.nonPositiveIntervals,
+    },
+  };
+}
+
+function parseCsvRecords(text) {
+  const records = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+
+  for (let index = 0; index < String(text ?? '').length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else if (character === '"') quoted = false;
+      else cell += character;
+    } else if (character === '"') quoted = true;
+    else if (character === ',') {
+      row.push(cell);
+      cell = '';
+    } else if (character === '\n') {
+      row.push(cell.replace(/\r$/, ''));
+      records.push(row);
+      row = [];
+      cell = '';
+    } else cell += character;
+  }
+
+  if (cell.length || row.length) {
+    row.push(cell.replace(/\r$/, ''));
+    records.push(row);
+  }
+  return records;
+}
+
+export function parseTrainingLogCsv(text) {
+  const records = parseCsvRecords(text);
+  const headerIndex = records.findIndex((row) => row.some((value) => String(value).trim() !== ''));
+  if (headerIndex === -1) return { headers: [], rows: [] };
+
+  const headers = records[headerIndex].map((value, index) => (
+    String(value).replace(/^\uFEFF/, '').trim() || `column_${index + 1}`
+  ));
+  const rows = records.slice(headerIndex + 1).map((values, index) => ({
+    rowNumber: headerIndex + index + 2,
+    values: headers.map((_, columnIndex) => values[columnIndex] ?? ''),
+  }));
+  return { headers, rows };
+}
+
+function headerIndex(headers, wanted) {
+  const normalizedWanted = normalize(wanted);
+  const indexes = headers.reduce((matches, header, index) => (
+    normalize(header) === normalizedWanted ? [...matches, index] : matches
+  ), []);
+  return indexes.length === 1 ? indexes[0] : -1;
+}
+
+function columnLetter(zeroBasedIndex) {
+  let value = zeroBasedIndex + 1;
+  let result = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+function result(action, details = {}) {
+  return { action, ...details };
+}
+
+export function resolveTcxTarget(table = {}, sessionIdValue = '') {
+  const sessionId = String(sessionIdValue ?? '').trim();
+  const headers = Array.isArray(table.headers) ? table.headers : [];
+  const rows = Array.isArray(table.rows) ? table.rows : [];
+  const sessionIndex = headerIndex(headers, SESSION_ID_HEADER);
+  const minIndex = headerIndex(headers, TCX_IMPORT_HEADERS[0]);
+  const maxIndex = headerIndex(headers, TCX_IMPORT_HEADERS[1]);
+  const missingHeaders = [
+    ...(sessionIndex === -1 ? [SESSION_ID_HEADER] : []),
+    ...(minIndex === -1 ? [TCX_IMPORT_HEADERS[0]] : []),
+    ...(maxIndex === -1 ? [TCX_IMPORT_HEADERS[1]] : []),
+  ];
+  if (missingHeaders.length) return result('contract-error', { missingHeaders });
+
+  const matches = rows.filter(({ values = [] }) => String(values[sessionIndex] ?? '').trim() === sessionId);
+  if (!matches.length) return result('missing-session', { sessionId });
+  if (matches.length > 1) {
+    return result('duplicate-session', { sessionId, rowNumbers: matches.map(({ rowNumber }) => rowNumber) });
+  }
+
+  const row = matches[0];
+  const targetMin = parseNumber(row.values?.[minIndex]);
+  const targetMax = parseNumber(row.values?.[maxIndex]);
+  if (targetMin === null || targetMax === null) {
+    return result('missing-target', { sessionId, rowNumber: row.rowNumber, targetMin, targetMax });
+  }
+  if (targetMin >= targetMax) {
+    return result('invalid-target', { sessionId, rowNumber: row.rowNumber, targetMin, targetMax });
+  }
+  return result('resolved', { sessionId, rowNumber: row.rowNumber, targetMin, targetMax });
+}
+
+export function reconcileTcxImport(table = {}, envelope = {}) {
+  if (envelope.schema !== TCX_IMPORT_SCHEMA) {
+    return result('contract-error', { reason: `Nieobsługiwany schemat importu: ${envelope.schema ?? 'brak'}` });
+  }
+
+  const headers = Array.isArray(table.headers) ? table.headers : [];
+  const rows = Array.isArray(table.rows) ? table.rows : [];
+  const sessionIndex = headerIndex(headers, SESSION_ID_HEADER);
+  const atomicIndexes = TCX_IMPORT_HEADERS.map((header) => headerIndex(headers, header));
+  const missingHeaders = [
+    ...(sessionIndex === -1 ? [SESSION_ID_HEADER] : []),
+    ...TCX_IMPORT_HEADERS.filter((_, index) => atomicIndexes[index] === -1),
+  ];
+  if (missingHeaders.length) return result('contract-error', { missingHeaders });
+
+  const expectedAtomicStart = atomicIndexes[0];
+  if (!atomicIndexes.every((index, offset) => index === expectedAtomicStart + offset)) {
+    return result('contract-error', { reason: 'Kolumny atomowe nie tworzą ciągłego bloku w ustalonej kolejności.' });
+  }
+
+  const matches = rows.filter(({ values = [] }) => String(values[sessionIndex] ?? '').trim() === envelope.sessionId);
+  if (!matches.length) return result('missing-session', { sessionId: envelope.sessionId });
+  if (matches.length > 1) {
+    return result('duplicate-session', {
+      sessionId: envelope.sessionId,
+      rowNumbers: matches.map(({ rowNumber }) => rowNumber),
+    });
+  }
+
+  const row = matches[0];
+  const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic?.[header]);
+  const invalidAtomicHeaders = TCX_IMPORT_HEADERS.filter((_, index) => !Number.isFinite(proposed[index]));
+  if (invalidAtomicHeaders.length) return result('contract-error', { invalidAtomicHeaders });
+  const currentRaw = atomicIndexes.map((index) => row.values?.[index] ?? '');
+  const conflicts = [];
+  let blanks = 0;
+
+  currentRaw.forEach((raw, index) => {
+    if (isNullish(raw)) {
+      blanks += 1;
+      return;
+    }
+    const parsed = parseNumber(raw);
+    if (parsed === null || Math.abs(parsed - proposed[index]) > 1e-9) {
+      conflicts.push({
+        header: TCX_IMPORT_HEADERS[index],
+        current: raw,
+        proposed: proposed[index],
+      });
+    }
+  });
+
+  const base = {
+    sessionId: envelope.sessionId,
+    idempotencyKey: envelope.idempotencyKey,
+    rowNumber: row.rowNumber,
+    range: `${columnLetter(expectedAtomicStart)}${row.rowNumber}:${columnLetter(expectedAtomicStart + proposed.length - 1)}${row.rowNumber}`,
+    startColumnIndex: expectedAtomicStart,
+    values: proposed,
+    current: Object.fromEntries(TCX_IMPORT_HEADERS.map((header, index) => [header, currentRaw[index]])),
+    proposed: envelope.atomic,
+  };
+
+  if (conflicts.length) return result('conflict', { ...base, conflicts });
+  if (blanks === 0) return result('noop', base);
+  return result('update', base);
+}
+
+export function buildSheetsBatchUpdate(reconciliation, sheetId) {
+  if (reconciliation?.action === 'noop') return [];
+  if (reconciliation?.action !== 'update') {
+    throw new Error(`Nie można zbudować zapisu dla akcji: ${reconciliation?.action ?? 'brak'}`);
+  }
+  const numericSheetId = Number(sheetId);
+  if (!Number.isInteger(numericSheetId) || numericSheetId < 0) throw new TypeError('sheetId musi być nieujemną liczbą całkowitą.');
+
+  return [{
+    updateCells: {
+      range: {
+        sheetId: numericSheetId,
+        startRowIndex: reconciliation.rowNumber - 1,
+        endRowIndex: reconciliation.rowNumber,
+        startColumnIndex: reconciliation.startColumnIndex,
+        endColumnIndex: reconciliation.startColumnIndex + reconciliation.values.length,
+      },
+      rows: [{
+        values: reconciliation.values.map((number) => ({ userEnteredValue: { numberValue: number } })),
+      }],
+      fields: 'userEnteredValue',
+    },
+  }];
+}

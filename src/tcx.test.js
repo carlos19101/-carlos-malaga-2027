@@ -77,6 +77,15 @@ describe('analyzeTcx', () => {
     });
   });
 
+  it('odrzuca pusty zakres HR zgodnie z computeExecution', () => {
+    const source = tcx([
+      { time: '2000-01-01T00:00:00Z', hr: 150 },
+      { time: '2000-01-01T00:00:01Z', hr: 150 },
+    ]);
+    expect(() => analyzeTcx(source, { targetMin: 150, targetMax: 150 }))
+      .toThrow('targetMin musi być mniejsze od targetMax');
+  });
+
   it('sanityzuje lokalizację, dystans i prawdziwy czas, zachowując obliczenia', () => {
     const source = readFileSync(fixtureUrl, 'utf8');
     const sanitized = sanitizeTcx(source);
