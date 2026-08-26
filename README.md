@@ -7,8 +7,9 @@ PWA React/Vite do monitorowania treningu i regeneracji zasilana Google Sheets.
 - `APP_FEED`
 - `Training Log`
 - `Plan`
+- `Raw_Data`
 
-Aplikacja pobiera CSV przez Google `gviz`, używa `cache: no-store`, parametru cache-busting, timeoutu `AbortController`, last-known-good w `localStorage` i jawnego mapowania pól exact-match.
+Produkcja działa na arkuszu `Restricted`. Po zalogowaniu siedmiodniową sesją HttpOnly aplikacja pobiera cztery tabele przez prywatny endpoint Vercela i Google Sheets API. Transport używa `cache: no-store`, timeoutu `AbortController`, prywatnego last-known-good w `localStorage` i jawnego mapowania pól exact-match.
 
 ## Uruchomienie
 
@@ -28,7 +29,7 @@ npm run build
 
 Wersjonowany analizator TCX oblicza atomowe czasy wykonania na podstawie rzeczywistych odstępów między próbkami HR. Metodologia, komenda i oczyszczony przypadek kontrolny są opisane w [`docs/tcx-methodology.md`](docs/tcx-methodology.md).
 
-Idempotentny importer dopasowuje sesję po `Session_ID`, blokuje konflikty i generuje precyzyjny zapis atomów do Training Log. Instrukcja: [`docs/tcx-import.md`](docs/tcx-import.md).
+Idempotentny importer jest dostępny w zakładce Log. Analizuje TCX lokalnie, pokazuje podgląd, dopasowuje sesję po `Session_ID`, blokuje konflikty i zapisuje wyłącznie sześć pól atomowych przez prywatny endpoint. Instrukcja: [`docs/tcx-import.md`](docs/tcx-import.md).
 
 ## Daily Metrics
 
@@ -52,4 +53,4 @@ Po konfiguracji service account i sekretów globalna sesja HttpOnly zastępuje p
 
 ## Ważne
 
-Kod prywatnego transportu jest wdrożony kompatybilnie wstecz. Dopóki produkcja raportuje `configured:false`, aplikacja używa publicznego `gviz`. Pełne zamknięcie wymaga ustawienia sekretów, pozytywnego smoke-checku i ręcznego odebrania publicznego dostępu do Google Sheet.
+Produkcja raportuje `configured:true`, a publiczny dostęp do arkusza jest wyłączony. Tryb `configured:false` pozostaje wyłącznie bezpiecznym mechanizmem wdrożeniowym dla nowego środowiska; nie jest bieżącym transportem produkcyjnym.

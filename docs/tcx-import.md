@@ -21,6 +21,17 @@ HR_Analyzed_Duration_s
 - zapis obejmuje jeden dopasowany wiersz i sześć kolumn atomowych;
 - źródłowy SHA-256 oraz fingerprint importu są zwracane w wyniku.
 
+## Import w aplikacji
+
+W zakładce **Log → Importuj bieg**:
+
+1. wybierz sesję z istniejącym `Session_ID` i zakresem HR;
+2. wybierz plik `.tcx` do 12 MB;
+3. sprawdź podgląd czasu w oknie, ponad i poniżej celu;
+4. potwierdź zapis.
+
+TCX jest analizowany lokalnie w przeglądarce. Do `/api/tcx-import` trafia wersjonowana koperta z SHA-256, metodologią i sześcioma wartościami atomowymi, nie surowy plik. Endpoint wymaga sesji HttpOnly i dozwolonego `Origin`. Serwer ponownie waliduje sumę czasów, metodologię, hash oraz kontrakt Training Log.
+
 ## Analiza bez arkusza
 
 ```bash
@@ -40,15 +51,6 @@ npm run tcx:import -- "bieg.tcx" \
   --training-log "training-log.csv"
 ```
 
-Można również pobrać publiczny arkusz bezpośrednio przez `--sheet-id`. Dodanie `--grid-id` powoduje wygenerowanie gotowej tablicy `spreadsheets.batchUpdate` dla połączonego Google Sheets.
-
 Gdy istniejący wiersz ma już `HR_Target_Min_bpm` i `HR_Target_Max_bpm`, nie trzeba powtarzać ich w komendzie — importer pobiera je po `Session_ID`. Podanie tylko jednej granicy jest błędem, a jawny cel sprzeczny z istniejącym zostaje zatrzymany jako `conflict`.
 
-```bash
-npm run tcx:import -- "bieg.tcx" \
-  --session-id "2026-08-23-run-01" \
-  --sheet-id "SPREADSHEET_ID" \
-  --grid-id "TRAINING_LOG_GRID_ID"
-```
-
-CLI jest domyślnie trybem dry-run: sam nie posiada sekretu ani uprawnienia zapisu. Aktualnie wygenerowany `batchUpdate` wykonuje Codex przez połączone Google Sheets. Samodzielne `--apply` wymaga późniejszego, uwierzytelnionego transportu O2/service account.
+CLI pozostaje lokalnym dry-runem dla pliku TCX i opcjonalnego eksportu CSV. Nie pobiera już Training Log przez publiczny `gviz`, ponieważ produkcyjny arkusz jest `Restricted`. Uwierzytelniony zapis wykonuje aplikacja przez service account.

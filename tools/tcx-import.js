@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { buildSheetCsvUrl } from '../src/parse.js';
 import {
-  buildSheetsBatchUpdate,
   createTcxImport,
   parseTrainingLogCsv,
   reconcileTcxImport,
@@ -26,19 +24,17 @@ function parseArguments(argv) {
 
 async function readTrainingLog(options) {
   if (options['training-log']) return readFileSync(options['training-log'], 'utf8');
-  if (!options['sheet-id']) return null;
-  const url = buildSheetCsvUrl(options['sheet-id'], 'Training Log');
-  const response = await fetch(url, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Nie udało się pobrać Training Log: HTTP ${response.status}`);
-  return response.text();
+  if (options['sheet-id']) {
+    throw new Error('Arkusz jest Restricted. Użyj importera w aplikacji albo lokalnego --training-log.');
+  }
+  return null;
 }
 
 function usage() {
   return [
     'Użycie:',
     'npm run tcx:import -- <plik.tcx> --session-id <ID> [--min 150 --max 162]',
-    '  [--training-log <plik.csv> | --sheet-id <SPREADSHEET_ID>]',
-    '  [--grid-id <SHEET_GRID_ID>] [--max-gap 5]',
+    '  [--training-log <plik.csv>] [--max-gap 5]',
     'Bez --min/--max cel HR jest pobierany z dopasowanego wiersza Training Log.',
   ].join('\n');
 }
@@ -46,9 +42,6 @@ function usage() {
 async function main() {
   const { file, options } = parseArguments(process.argv.slice(2));
   if (!file || !options['session-id']) throw new Error(usage());
-  if (options['training-log'] && options['sheet-id']) {
-    throw new Error('Podaj tylko jedno źródło Training Log: --training-log albo --sheet-id.');
-  }
   if ((options.min === undefined) !== (options.max === undefined)) {
     throw new Error('--min i --max muszą wystąpić razem.');
   }
@@ -82,10 +75,7 @@ async function main() {
   if (trainingLogCsv === null) console.log(JSON.stringify({ envelope }, null, 2));
   else {
     const reconciliation = reconcileTcxImport(trainingLog, envelope);
-    const batchUpdate = options['grid-id'] && ['update', 'noop'].includes(reconciliation.action)
-      ? buildSheetsBatchUpdate(reconciliation, options['grid-id'])
-      : null;
-    console.log(JSON.stringify({ targetResolution, envelope, reconciliation, batchUpdate }, null, 2));
+    console.log(JSON.stringify({ targetResolution, envelope, reconciliation }, null, 2));
     if (!['update', 'noop'].includes(reconciliation.action)) process.exitCode = 2;
   }
 }

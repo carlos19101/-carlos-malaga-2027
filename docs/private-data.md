@@ -35,3 +35,7 @@ Snapshot `localStorage` ma oznaczenie `public` albo `private`. Prywatna sesja ni
 `APP_PASSCODE_SCRYPT` ma format `scrypt-v1$salt$key`. Plaintextowy passcode nie jest zmienną środowiskową i nie może trafić do repozytorium ani logów wdrożenia. Reguła WAF jest współdzielona przez instancje serverless; nie zastępuj jej licznikiem w pamięci funkcji ani zapisem prób w arkuszu treningowym.
 
 Odebranie publicznego dostępu jest zmianą zewnętrzną i wymaga uprawnień właściciela arkusza. Samo wdrożenie kodu nie wykonuje tego kroku.
+
+## Stan produkcji
+
+Aktywacja została zakończona: service account ma uprawnienie edytora, prywatny odczyt i idempotentny zapis zostały potwierdzone, arkusz jest `Restricted`, a anonimowy `gviz` zwraca `401`. Lokalny plik JSON z kluczem został usunięty po zapisaniu sekretu w Vercelu.

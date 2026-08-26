@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import sessionHandler from '../../api/session.js';
 import feedbackHandler from '../../api/training-feedback.js';
 import dataHandler from '../../api/data.js';
+import tcxImportHandler from '../../api/tcx-import.js';
 import { createPasscodeVerifier, createSessionToken, SESSION_COOKIE } from '../../api/_lib/session.js';
 
 let passcodeVerifier;
@@ -46,6 +47,8 @@ describe('/api/session', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual({ ok: true, configured: false, authenticated: false });
     expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(response.headers['Referrer-Policy']).toBe('no-referrer');
   });
 
   it('POST z poprawnym passcode ustawia sesję HttpOnly', async () => {
@@ -73,12 +76,36 @@ describe('/api/session', () => {
     expect(response.headers['Set-Cookie']).toBeUndefined();
   });
 
+  it('odrzuca zbyt duży sparsowany payload przed weryfikacją passcode', async () => {
+    configuredEnvironment();
+    const response = responseMock();
+    await sessionHandler({
+      method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' },
+      body: { passcode: 'x'.repeat(1100) },
+    }, response);
+    expect(response.statusCode).toBe(413);
+    expect(response.body.error).toBe('invalid-request');
+  });
+
   it('odrzuca obcy Origin przed sprawdzeniem passcode', async () => {
     configuredEnvironment();
     const response = responseMock();
     await sessionHandler({ method: 'POST', headers: { origin: 'https://evil.example' }, body: { passcode: 'Carlos-2027-passcode!' } }, response);
     expect(response.statusCode).toBe(403);
     expect(response.body.error).toBe('origin-not-allowed');
+  });
+
+  it('DELETE czyści sesję tymi samymi bezpiecznymi atrybutami cookie', async () => {
+    configuredEnvironment();
+    const response = responseMock();
+    await sessionHandler({
+      method: 'DELETE', headers: { origin: 'https://carlos-malaga-2027.vercel.app' },
+    }, response);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['Set-Cookie']).toContain('Max-Age=0');
+    expect(response.headers['Set-Cookie']).toContain('HttpOnly');
+    expect(response.headers['Set-Cookie']).toContain('Secure');
+    expect(response.headers['Set-Cookie']).toContain('SameSite=Strict');
   });
 });
 
@@ -143,5 +170,38 @@ describe('/api/data', () => {
     expect(response.body).toMatchObject({ ok: true, transport: 'google-sheets-api' });
     expect(Object.keys(response.body.tables)).toEqual(['feed', 'log', 'plan', 'raw']);
     expect(response.headers['Cache-Control']).toBe('no-store');
+  });
+});
+
+describe('/api/tcx-import', () => {
+  it('wymaga dozwolonego Origin i podpisanej sesji', async () => {
+    configuredEnvironment();
+    const foreign = responseMock();
+    await tcxImportHandler({ method: 'POST', headers: { origin: 'https://evil.example' }, body: {} }, foreign);
+    expect(foreign.statusCode).toBe(403);
+    expect(foreign.body.error).toBe('origin-not-allowed');
+
+    const anonymous = responseMock();
+    await tcxImportHandler({
+      method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' }, body: {},
+    }, anonymous);
+    expect(anonymous.statusCode).toBe(401);
+    expect(anonymous.body.error).toBe('authentication-required');
+  });
+
+  it('odrzuca nieprawidłową kopertę przed połączeniem z Google', async () => {
+    configuredEnvironment();
+    const token = createSessionToken('session-secret-long-enough', { nonce: 'tcx-invalid' });
+    const response = responseMock();
+    await tcxImportHandler({
+      method: 'POST',
+      headers: {
+        origin: 'https://carlos-malaga-2027.vercel.app',
+        cookie: `${SESSION_COOKIE}=${token}`,
+      },
+      body: { schema: 'unknown' },
+    }, response);
+    expect(response.statusCode).toBe(422);
+    expect(response.body).toMatchObject({ ok: false, error: 'validation-error' });
   });
 });

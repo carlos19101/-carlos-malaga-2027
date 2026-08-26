@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi.js';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi.js';
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
@@ -23,6 +23,15 @@ describe('feedbackApi', () => {
     expect(fetchImpl.mock.calls[0][1]).toEqual(expect.objectContaining({
       method: 'POST', body: JSON.stringify({ passcode: 'sekret' }),
       headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+    }));
+  });
+
+  it('wysyła wyłącznie kopertę TCX do prywatnego endpointu', async () => {
+    const envelope = { schema: 'carlos.tcx-import.v1', sessionId: '2026-08-25-run-01' };
+    const fetchImpl = vi.fn().mockResolvedValue(response(200, { ok: true, action: 'noop' }));
+    expect(await sendTcxImport(envelope, fetchImpl)).toMatchObject({ ok: true, action: 'noop' });
+    expect(fetchImpl).toHaveBeenCalledWith('/api/tcx-import', expect.objectContaining({
+      method: 'POST', body: JSON.stringify(envelope), credentials: 'same-origin', cache: 'no-store',
     }));
   });
 

@@ -38,3 +38,5 @@ Ustaw zmienne z [`.env.example`](../.env.example) w Production:
 Konto serwisowe musi mieć uprawnienie edytora do konkretnego arkusza. Do chwili kompletnej konfiguracji `/api/session` zwraca `configured:false`, a aplikacja nie pokazuje formularza.
 
 Warstwa odczytu przełącza się na prywatne `/api/data`, gdy konfiguracja jest kompletna. Do tego czasu `configured:false` zachowuje publiczny `gviz`, aby wdrożenie kodu nie odcięło aplikacji przed dodaniem sekretów. Pełna procedura: [`private-data.md`](private-data.md).
+
+Produkcja jest obecnie skonfigurowana i arkusz ma dostęp `Restricted`; publiczny fallback nie uczestniczy w bieżącym odczycie.

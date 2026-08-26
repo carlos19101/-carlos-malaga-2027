@@ -29,3 +29,7 @@ export function feedbackLogout(fetchImpl) {
 export function sendTrainingFeedback(feedback, fetchImpl) {
   return jsonRequest('/api/training-feedback', { method: 'POST', body: JSON.stringify(feedback) }, fetchImpl);
 }
+
+export function sendTcxImport(envelope, fetchImpl) {
+  return jsonRequest('/api/tcx-import', { method: 'POST', body: JSON.stringify(envelope) }, fetchImpl);
+}

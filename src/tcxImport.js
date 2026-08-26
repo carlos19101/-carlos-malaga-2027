@@ -12,6 +12,10 @@ export const TCX_IMPORT_HEADERS = [
 ];
 export const SESSION_ID_HEADER = 'Session_ID';
 
+const TCX_IMPORT_ID_PATTERN = /^tcx-v1-[0-9a-f]{8}$/;
+const SESSION_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{5,119}$/i;
+const SHA256_PATTERN = /^[A-F0-9]{64}$/;
+
 function requiredText(value, label) {
   const text = String(value ?? '').trim();
   if (!text) throw new TypeError(`${label} nie może być puste.`);
@@ -66,6 +70,45 @@ export function createTcxImport(tcxText, options = {}) {
       nonPositiveIntervals: analysis.nonPositiveIntervals,
     },
   };
+}
+
+export function validateTcxImportEnvelope(envelope = {}) {
+  if (envelope.schema !== TCX_IMPORT_SCHEMA) {
+    return result('contract-error', { reason: `Nieobsługiwany schemat importu: ${envelope.schema ?? 'brak'}` });
+  }
+  if (!SESSION_ID_PATTERN.test(String(envelope.sessionId ?? '').trim())) {
+    return result('contract-error', { reason: 'Nieprawidłowy Session_ID.' });
+  }
+  if (!TCX_IMPORT_ID_PATTERN.test(String(envelope.idempotencyKey ?? ''))) {
+    return result('contract-error', { reason: 'Nieprawidłowy klucz idempotencji TCX.' });
+  }
+  if (envelope.sourceSha256 !== null && !SHA256_PATTERN.test(String(envelope.sourceSha256 ?? ''))) {
+    return result('contract-error', { reason: 'Nieprawidłowy SHA-256 pliku TCX.' });
+  }
+
+  const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic?.[header]);
+  const invalidAtomicHeaders = TCX_IMPORT_HEADERS.filter((_, index) => (
+    !Number.isFinite(proposed[index]) || proposed[index] < 0
+  ));
+  if (invalidAtomicHeaders.length) return result('contract-error', { invalidAtomicHeaders });
+
+  const [targetMin, targetMax, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration] = proposed;
+  if (targetMin < 20 || targetMax > 250 || targetMin >= targetMax) {
+    return result('contract-error', { reason: 'Nieprawidłowy zakres docelowego HR.' });
+  }
+  if (Math.abs(timeInTarget + timeAboveTarget + timeBelowTarget - analyzedDuration) > 1e-6) {
+    return result('contract-error', { reason: 'Czasy atomowe nie sumują się do analizowanego czasu.' });
+  }
+
+  const methodology = envelope.methodology || {};
+  if (methodology.intervalOwner !== 'previous-trackpoint'
+    || methodology.inclusiveTarget !== true
+    || methodology.lastTrackpointGetsDuration !== false
+    || !Number.isFinite(methodology.maxGapSeconds)
+    || methodology.maxGapSeconds <= 0) {
+    return result('contract-error', { reason: 'Nieprawidłowa metodologia analizy TCX.' });
+  }
+  return result('valid', { envelope });
 }
 
 function parseCsvRecords(text) {
@@ -172,9 +215,8 @@ export function resolveTcxTarget(table = {}, sessionIdValue = '') {
 }
 
 export function reconcileTcxImport(table = {}, envelope = {}) {
-  if (envelope.schema !== TCX_IMPORT_SCHEMA) {
-    return result('contract-error', { reason: `Nieobsługiwany schemat importu: ${envelope.schema ?? 'brak'}` });
-  }
+  const validation = validateTcxImportEnvelope(envelope);
+  if (validation.action !== 'valid') return validation;
 
   const headers = Array.isArray(table.headers) ? table.headers : [];
   const rows = Array.isArray(table.rows) ? table.rows : [];
@@ -201,9 +243,7 @@ export function reconcileTcxImport(table = {}, envelope = {}) {
   }
 
   const row = matches[0];
-  const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic?.[header]);
-  const invalidAtomicHeaders = TCX_IMPORT_HEADERS.filter((_, index) => !Number.isFinite(proposed[index]));
-  if (invalidAtomicHeaders.length) return result('contract-error', { invalidAtomicHeaders });
+  const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic[header]);
   const currentRaw = atomicIndexes.map((index) => row.values?.[index] ?? '');
   const conflicts = [];
   let blanks = 0;

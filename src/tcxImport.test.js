@@ -7,6 +7,7 @@ import {
   reconcileTcxImport,
   resolveTcxTarget,
   TCX_IMPORT_HEADERS,
+  validateTcxImportEnvelope,
 } from './tcxImport.js';
 
 const fixture = readFileSync(new URL('../test/fixtures/2026-08-23-run-01.sanitized.tcx', import.meta.url), 'utf8');
@@ -57,6 +58,16 @@ describe('createTcxImport', () => {
         HR_Analyzed_Duration_s: 2632,
       },
     });
+  });
+
+  it('waliduje metodologię, hash i sumę atomowych czasów', () => {
+    expect(validateTcxImportEnvelope(envelope)).toMatchObject({ action: 'valid' });
+    expect(validateTcxImportEnvelope({
+      ...envelope,
+      atomic: { ...envelope.atomic, HR_Analyzed_Duration_s: 2633 },
+    })).toMatchObject({ action: 'contract-error', reason: 'Czasy atomowe nie sumują się do analizowanego czasu.' });
+    expect(validateTcxImportEnvelope({ ...envelope, sourceSha256: 'NOT-A-HASH' }))
+      .toMatchObject({ action: 'contract-error', reason: 'Nieprawidłowy SHA-256 pliku TCX.' });
   });
 });
 

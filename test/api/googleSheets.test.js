@@ -1,6 +1,7 @@
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { createGoogleAssertion, readApplicationTables, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { createGoogleAssertion, readApplicationTables, updateTcxImport, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { createTcxImport } from '../../src/tcxImport.js';
 
 function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
@@ -89,5 +90,41 @@ describe('Google Sheets service account', () => {
       "'APP_FEED'", "'Training Log'", "'Plan'", "'Raw_Data'",
     ]);
     expect(options.headers.Authorization).toBe('Bearer private-read-token');
+  });
+
+  it('import TCX zapisuje tylko ciągły blok atomowy dopasowanej sesji', async () => {
+    const { privateKey } = keyPair();
+    const headers = [
+      'Date', 'Session_ID', 'HR_Target_Min_bpm', 'HR_Target_Max_bpm',
+      'Time_In_Target_s', 'Time_Above_Target_s', 'Time_Below_Target_s', 'HR_Analyzed_Duration_s',
+    ];
+    const row = ['2026-08-25', '2026-08-25-run-01', 145, 158, '', '', '', ''];
+    const envelope = createTcxImport(`
+      <Lap><Track>
+        <Trackpoint><Time>2026-08-25T18:00:00Z</Time><HeartRateBpm><Value>150</Value></HeartRateBpm></Trackpoint>
+        <Trackpoint><Time>2026-08-25T18:00:01Z</Time><HeartRateBpm><Value>159</Value></HeartRateBpm></Trackpoint>
+      </Track></Lap>`, {
+      sessionId: '2026-08-25-run-01', targetMin: 145, targetMax: 158,
+      sourceSha256: 'A'.repeat(64),
+    });
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'tcx-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, { values: [headers, row] }))
+      .mockResolvedValueOnce(jsonResponse(200, { responses: [{ updatedRange: "'Training Log'!C2:H2" }] }));
+
+    const result = await updateTcxImport(envelope, {
+      env: {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: 'tcx-import@example.test',
+        GOOGLE_PRIVATE_KEY: privateKey,
+        GOOGLE_SHEET_ID: 'private-sheet',
+      },
+      fetchImpl,
+    });
+    expect(result).toMatchObject({ action: 'update', rowNumber: 2, range: 'C2:H2' });
+    const writeBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(writeBody).toMatchObject({
+      valueInputOption: 'RAW',
+      data: [{ range: "'Training Log'!C2:H2", values: [[145, 158, 1, 0, 0, 1]] }],
+    });
   });
 });

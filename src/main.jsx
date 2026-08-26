@@ -29,20 +29,21 @@ import { computeDailyMetrics } from './dailyMetrics';
 import { buildDecisionJournal } from './decisionJournal';
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
-import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTrainingFeedback } from './feedbackApi';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
 import {
   createTrainingFeedback,
   enqueueTrainingFeedback,
   flushTrainingFeedbackQueue,
   readFeedbackQueue,
 } from './trainingFeedback';
+import { MAX_TCX_FILE_BYTES, prepareTcxImport, tcxImportPreview } from './tcxImportClient';
 import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.1';
+const APP_VERSION = 'FINAL 5.2';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -837,13 +838,136 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit }) {
   );
 }
 
-function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit }) {
+function TcxImportPanel({ rows, access, onSubmit }) {
+  const eligible = useMemo(() => sortedRows(rows, 'desc').filter((row) => (
+    isRunLogRow(row)
+    && v(row, 'logSessionId', '')
+    && parseMetric(v(row, 'logHrTargetMin', '')) !== null
+    && parseMetric(v(row, 'logHrTargetMax', '')) !== null
+  )).slice(0, 12), [rows]);
+  const [sessionId, setSessionId] = useState('');
+  const [envelope, setEnvelope] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [state, setState] = useState({ busy: false, message: '', tone: '' });
+
+  useEffect(() => {
+    if (!eligible.length) {
+      setSessionId('');
+      setEnvelope(null);
+      return;
+    }
+    if (!eligible.some((row) => v(row, 'logSessionId', '') === sessionId)) {
+      setSessionId(v(eligible[0], 'logSessionId', ''));
+      setEnvelope(null);
+    }
+  }, [eligible, sessionId]);
+
+  if (!access.checked || !access.configured || !access.authenticated || !eligible.length) return null;
+  const target = eligible.find((row) => v(row, 'logSessionId', '') === sessionId) || eligible[0];
+  const preview = envelope ? tcxImportPreview(envelope) : null;
+
+  const chooseSession = (event) => {
+    setSessionId(event.target.value);
+    setEnvelope(null);
+    setFileName('');
+    setState({ busy: false, message: '', tone: '' });
+  };
+
+  const chooseFile = async (event) => {
+    const file = event.target.files?.[0];
+    setEnvelope(null);
+    setFileName(file?.name || '');
+    setState({ busy: false, message: '', tone: '' });
+    if (!file) return;
+    if (file.size > MAX_TCX_FILE_BYTES) {
+      setState({ busy: false, message: 'Plik TCX przekracza limit 12 MB.', tone: 'error' });
+      return;
+    }
+    setState({ busy: true, message: 'Analizuję TCX lokalnie…', tone: '' });
+    try {
+      const prepared = await prepareTcxImport(await file.text(), {
+        sessionId: v(target, 'logSessionId', ''),
+        targetMin: parseMetric(v(target, 'logHrTargetMin', '')),
+        targetMax: parseMetric(v(target, 'logHrTargetMax', '')),
+      });
+      setEnvelope(prepared);
+      setState({ busy: false, message: 'Analiza gotowa. Sprawdź podgląd przed zapisem.', tone: 'ok' });
+    } catch (error) {
+      setState({ busy: false, message: error.message || 'Nie udało się przeanalizować TCX.', tone: 'error' });
+    }
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!envelope) return;
+    setState({ busy: true, message: 'Zapisuję dane atomowe…', tone: '' });
+    const result = await onSubmit(envelope);
+    const messages = {
+      update: 'Dane atomowe zapisane i potwierdzone przez Training Log.',
+      noop: 'Identyczne dane są już zapisane — bez duplikatu i bez zmian.',
+      conflict: 'Konflikt z istniejącymi danymi. Nic nie zostało nadpisane.',
+      'missing-session': 'Session_ID nie istnieje już w Training Log.',
+      'duplicate-session': 'Training Log zawiera zduplikowany Session_ID. Zapis został zablokowany.',
+      'contract-error': 'Kontrakt Training Log nie pozwala na bezpieczny zapis.',
+    };
+    setState({
+      busy: false,
+      message: messages[result.action] || (result.status === 0 ? 'Brak sieci — wybierz plik ponownie po odzyskaniu połączenia.' : 'Import nie został zapisany.'),
+      tone: result.ok ? 'ok' : 'error',
+    });
+  };
+
+  return (
+    <section className="section-block feedback-section tcx-import-section">
+      <div className="section-heading">
+        <div><span className="eyebrow">EXECUTION · TCX</span><h2>Importuj bieg</h2></div>
+        <span className="section-aside">lokalna analiza · prywatny zapis</span>
+      </div>
+      <form className="feedback-card tcx-import-card" onSubmit={submit}>
+        <div className="tcx-import-fields">
+          <label>
+            <span>Sesja</span>
+            <select value={sessionId} onChange={chooseSession}>
+              {eligible.map((row) => {
+                const id = v(row, 'logSessionId', '');
+                return <option value={id} key={id}>{formatDate(v(row, 'date', ''))} · {v(row, 'logName', 'Bieg')} · HR {v(row, 'logHrTargetMin', '')}–{v(row, 'logHrTargetMax', '')}</option>;
+              })}
+            </select>
+          </label>
+          <label>
+            <span>Plik TCX</span>
+            <input key={sessionId} type="file" accept=".tcx,application/xml,text/xml" onChange={chooseFile} />
+            <small>{fileName || 'Maksymalnie 12 MB. Surowy plik nie trafia do arkusza.'}</small>
+          </label>
+        </div>
+        {preview ? (
+          <div className="tcx-preview" aria-label="Podgląd analizy TCX">
+            <p><b>CEL HR</b><strong>{preview.targetMin}–{preview.targetMax}</strong><small>bpm</small></p>
+            <p><b>ANALIZA</b><strong>{executionDuration(preview.analyzedDuration)}</strong><small>{preview.diagnostics.trackpointCount || 0} próbek</small></p>
+            <p><b>W OKNIE</b><strong>{formatMetricNumber(preview.pctInTarget, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(preview.timeInTarget)}</small></p>
+            <p><b>PONAD</b><strong>{formatMetricNumber(preview.pctAboveTarget, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(preview.timeAboveTarget)}</small></p>
+            <p><b>PONIŻEJ</b><strong>{formatMetricNumber(preview.pctBelowTarget, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(preview.timeBelowTarget)}</small></p>
+            <p><b>LUKI &gt; 5 S</b><strong>{preview.diagnostics.excludedGaps || 0}</strong><small>{executionDuration(preview.diagnostics.excludedDuration || 0)} wykluczone</small></p>
+          </div>
+        ) : null}
+        <div className="feedback-actions">
+          <small>Granice są domknięte. Czas przypisujemy wcześniejszej próbce; luk powyżej 5 s nie analizujemy.</small>
+          <button type="submit" disabled={state.busy || !envelope}>{state.busy ? 'Pracuję…' : 'Zapisz dane TCX'}</button>
+        </div>
+        {state.message ? <p className={`feedback-message ${state.tone ? `feedback-${state.tone}` : ''}`} role="status">{state.message}</p> : null}
+      </form>
+    </section>
+  );
+}
+
+function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport }) {
   const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
   const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
   return (
     <>
       <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, recovery i później boks są liczone jako realne obciążenie systemu.</p></section>
       <FeedbackPanel target={feedbackTarget} access={feedbackAccess} queueCount={feedbackQueueCount} onLogin={onFeedbackLogin} onSubmit={onFeedbackSubmit} />
+      <TcxImportPanel rows={sorted} access={feedbackAccess} onSubmit={onTcxImport} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
       </section>
@@ -1098,6 +1222,16 @@ function App() {
     return syncFeedback();
   }, [syncFeedback]);
 
+  const submitTcxImport = useCallback(async (envelope) => {
+    const result = await sendTcxImport(envelope);
+    if (result.status === 401 || result.status === 403) {
+      commitAccess({ ...accessRef.current, authenticated: false, error: 'session-expired' });
+      return result;
+    }
+    if (result.ok) await refresh({ force: true });
+    return result;
+  }, [commitAccess, refresh]);
+
   useEffect(() => {
     setFeedbackQueueCount(readFeedbackQueue(localStorage).length);
     let active = true;
@@ -1245,7 +1379,7 @@ function App() {
       <main>
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
-        {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} />}
+        {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>
 

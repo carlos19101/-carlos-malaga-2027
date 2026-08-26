@@ -1,5 +1,6 @@
 import { createHash, createSign } from 'node:crypto';
 import { feedbackBatchData, planTrainingFeedbackUpdate } from '../../src/trainingFeedbackServer.js';
+import { reconcileTcxImport } from '../../src/tcxImport.js';
 
 let tokenCache = null;
 
@@ -113,4 +114,41 @@ export async function updateTrainingFeedback(feedback, options = {}) {
   if (!updateResponse.ok) throw new Error(`google-write-${updateResponse.status}`);
   const result = await updateResponse.json();
   return { ...plan, updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [] };
+}
+
+export async function updateTcxImport(envelope, options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const token = await accessToken(env, fetchImpl);
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, "'Training Log'!A1:AI2000")}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
+  const values = (await tableResponse.json()).values || [];
+  const table = {
+    headers: Array.isArray(values[0]) ? values[0].map((value) => String(value ?? '')) : [],
+    rows: values.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row })),
+  };
+  const reconciliation = reconcileTcxImport(table, envelope);
+  if (reconciliation.action !== 'update') return reconciliation;
+
+  const updateResponse = await fetchImpl(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.GOOGLE_SHEET_ID)}/values:batchUpdate`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      valueInputOption: 'RAW',
+      includeValuesInResponse: true,
+      data: [{
+        range: `'Training Log'!${reconciliation.range}`,
+        values: [reconciliation.values],
+      }],
+    }),
+  });
+  if (!updateResponse.ok) throw new Error(`google-write-${updateResponse.status}`);
+  const result = await updateResponse.json();
+  return {
+    ...reconciliation,
+    updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [],
+  };
 }
