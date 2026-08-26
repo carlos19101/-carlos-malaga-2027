@@ -44,7 +44,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.6.2';
+const APP_VERSION = 'FINAL 5.6.3';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -667,7 +667,7 @@ function StaffDrawer({ open, onClose, panel, decision }) {
         </header>
         <div className="staff-drawer-scroll">
           <article className={`staff-drawer-decision coach-${decision.status.toLowerCase()}`}>
-            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{{ GREEN: 'WYKONAJ PLAN', YELLOW: 'ZMODYFIKUJ PLAN', RED: 'STOP' }[decision.status] || decision.status}</StatusChip></div>
+            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{{ GREEN: 'TRENUJ ZGODNIE Z PLANEM', YELLOW: 'ODPOCZYNEK I REGENERACJA', RED: 'NIE TRENUJ' }[decision.status] || decision.status}</StatusChip></div>
             <strong>{decision.title}</strong>
             <p>{decision.recommendation}</p>
           </article>
@@ -765,7 +765,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const staffAlerts = allStaff
     .filter((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status)).length;
   const firstStaffAlert = allStaff.find((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status));
-  const decisionCode = { GREEN: 'WYKONAJ PLAN', YELLOW: 'ZMODYFIKUJ PLAN', RED: 'STOP' }[decision.status] || decision.status;
+  const decisionCode = { GREEN: 'TRENUJ ZGODNIE Z PLANEM', YELLOW: 'ODPOCZYNEK I REGENERACJA', RED: 'NIE TRENUJ' }[decision.status] || decision.status;
   const todaySession = todayPlan
     ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', 'Sesja'))
     : 'Brak sesji na dziś';

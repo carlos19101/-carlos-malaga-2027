@@ -7,9 +7,9 @@ const DIRECTION_BY_STATUS = {
 };
 
 const DIRECTION_LABEL = {
-  GO: 'WYKONAJ PLAN',
-  MODIFY: 'ZMODYFIKUJ PLAN',
-  STOP: 'STOP',
+  GO: 'TRENUJ ZGODNIE Z PLANEM',
+  MODIFY: 'ODPOCZYNEK I REGENERACJA',
+  STOP: 'NIE TRENUJ',
 };
 
 function evidence(label, value, unit = '') {
