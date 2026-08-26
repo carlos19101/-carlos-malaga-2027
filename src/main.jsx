@@ -43,7 +43,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.3';
+const APP_VERSION = 'FINAL 5.4';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -656,22 +656,25 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       <Hero feedRow={row} now={now} />
 
       <section className="section-block dashboard-priority">
-        <div className="section-heading dashboard-decision-heading">
-          <div><span className="eyebrow">SZTAB #CARLOS</span><h2>Decyzja dnia</h2></div>
-          <StatusChip status={decision.status} />
-        </div>
         <div className="dashboard-priority-grid">
-          <article className={`coach-card dashboard-coach coach-${decision.status.toLowerCase()}`}>
-            <div>
-              <span className="coach-label">HEAD COACH</span>
-              <strong>{decision.title}</strong>
-              <p>{decision.recommendation}</p>
-              <div className="decision-signal-row">
-                <span>{decision.source === 'head-coach' ? 'APP_FEED' : 'FALLBACK'}</span>
-                {sourceSignals.slice(0, 3).map((signal) => <span key={signal}>{signal}</span>)}
-                {freshnessState !== 'fresh' ? <span className="signal-warning">dane nie są świeże</span> : null}
-              </div>
+          <article className={`decision-command-card decision-${decision.status.toLowerCase()}`}>
+            <header>
+              <div><span className="eyebrow">DECYZJA DNIA</span><small>HEAD COACH · {decision.source === 'head-coach' ? 'APP_FEED' : 'FALLBACK'}</small></div>
+              <StatusChip status={decision.status} />
+            </header>
+            <h2>{decision.title}</h2>
+            <p>{decision.recommendation}</p>
+            <div className="decision-mini-grid" aria-label="Najważniejsze statystyki dnia">
+              <span><small>READINESS</small><strong>{formatMetricNumber(v(row, 'readiness', ''), { maximumFractionDigits: 0 })}<i>%</i></strong></span>
+              <span><small>BODY BATTERY</small><strong>{formatMetricNumber(v(row, 'bodyBattery', ''), { maximumFractionDigits: 0 })}<i>%</i></strong></span>
+              <span><small>SEN</small><strong>{formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })}<i>%</i></strong></span>
+              <span><small>HRV</small><strong>{formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })}<i>ms</i></strong></span>
+              <span><small>RHR</small><strong>{formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })}<i>bpm</i></strong></span>
             </div>
+            <footer>
+              {sourceSignals.slice(0, 2).map((signal) => <span key={signal}>{signal}</span>)}
+              {freshnessState !== 'fresh' ? <span className="signal-warning">dane nie są świeże</span> : null}
+            </footer>
           </article>
           <button type="button" className="staff-trigger-card" onClick={() => setStaffOpen(true)}>
             <span className="staff-trigger-top"><i aria-hidden="true" />SZTAB</span>
@@ -682,12 +685,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         </div>
       </section>
 
-      <section className="section-block">
-        <TodayPlanCard row={todayPlan} />
-      </section>
-
-      <section className="section-block dashboard-signals-section">
-        <div className="section-heading"><div><span className="eyebrow">DZISIAJ</span><h2>Sygnały organizmu</h2></div></div>
+      <div className="dashboard-alerts">
         {!validation.ok ? (
           <div className="data-quality-banner" role="alert">
             <strong>DATA ERROR — decyzję traktuj ostrożnie.</strong>
@@ -697,24 +695,41 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         ) : null}
         <VerifierBanner mismatches={verifierMismatches} />
         <DailyMetricsStatus daily={daily} showMethod={false} />
-        {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : <div className="dashboard-signal-grid">
-          <DashboardSignal label="READINESS" value={formatMetricNumber(v(row, 'readiness', ''), { maximumFractionDigits: 0 })} unit="%" note="gotowość" />
-          <DashboardSignal label="RECOVERY" value={formatMetricNumber(v(row, 'recovery', ''), { maximumFractionDigits: 0 })} unit="%" note="regeneracja" />
-          <DashboardSignal label="BODY BATTERY" value={formatMetricNumber(v(row, 'bodyBattery', ''), { maximumFractionDigits: 0 })} unit="%" note="energia" />
-          <DashboardSignal label="SEN" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note="Sleep Score" />
-          <DashboardSignal label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })}` : 'nocne'} />
-          <DashboardSignal label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note="spoczynkowe" />
-        </div>}
-      </section>
+      </div>
 
-      <section className="section-block">
-        <div className="section-heading">
-          <div><span className="eyebrow">NASTĘPNE</span><h2>Najbliższe sesje</h2></div>
-          <span className="section-aside">{upcoming.length} pozycji</span>
-        </div>
-        <div className="plan-preview">
-          {upcoming.length ? upcoming.map((p, i) => <PlanMini row={p} key={`${v(p, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak kolejnych datowanych sesji.</p>}
-        </div>
+      <section className="section-block dashboard-core-stack">
+        <DashboardDisclosure
+          eyebrow="PLAN NA DZIŚ"
+          title={todayPlan ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', 'Sesja')) : 'Brak sesji z dzisiejszą datą'}
+          summary={todayPlan ? `${v(todayPlan, 'planHr', 'bez celu HR')} · RPE ${v(todayPlan, 'planRpe', '—')}` : 'sprawdź zakładkę Plan'}
+        >
+          <TodayPlanCard row={todayPlan} />
+        </DashboardDisclosure>
+
+        <DashboardDisclosure
+          eyebrow="DZISIAJ"
+          title="Sygnały organizmu"
+          summary={`Readiness ${formatMetricNumber(v(row, 'readiness', ''), { maximumFractionDigits: 0 })}% · BB ${formatMetricNumber(v(row, 'bodyBattery', ''), { maximumFractionDigits: 0 })}% · HRV ${formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} ms`}
+        >
+          {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : <div className="dashboard-signal-grid">
+            <DashboardSignal label="READINESS" value={formatMetricNumber(v(row, 'readiness', ''), { maximumFractionDigits: 0 })} unit="%" note="gotowość" />
+            <DashboardSignal label="RECOVERY" value={formatMetricNumber(v(row, 'recovery', ''), { maximumFractionDigits: 0 })} unit="%" note="regeneracja" />
+            <DashboardSignal label="BODY BATTERY" value={formatMetricNumber(v(row, 'bodyBattery', ''), { maximumFractionDigits: 0 })} unit="%" note="energia" />
+            <DashboardSignal label="SEN" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note="Sleep Score" />
+            <DashboardSignal label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })}` : 'nocne'} />
+            <DashboardSignal label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note="spoczynkowe" />
+          </div>}
+        </DashboardDisclosure>
+
+        <DashboardDisclosure
+          eyebrow="NASTĘPNE"
+          title="Najbliższe sesje"
+          summary={upcoming.length ? `${upcoming.length} · ${formatDate(v(upcoming[0], 'date', ''))} · ${v(upcoming[0], 'planMorning', v(upcoming[0], 'planSession', 'Sesja'))}` : 'brak kolejnych datowanych sesji'}
+        >
+          <div className="plan-preview">
+            {upcoming.length ? upcoming.map((p, i) => <PlanMini row={p} key={`${v(p, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak kolejnych datowanych sesji.</p>}
+          </div>
+        </DashboardDisclosure>
       </section>
 
       <section className="section-block dashboard-details-section">
