@@ -44,7 +44,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.6.1';
+const APP_VERSION = 'FINAL 5.6.2';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -365,7 +365,7 @@ function DailyMetricsStatus({ daily, showMethod = true }) {
       ) : null}
       {daily?.bridgeSignal?.active ? (
         <div className="data-quality-banner verifier-warning" role="status">
-          <strong>SYGNAŁ POMOSTOWY — rozważ MODIFY, nie STOP.</strong>
+          <strong>SYGNAŁ POMOSTOWY — rozważ modyfikację planu, nie zatrzymanie treningu.</strong>
           <span>Przez trzy kolejne dni RHR rosło, a HRV spadało. Reguła jest tymczasowa i podatna na szum; wymaga potwierdzenia samopoczuciem oraz rozgrzewką.</span>
         </div>
       ) : null}
@@ -667,7 +667,7 @@ function StaffDrawer({ open, onClose, panel, decision }) {
         </header>
         <div className="staff-drawer-scroll">
           <article className={`staff-drawer-decision coach-${decision.status.toLowerCase()}`}>
-            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{{ GREEN: 'GO', YELLOW: 'MODIFY', RED: 'STOP' }[decision.status] || decision.status}</StatusChip></div>
+            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{{ GREEN: 'WYKONAJ PLAN', YELLOW: 'ZMODYFIKUJ PLAN', RED: 'STOP' }[decision.status] || decision.status}</StatusChip></div>
             <strong>{decision.title}</strong>
             <p>{decision.recommendation}</p>
           </article>
@@ -765,7 +765,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const staffAlerts = allStaff
     .filter((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status)).length;
   const firstStaffAlert = allStaff.find((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status));
-  const decisionCode = { GREEN: 'GO', YELLOW: 'MODIFY', RED: 'STOP' }[decision.status] || decision.status;
+  const decisionCode = { GREEN: 'WYKONAJ PLAN', YELLOW: 'ZMODYFIKUJ PLAN', RED: 'STOP' }[decision.status] || decision.status;
   const todaySession = todayPlan
     ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', 'Sesja'))
     : 'Brak sesji na dziś';
@@ -816,7 +816,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         <div className="compact-section-heading"><span>SYGNAŁY DNIA</span><small>Kliknij wartość, aby zobaczyć kontekst</small></div>
         {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : (
           <div className="dashboard-contributors">
-            <DashboardSignal label="READINESS" value={formatMetricNumber(readiness, { maximumFractionDigits: 0 })} unit="/100" tone={scoreTone(readiness, 70, 40)} note={`Gotowość treningowa Garmina: ${formatMetricNumber(readiness, { maximumFractionDigits: 0 })}/100 — ${metric(readiness) < 40 ? 'niska' : metric(readiness) < 70 ? 'średnia' : 'wysoka'}. Łączy obciążenie, HRV, regenerację, sen i stres.`} />
+            <DashboardSignal label="GOTOWOŚĆ TRENINGOWA GARMINA" value={formatMetricNumber(readiness, { maximumFractionDigits: 0 })} unit="/100" tone={scoreTone(readiness, 70, 40)} note={`Gotowość treningowa Garmina: ${formatMetricNumber(readiness, { maximumFractionDigits: 0 })}/100 — ${metric(readiness) < 40 ? 'niska' : metric(readiness) < 70 ? 'średnia' : 'wysoka'}. Łączy obciążenie, HRV, regenerację, sen i stres.`} />
             <DashboardSignal label="SEN" value={formatMetricNumber(sleep, { maximumFractionDigits: 0 })} unit="/100" tone={scoreTone(sleep, 80, 60)} note={`Sleep Score ${formatMetricNumber(sleep, { maximumFractionDigits: 0 })}/100. Wynik jest sygnałem regeneracji, nie samodzielną decyzją treningową.`} />
             <DashboardSignal label="BODY BATTERY" value={formatMetricNumber(bodyBattery, { maximumFractionDigits: 0 })} unit="/100" tone={scoreTone(bodyBattery, 60, 25)} note={`Body Battery ${formatMetricNumber(bodyBattery, { maximumFractionDigits: 0 })}/100 — poranny poziom energii zapisany w źródle.`} />
             <DashboardSignal label="HRV" value={formatMetricNumber(hrv, { maximumFractionDigits: 0 })} unit="ms" tone={baselineTone(daily?.metrics?.hrv) || (hrvDelta === null ? '' : hrvDelta < -10 ? 'bad' : hrvDelta < -5 ? 'mid' : 'good')} note={`${v(row, 'hrv7d', '') ? `Średnia 7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms. ` : ''}${calibrationLabel}.`} />
@@ -865,7 +865,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           <DashboardDisclosure eyebrow="DANE" title="Organizm i kalibracja" summary={`HRV ${formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} ms · waga ${formatMetricNumber(weightReading?.value, { maximumFractionDigits: 1 })} kg`}>
             <p className="method-note detail-method"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline wyklucza oceniany dzień.</p>
             <div className="readiness-grid">
-              <MetricRing label="READINESS" value={v(row, 'readiness', '')} note="gotowość Garmin" />
+              <MetricRing label="GOTOWOŚĆ TRENINGOWA GARMINA" value={v(row, 'readiness', '')} note="wskaźnik Garmin" />
               <MetricRing label="RECOVERY" value={v(row, 'recovery', '')} note="regeneracja" />
               <MetricRing label="BODY BATTERY" value={v(row, 'bodyBattery', '')} note="energia Garmin" />
               <div className="stats-grid compact-stats">
@@ -930,7 +930,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         </article>
         <div className="compact-section-heading"><span>DOWODY</span><small>Dane dostępne teraz</small></div>
         <div className="dashboard-detail-grid">
-          <DetailMetric label="READINESS" value={`${formatMetricNumber(readiness, { maximumFractionDigits: 0 })}/100`} tone={scoreTone(readiness, 70, 40)} />
+          <DetailMetric label="GOTOWOŚĆ TRENINGOWA GARMINA" value={`${formatMetricNumber(readiness, { maximumFractionDigits: 0 })}/100`} tone={scoreTone(readiness, 70, 40)} />
           <DetailMetric label="RECOVERY" value={`${formatMetricNumber(recovery, { maximumFractionDigits: 0 })}/100`} tone={scoreTone(recovery, 70, 40)} />
           <DetailMetric label="BODY BATTERY" value={`${formatMetricNumber(bodyBattery, { maximumFractionDigits: 0 })}/100`} tone={scoreTone(bodyBattery, 60, 25)} />
           <DetailMetric label="SEN" value={`${formatMetricNumber(sleep, { maximumFractionDigits: 0 })}/100`} tone={scoreTone(sleep, 80, 60)} />

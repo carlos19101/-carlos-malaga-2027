@@ -14,7 +14,7 @@ export const DECISION_EVIDENCE_FIELDS = {
   sleepScore: { label: 'Sleep Score', aliases: ['sleep score'], min: 0, max: 100, unit: '/100' },
   hrv: { label: 'HRV', aliases: ['hrv night ms'], min: 10, max: 250, unit: 'ms' },
   rhr: { label: 'RHR', aliases: ['rhr bpm'], min: 30, max: 120, unit: 'bpm' },
-  readiness: { label: 'Readiness', aliases: ['readiness garmin'], min: 0, max: 100, unit: '/100' },
+  readiness: { label: 'Gotowość treningowa Garmina', aliases: ['readiness garmin'], min: 0, max: 100, unit: '/100' },
   bodyBattery: { label: 'Body Battery', aliases: ['bodybattery current'], min: 0, max: 100, unit: '/100' },
   bodyBatteryGain: { label: 'BB gain', aliases: ['bodybattery gain'], min: 0, max: 100, unit: '' },
   pain: { label: 'Ból', aliases: ['pain 0 10'], min: 0, max: 10, unit: '/10' },

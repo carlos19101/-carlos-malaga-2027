@@ -257,7 +257,7 @@ export function preCalibrationTrend(days = [], evaluationDate = new Date(), opti
     dates: requiredDays.map(dayKey),
     evidence,
     interpretation: active
-      ? 'Tymczasowa, podatna na szum przesłanka do rozważenia MODIFY; nigdy samodzielnie do STOP.'
+      ? 'Tymczasowa, podatna na szum przesłanka do rozważenia modyfikacji planu; nigdy samodzielnie do zatrzymania treningu.'
       : 'Brak trzydniowego pogorszenia według reguły pomostowej.',
   };
 }

@@ -187,7 +187,7 @@ describe('computeDailyMetrics', () => {
     expect(result.bridgeSignal).toMatchObject({
       state: 'active', active: true, reason: 'three-day-rhr-up-hrv-down',
     });
-    expect(result.bridgeSignal.interpretation).toContain('nigdy samodzielnie do STOP');
+    expect(result.bridgeSignal.interpretation).toContain('nigdy samodzielnie do zatrzymania treningu');
   });
 
   it('reguła pomostowa nie uruchamia się przy luce lub niepełnym zestawie HRV/RHR', () => {

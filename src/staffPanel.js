@@ -6,6 +6,12 @@ const DIRECTION_BY_STATUS = {
   RED: 'STOP',
 };
 
+const DIRECTION_LABEL = {
+  GO: 'WYKONAJ PLAN',
+  MODIFY: 'ZMODYFIKUJ PLAN',
+  STOP: 'STOP',
+};
+
 function evidence(label, value, unit = '') {
   return { label, value: value ?? null, unit };
 }
@@ -72,7 +78,7 @@ function physiologist({ daily }) {
         evidence('Trend 3 dni', 'RHR rośnie · HRV spada'),
       ],
       interpretation: 'Aktywny jest tymczasowy sygnał pomostowy. Jest podatny na szum i sam nie uzasadnia STOP.',
-      recommendation: 'Rozważ MODIFY po potwierdzeniu samopoczuciem i rozgrzewką; nie zwiększaj planu.',
+      recommendation: 'Rozważ modyfikację planu po potwierdzeniu samopoczuciem i rozgrzewką; nie zwiększaj obciążenia.',
     };
   }
 
@@ -194,8 +200,8 @@ function buildDispute(decision, core) {
   return {
     status: 'YELLOW',
     evidence: [
-      evidence('GŁÓWNY TRENER', headDirection),
-      ...divergent.map(({ role, direction }) => evidence(role, direction)),
+      evidence('GŁÓWNY TRENER', DIRECTION_LABEL[headDirection] || headDirection),
+      ...divergent.map(({ role, direction }) => evidence(role, DIRECTION_LABEL[direction] || direction)),
     ],
     interpretation: 'Co najmniej jedna domena wskazuje inny kierunek niż końcowy werdykt Głównego Trenera.',
     recommendation: 'Rozbieżność wymaga jawnego uzasadnienia przed treningiem; panel nie nadpisuje automatycznie werdyktu Głównego Trenera.',
