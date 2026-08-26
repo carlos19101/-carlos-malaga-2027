@@ -19,6 +19,7 @@ import {
 import {
   coachActionLabel,
   daysUntilRace,
+  integrateCoachDecision,
   metricDeltaPercent,
   millisecondsUntilNextLocalMidnight,
   raceGoalMatrix,
@@ -45,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.7';
+const APP_VERSION = 'FINAL 5.8';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -706,7 +707,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
   const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
 
-  const decision = useMemo(() => resolveCoachDecision({
+  const baseDecision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
     sheetDecision: v(row, 'decision', ''),
     plannedSession: todayPlan ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', '')) : '',
@@ -716,6 +717,23 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       pain: v(row, 'pain', ''), doms: v(row, 'doms', ''), fatigue: v(row, 'fatigue', ''), dataOk: validation.ok,
     },
   }), [row, todayPlan, validation.ok]);
+  const decision = useMemo(() => integrateCoachDecision({
+    decision: baseDecision,
+    integrity: {
+      validationOk: validation.ok,
+      freshnessState,
+      verifierMismatches,
+      dailyIssues: daily.issues,
+    },
+    recovery: {
+      pain: v(row, 'pain', ''),
+      doms: v(row, 'doms', ''),
+      fatigue: v(row, 'fatigue', ''),
+    },
+    daily,
+    execution,
+    load: loadComputed,
+  }), [baseDecision, validation.ok, freshnessState, verifierMismatches, daily, execution, loadComputed, row]);
   const staffPanel = useMemo(() => buildStaffPanel({
     decision,
     plan: todayPlan ? {
@@ -749,6 +767,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const ratio = loadComputed.loadRatio;
 
   const sourceSignals = [
+    ...(decision.evidence || []),
     v(row, 'pain', '') !== '' ? `ból ${formatMetricNumber(v(row, 'pain'), { maximumFractionDigits: 1 })}/10` : '',
     v(row, 'doms', '') !== '' ? `DOMS ${formatMetricNumber(v(row, 'doms'), { maximumFractionDigits: 1 })}/10` : '',
     v(row, 'fatigue', '') !== '' ? `zmęczenie ${formatMetricNumber(v(row, 'fatigue'), { maximumFractionDigits: 1 })}/10` : '',

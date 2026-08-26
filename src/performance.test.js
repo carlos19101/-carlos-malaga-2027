@@ -7,6 +7,7 @@ import {
   metricDeltaPercent,
   millisecondsUntilNextLocalMidnight,
   raceGoalMatrix,
+  integrateCoachDecision,
   resolveCoachDecision,
   sourceFreshness,
   summarizeLoad,
@@ -50,6 +51,58 @@ describe('coach decision', () => {
     const d = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy zgodnie z planem.' });
     expect(d.action).toBe(COACH_ACTION.TRAIN);
     expect(coachActionLabel(d.action)).toBe('TRENUJ ZGODNIE Z PLANEM');
+  });
+
+  it('błąd integralności blokuje pewną decyzję także przy zielonym statusie źródłowym', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({ decision, integrity: { validationOk: false, freshnessState: 'fresh' } });
+    expect(result).toMatchObject({ status: 'RED', action: COACH_ACTION.NO_DECISION, confidence: 'NONE' });
+    expect(result.engineAdjustments).toEqual(['integrity-gate']);
+  });
+
+  it('nieświeże dane blokują decyzję zamiast używać starego statusu', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({ decision, integrity: { validationOk: true, freshnessState: 'stale' } });
+    expect(result.action).toBe(COACH_ACTION.NO_DECISION);
+    expect(result.reasons).toContain('dane starsze niż 36 godzin');
+  });
+
+  it('czerwony sygnał bólowy ma pierwszeństwo przed zielonym statusem źródłowym', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({
+      decision,
+      integrity: { validationOk: true, freshnessState: 'fresh' },
+      recovery: { pain: 4, doms: 2, fatigue: 2 },
+    });
+    expect(result).toMatchObject({ status: 'RED', action: COACH_ACTION.NO_TRAIN, confidence: 'SUPPORTED' });
+    expect(result.engineAdjustments).toEqual(['red-recovery-gate']);
+  });
+
+  it('sygnał pomostowy zmienia tylko zielony trening na kontrolowany', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({
+      decision,
+      integrity: { validationOk: true, freshnessState: 'fresh' },
+      recovery: { pain: 0, doms: 2, fatigue: 2 },
+      daily: { state: 'calibrating', bridgeSignal: { active: true } },
+    });
+    expect(result).toMatchObject({ status: 'YELLOW', action: COACH_ACTION.CONTROL, confidence: 'LIMITED' });
+    expect(result.engineAdjustments).toEqual(['pre-calibration-bridge']);
+  });
+
+  it('Execution OVER i load ratio są dowodem, ale bez zatwierdzonej reguły nie zmieniają działania', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({
+      decision,
+      integrity: { validationOk: true, freshnessState: 'fresh' },
+      recovery: { pain: 0, doms: 2, fatigue: 2 },
+      daily: { state: 'ready', bridgeSignal: { active: false } },
+      execution: { status: 'over' },
+      load: { loadRatio: 1.51, calibrationDays: '28/28' },
+    });
+    expect(result.action).toBe(COACH_ACTION.TRAIN);
+    expect(result.evidence).toEqual(expect.arrayContaining(['OSTATNIA SESJA: over', 'LOAD RATIO: 1.51']));
+    expect(result.engineAdjustments).toEqual([]);
   });
 });
 

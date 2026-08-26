@@ -172,6 +172,104 @@ export function resolveCoachDecision({ sheetStatus, sheetDecision, plannedSessio
   return classifyCoachStatus({ ...fallbackInput, plannedSession, plannedStatus });
 }
 
+export function integrateCoachDecision({
+  decision,
+  integrity = {},
+  recovery = {},
+  daily = null,
+  execution = null,
+  load = null,
+} = {}) {
+  const base = decision || {
+    status: 'RED',
+    action: COACH_ACTION.NO_DECISION,
+    title: 'Brak decyzji źródłowej',
+    recommendation: 'Najpierw odśwież dane.',
+    reasons: [],
+    source: 'engine',
+  };
+  const evidence = [];
+  const limitations = [];
+  const dataProblems = [];
+
+  if (integrity.validationOk === false) dataProblems.push('brak lub anomalia danych wymaganych');
+  if (integrity.freshnessState === 'stale') dataProblems.push('dane starsze niż 36 godzin');
+  if ((integrity.verifierMismatches || []).some(({ severity }) => severity === 'error')) dataProblems.push('niezgodność źródeł w Verifierze');
+  if ((integrity.dailyIssues || []).some(({ severity }) => severity === 'error')) dataProblems.push('błąd integralności Raw_Data');
+  if (execution?.status === 'data-error') dataProblems.push('błąd danych Execution');
+
+  if (dataProblems.length) {
+    return {
+      ...base,
+      status: 'RED',
+      action: COACH_ACTION.NO_DECISION,
+      title: 'Najpierw popraw dane',
+      recommendation: 'Nie wydawaj pewnej decyzji treningowej, dopóki wskazane dane nie będą poprawne i świeże.',
+      reasons: dataProblems,
+      evidence: dataProblems.map((reason) => `DANE: ${reason}`),
+      limitations: dataProblems,
+      confidence: 'NONE',
+      engineAdjustments: ['integrity-gate'],
+    };
+  }
+
+  evidence.push(`DANE: ${integrity.freshnessState === 'fresh' ? 'świeże, bez błędu blokującego' : 'bez błędu blokującego'}`);
+  const pain = n(recovery.pain);
+  const doms = n(recovery.doms);
+  const fatigue = n(recovery.fatigue);
+  const redSignals = [];
+  if (pain !== null && pain >= 4) redSignals.push(`ból ${pain}/10`);
+  if (doms !== null && doms >= 8) redSignals.push(`DOMS ${doms}/10`);
+  if (fatigue !== null && fatigue >= 8) redSignals.push(`zmęczenie ${fatigue}/10`);
+
+  if (redSignals.length) {
+    return {
+      ...base,
+      status: 'RED',
+      action: COACH_ACTION.NO_TRAIN,
+      title: 'Regeneracja ma pierwszeństwo',
+      recommendation: 'Nie trenuj. Nowy, narastający albo nietypowy objaw wymaga oceny poza aplikacją.',
+      reasons: redSignals,
+      evidence: [...evidence, ...redSignals.map((reason) => `SYGNAŁ CZERWONY: ${reason}`)],
+      limitations,
+      confidence: 'SUPPORTED',
+      engineAdjustments: ['red-recovery-gate'],
+    };
+  }
+
+  if (pain === null || doms === null || fatigue === null) limitations.push('brak pełnej deklaracji bólu, DOMS lub zmęczenia');
+  if (daily?.state !== 'ready') limitations.push(`Daily Metrics: ${daily?.state || 'brak danych'}`);
+  if (execution?.status) evidence.push(`OSTATNIA SESJA: ${execution.status}`);
+  if (load?.loadRatio === null || load?.loadRatio === undefined) limitations.push(`Load ratio: ${load?.calibrationDays || 'kalibracja'}`);
+  else evidence.push(`LOAD RATIO: ${Number(load.loadRatio).toFixed(2)}`);
+
+  if (daily?.bridgeSignal?.active) {
+    evidence.push('TREND 3 DNI: RHR rośnie, HRV spada');
+    if (base.action === COACH_ACTION.TRAIN) {
+      return {
+        ...base,
+        status: 'YELLOW',
+        action: COACH_ACTION.CONTROL,
+        title: 'Trening tylko kontrolowany',
+        recommendation: 'Sygnał pomostowy wymaga kontroli po 10–15 minutach rozgrzewki; nie zwiększaj planu.',
+        reasons: [...(base.reasons || []), 'trzydniowy trend RHR w górę i HRV w dół'],
+        evidence,
+        limitations,
+        confidence: 'LIMITED',
+        engineAdjustments: ['pre-calibration-bridge'],
+      };
+    }
+  }
+
+  return {
+    ...base,
+    evidence,
+    limitations,
+    confidence: limitations.length ? 'LIMITED' : 'SUPPORTED',
+    engineAdjustments: [],
+  };
+}
+
 function startOfDay(value) {
   const d = value instanceof Date ? new Date(value) : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
