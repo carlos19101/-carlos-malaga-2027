@@ -43,7 +43,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.2';
+const APP_VERSION = 'FINAL 5.3';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -351,7 +351,7 @@ function dailyMetricNote(daily, field, prefix = '') {
   return [prefix, baselineNote].filter(Boolean).join(' · ');
 }
 
-function DailyMetricsStatus({ daily }) {
+function DailyMetricsStatus({ daily, showMethod = true }) {
   const actionable = (daily?.issues || []).filter(({ severity }) => severity === 'error' || severity === 'warning');
   const severity = actionable.some(({ severity: itemSeverity }) => itemSeverity === 'error') ? 'error' : 'warning';
   return (
@@ -368,7 +368,7 @@ function DailyMetricsStatus({ daily }) {
           <span>Przez trzy kolejne dni RHR rosło, a HRV spadało. Reguła jest tymczasowa i podatna na szum; wymaga potwierdzenia samopoczuciem oraz rozgrzewką.</span>
         </div>
       ) : null}
-      <p className="method-note"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline 30 dni wyklucza oceniany dzień; przed kalibracją nie pokazujemy z-score.</p>
+      {showMethod ? <p className="method-note"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline 30 dni wyklucza oceniany dzień; przed kalibracją nie pokazujemy z-score.</p> : null}
     </>
   );
 }
@@ -379,10 +379,10 @@ function journalEvidenceText(item) {
   return `${item.label} ${value}${suffix}`;
 }
 
-function DecisionJournal({ journal }) {
+function DecisionJournal({ journal, embedded = false }) {
   if (!journal.entries.length) return null;
   return (
-    <section className="section-block">
+    <section className={embedded ? 'embedded-section' : 'section-block'}>
       <div className="section-heading">
         <div><span className="eyebrow">DZIENNIK DECYZJI</span><h2>Co wiedział sztab</h2></div>
         <span className="section-aside">dowody dostępne w chwili decyzji</span>
@@ -460,30 +460,36 @@ function staffEvidenceText(item) {
 function StaffRoleCard({ member }) {
   const tone = ['GREEN', 'YELLOW', 'RED'].includes(member.status) ? member.status : '';
   return (
-    <article className={`staff-role-card staff-${member.status.toLowerCase()}`}>
-      <div className="staff-role-heading">
-        <div><span>{member.role}</span><small>{member.scope}</small></div>
-        <StatusChip status={tone}>{member.status}</StatusChip>
+    <details className={`staff-role-card staff-${member.status.toLowerCase()}`}>
+      <summary className="staff-role-summary">
+        <div className="staff-role-heading">
+          <div><span>{member.role}</span><small>{member.scope}</small></div>
+          <StatusChip status={tone}>{member.status}</StatusChip>
+        </div>
+        <p>{member.recommendation}</p>
+        <span className="staff-role-toggle">Pokaż dowody</span>
+      </summary>
+      <div className="staff-role-body">
+        <div className="staff-evidence" aria-label={`Dowody: ${member.role}`}>
+          <b>DOWODY</b>
+          <div>{member.evidence.map((item, index) => <span key={`${item.label}-${index}`}>{staffEvidenceText(item)}</span>)}</div>
+        </div>
+        <div className="staff-conclusion">
+          <p><b>INTERPRETACJA</b>{member.interpretation}</p>
+          <p><b>REKOMENDACJA</b>{member.recommendation}</p>
+        </div>
       </div>
-      <div className="staff-evidence" aria-label={`Dowody: ${member.role}`}>
-        <b>DOWODY</b>
-        <div>{member.evidence.map((item, index) => <span key={`${item.label}-${index}`}>{staffEvidenceText(item)}</span>)}</div>
-      </div>
-      <div className="staff-conclusion">
-        <p><b>INTERPRETACJA</b>{member.interpretation}</p>
-        <p><b>REKOMENDACJA</b>{member.recommendation}</p>
-      </div>
-    </article>
+    </details>
   );
 }
 
-function StaffPanel({ panel }) {
+function StaffPanel({ panel, showHeading = true }) {
   return (
-    <section className="section-block staff-panel">
-      <div className="section-heading">
+    <section className={showHeading ? 'section-block staff-panel' : 'staff-panel staff-panel-embedded'}>
+      {showHeading ? <div className="section-heading">
         <div><span className="eyebrow">PANEL SZTABU · 4 CORE</span><h2>Konsultacja domenowa</h2></div>
         <span className="section-aside">dowody, nie głosowanie</span>
-      </div>
+      </div> : null}
       {panel.dispute ? (
         <div className="staff-dispute" role="status">
           <strong>SPÓR SZTABU — kierunki nie są zgodne.</strong>
@@ -507,13 +513,71 @@ function StaffPanel({ panel }) {
   );
 }
 
+function DashboardDisclosure({ eyebrow, title, summary, children, defaultOpen = false }) {
+  return (
+    <details className="dashboard-disclosure" open={defaultOpen || undefined}>
+      <summary>
+        <span className="disclosure-copy"><small>{eyebrow}</small><strong>{title}</strong><em>{summary}</em></span>
+        <span className="disclosure-toggle" aria-hidden="true" />
+      </summary>
+      <div className="disclosure-body">{children}</div>
+    </details>
+  );
+}
+
+function DashboardSignal({ label, value, unit = '', note = '', tone = '' }) {
+  return (
+    <article className={`dashboard-signal ${tone ? `signal-${tone}` : ''}`}>
+      <span>{label}</span>
+      <strong>{value || '—'}{value && unit ? <small>{unit}</small> : null}</strong>
+      {note ? <small>{note}</small> : null}
+    </article>
+  );
+}
+
+function StaffDrawer({ open, onClose, panel, decision }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event) => { if (event.key === 'Escape') onClose(); };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div className="staff-drawer-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <aside className="staff-drawer" role="dialog" aria-modal="true" aria-labelledby="staff-drawer-title">
+        <header className="staff-drawer-header">
+          <div><span className="eyebrow">SZTAB #CARLOS</span><h2 id="staff-drawer-title">Pełna analiza dnia</h2></div>
+          <button type="button" onClick={onClose} aria-label="Zamknij panel sztabu">×</button>
+        </header>
+        <div className="staff-drawer-scroll">
+          <article className={`staff-drawer-decision coach-${decision.status.toLowerCase()}`}>
+            <div><span>HEAD COACH</span><StatusChip status={decision.status} /></div>
+            <strong>{decision.title}</strong>
+            <p>{decision.recommendation}</p>
+          </article>
+          <StaffPanel panel={panel} showHeading={false} />
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierReady, now }) {
+  const [staffOpen, setStaffOpen] = useState(false);
+  const closeStaff = useCallback(() => setStaffOpen(false), []);
   const row = latestRow(feed);
   const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
   const validation = useMemo(() => validateFeed(row, weightReading?.value || ''), [row, weightReading]);
   const loadComputed = useMemo(() => computeLoad(verifierTrainingRecords(log), now), [log, now]);
   const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
-  const upcoming = useMemo(() => getUpcomingPlan(plan, 3, now), [plan, now]);
+  const upcoming = useMemo(() => getUpcomingPlan(plan, 2, now), [plan, now]);
   const matrix = useMemo(() => raceGoalMatrix(), []);
   const verifierEndDate = v(row, 'date', '') || now;
   const daily = useMemo(() => computeDailyMetrics(raw, verifierEndDate), [raw, verifierEndDate]);
@@ -575,38 +639,54 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     hrvDelta !== null ? `HRV ${hrvDelta >= 0 ? '+' : ''}${formatMetricNumber(hrvDelta, { maximumFractionDigits: 0 })}% vs 7d` : '',
   ].filter(Boolean);
 
+  const executionSummary = {
+    ok: 'OK · zgodnie z celem',
+    over: 'OVER · kosztowniejszy niż plan',
+    under: 'UNDER · poniżej planu',
+    'no-target': 'brak celu HR',
+    'no-data': 'brak danych atomowych',
+    'data-error': 'błąd danych Execution',
+  }[execution.status] || 'brak oceny';
+  const staffMembers = staffPanel.core.length + staffPanel.specialists.length;
+  const staffAlerts = [...staffPanel.core, ...staffPanel.specialists]
+    .filter((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status)).length;
+
   return (
     <>
       <Hero feedRow={row} now={now} />
 
-      <section className="section-block">
-        <div className="section-heading">
+      <section className="section-block dashboard-priority">
+        <div className="section-heading dashboard-decision-heading">
           <div><span className="eyebrow">SZTAB #CARLOS</span><h2>Decyzja dnia</h2></div>
           <StatusChip status={decision.status} />
         </div>
-        <article className={`coach-card coach-${decision.status.toLowerCase()}`}>
-          <div>
-            <span className="coach-label">HEAD COACH</span>
-            <strong>{decision.title}</strong>
-            <p>{decision.recommendation}</p>
-          </div>
-          <div className="coach-context">
-            <span>{decision.source === 'head-coach' ? 'WERDYKT Z APP_FEED' : 'FALLBACK AUTOMATYCZNY'}</span>
-            <p>{sourceSignals.length ? sourceSignals.join(' · ') : 'Brak dodatkowych sygnałów subiektywnych w źródle.'}</p>
-            {freshnessState !== 'fresh' ? <small>Uwaga: dane źródłowe nie są oznaczone jako świeże.</small> : null}
-          </div>
-        </article>
+        <div className="dashboard-priority-grid">
+          <article className={`coach-card dashboard-coach coach-${decision.status.toLowerCase()}`}>
+            <div>
+              <span className="coach-label">HEAD COACH</span>
+              <strong>{decision.title}</strong>
+              <p>{decision.recommendation}</p>
+              <div className="decision-signal-row">
+                <span>{decision.source === 'head-coach' ? 'APP_FEED' : 'FALLBACK'}</span>
+                {sourceSignals.slice(0, 3).map((signal) => <span key={signal}>{signal}</span>)}
+                {freshnessState !== 'fresh' ? <span className="signal-warning">dane nie są świeże</span> : null}
+              </div>
+            </div>
+          </article>
+          <button type="button" className="staff-trigger-card" onClick={() => setStaffOpen(true)}>
+            <span className="staff-trigger-top"><i aria-hidden="true" />SZTAB</span>
+            <strong>{staffMembers} perspektyw</strong>
+            <small>{staffAlerts ? `${staffAlerts} wymagają uwagi` : 'brak aktywnych alarmów'}</small>
+            <b>Otwórz pełną analizę <span aria-hidden="true">→</span></b>
+          </button>
+        </div>
       </section>
-
-      <StaffPanel panel={staffPanel} />
 
       <section className="section-block">
         <TodayPlanCard row={todayPlan} />
       </section>
 
-      <DecisionJournal journal={journal} />
-
-      <section className="section-block">
+      <section className="section-block dashboard-signals-section">
         <div className="section-heading"><div><span className="eyebrow">DZISIAJ</span><h2>Sygnały organizmu</h2></div></div>
         {!validation.ok ? (
           <div className="data-quality-banner" role="alert">
@@ -616,69 +696,15 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           </div>
         ) : null}
         <VerifierBanner mismatches={verifierMismatches} />
-        <DailyMetricsStatus daily={daily} />
-        {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : (
-          <div className="readiness-grid">
-            <MetricRing label="READINESS" value={v(row, 'readiness', '')} note="gotowość Garmin" />
-            <MetricRing label="RECOVERY" value={v(row, 'recovery', '')} note="regeneracja" />
-            <MetricRing label="BODY BATTERY" value={v(row, 'bodyBattery', '')} note="energia Garmin" />
-            <div className="stats-grid compact-stats">
-              <StatCard label="SLEEP" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note={dailyMetricNote(daily, 'sleepScore', 'jakość / realizacja snu')} />
-              <StatCard label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={dailyMetricNote(daily, 'hrv', v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms` : 'nocne HRV')} />
-              <StatCard label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note={dailyMetricNote(daily, 'rhr', 'tętno spoczynkowe')} />
-              <StatCard label="WAGA" value={formatMetricNumber(weightReading?.value, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={dailyMetricNote(daily, 'weight', weightReading?.inherited ? `waga z ${formatNumericDate(weightReading.date)}` : v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt')} />
-              <StatCard label="BÓL" value={formatMetricNumber(v(row, 'pain', ''), { maximumFractionDigits: 1 })} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="section-block">
-        <div className="section-heading">
-          <div><span className="eyebrow">OBCIĄŻENIE</span><h2>7 / 28 dni</h2></div>
-          <span className="section-aside">sRPE + kilometraż</span>
-        </div>
-        <div className="load-grid">
-          <StatCard label="BIEG · 7D" value={formatMetricNumber(v(row, 'runKm7d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatMetricNumber(v(row, 'runCount7d', ''), { maximumFractionDigits: 0, fallback: '—' })} biegów`} />
-          <StatCard label="BIEG · 28D" value={formatMetricNumber(v(row, 'runKm28d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note="kontekst objętości" />
-          <StatCard label="sRPE · 7D" value={srpe7 ? formatMetricNumber(srpe7, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
-          <StatCard label="sRPE · 28D" value={srpe28 ? formatMetricNumber(srpe28, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
-          <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : ''} note={ratio !== null ? '7d / średnia tygodniowa z dni 8–28' : `kalibracja ${loadComputed.calibrationDays}`} />
-          <StatCard label="WAGA · TREND" value={weightDelta !== null ? `${weightDelta >= 0 ? '+' : ''}${formatMetricNumber(weightDelta, { maximumFractionDigits: 1, minimumFractionDigits: 1 })}` : ''} unit={weightDelta !== null ? 'kg' : ''} note="śr. 7d vs poprzednie 7d" />
-        </div>
-        <p className="method-note">Load ratio jest kontekstem, nie automatycznym limitem bezpieczeństwa. Finalny werdykt sztabu ma pierwszeństwo.</p>
-      </section>
-
-      <section className="section-block">
-        <div className="section-heading"><div><span className="eyebrow">OSTATNI BIEG</span><h2>Punkt odniesienia</h2></div></div>
-        <article className="last-run-card">
-          <div><span>DYSTANS</span><strong>{v(row, 'lastRunDistance', '') ? `${formatMetricNumber(v(row, 'lastRunDistance'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km` : '—'}</strong></div>
-          <div><span>TEMPO</span><strong>{v(row, 'lastRunPace', '—')}</strong></div>
-          <div><span>HR</span><strong>{formatMetricNumber(v(row, 'lastRunHrAvg', ''), { maximumFractionDigits: 0, fallback: '—' })} <small>/ {formatMetricNumber(v(row, 'lastRunHrMax', ''), { maximumFractionDigits: 0, fallback: '—' })}</small></strong></div>
-          <div><span>RPE</span><strong>{v(row, 'lastRunRpe', '') ? `${formatMetricNumber(v(row, 'lastRunRpe'), { maximumFractionDigits: 1 })}/10` : '—'}</strong></div>
-        </article>
-        <ExecutionCard execution={execution} />
-      </section>
-
-      <section className="section-block race-goals">
-        <div className="section-heading">
-          <div><span className="eyebrow">CEL GŁÓWNY</span><h2>Málaga 07.03.2027</h2></div>
-          <span className="section-aside">{v(row, 'phase', '—')}</span>
-        </div>
-        <div className="goal-chips">
-          <span><b>A</b>{v(row, 'goalA', '1:45–1:48')}</span>
-          <span><b>B</b>{v(row, 'goalB', '1:48–1:52')}</span>
-          <span><b>C</b>{v(row, 'goalC', 'SUB 2:00')}</span>
-        </div>
-        <div className="race-table-shell">
-          <table className="race-table">
-            <thead><tr><th>Anchor</th><th>Meta</th><th>Tempo</th><th>5 km</th><th>10 km</th><th>15 km</th></tr></thead>
-            <tbody>{matrix.map((goal) => (
-              <tr key={goal.id}><td data-label="Anchor"><b>{goal.id}</b></td><td data-label="Meta">{goal.finish}</td><td data-label="Tempo">{goal.pace}</td><td data-label="5 km">{goal.km5}</td><td data-label="10 km">{goal.km10}</td><td data-label="15 km">{goal.km15}</td></tr>
-            ))}</tbody>
-          </table>
-        </div>
-        <p className="method-note">Anchory służą do matematyki tempa i międzyczasów; scenariusze A/B/C z arkusza są celami rozwojowymi, nie oceną aktualnej formy.</p>
+        <DailyMetricsStatus daily={daily} showMethod={false} />
+        {loading && !feed.length ? <div className="skeleton-grid"><i /><i /></div> : <div className="dashboard-signal-grid">
+          <DashboardSignal label="READINESS" value={formatMetricNumber(v(row, 'readiness', ''), { maximumFractionDigits: 0 })} unit="%" note="gotowość" />
+          <DashboardSignal label="RECOVERY" value={formatMetricNumber(v(row, 'recovery', ''), { maximumFractionDigits: 0 })} unit="%" note="regeneracja" />
+          <DashboardSignal label="BODY BATTERY" value={formatMetricNumber(v(row, 'bodyBattery', ''), { maximumFractionDigits: 0 })} unit="%" note="energia" />
+          <DashboardSignal label="SEN" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note="Sleep Score" />
+          <DashboardSignal label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })}` : 'nocne'} />
+          <DashboardSignal label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note="spoczynkowe" />
+        </div>}
       </section>
 
       <section className="section-block">
@@ -690,6 +716,75 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           {upcoming.length ? upcoming.map((p, i) => <PlanMini row={p} key={`${v(p, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak kolejnych datowanych sesji.</p>}
         </div>
       </section>
+
+      <section className="section-block dashboard-details-section">
+        <div className="section-heading">
+          <div><span className="eyebrow">WIĘCEJ</span><h2>Szczegóły</h2></div>
+          <span className="section-aside">otwieraj tylko to, czego potrzebujesz</span>
+        </div>
+        <div className="dashboard-disclosure-stack">
+          <DashboardDisclosure eyebrow="DANE" title="Organizm i kalibracja" summary={`HRV ${formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} ms · waga ${formatMetricNumber(weightReading?.value, { maximumFractionDigits: 1 })} kg`}>
+            <p className="method-note detail-method"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline wyklucza oceniany dzień.</p>
+            <div className="readiness-grid">
+              <MetricRing label="READINESS" value={v(row, 'readiness', '')} note="gotowość Garmin" />
+              <MetricRing label="RECOVERY" value={v(row, 'recovery', '')} note="regeneracja" />
+              <MetricRing label="BODY BATTERY" value={v(row, 'bodyBattery', '')} note="energia Garmin" />
+              <div className="stats-grid compact-stats">
+                <StatCard label="SLEEP" value={formatMetricNumber(v(row, 'sleep', ''), { maximumFractionDigits: 0 })} unit="%" note={dailyMetricNote(daily, 'sleepScore', 'jakość / realizacja snu')} />
+                <StatCard label="HRV" value={formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} unit="ms" note={dailyMetricNote(daily, 'hrv', v(row, 'hrv7d', '') ? `7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms` : 'nocne HRV')} />
+                <StatCard label="RHR" value={formatMetricNumber(v(row, 'rhr', ''), { maximumFractionDigits: 0 })} unit="bpm" note={dailyMetricNote(daily, 'rhr', 'tętno spoczynkowe')} />
+                <StatCard label="WAGA" value={formatMetricNumber(weightReading?.value, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="kg" note={dailyMetricNote(daily, 'weight', weightReading?.inherited ? `waga z ${formatNumericDate(weightReading.date)}` : v(row, 'weightAvg7d', '') ? `śr. 7d: ${formatMetricNumber(v(row, 'weightAvg7d'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kg` : 'ostatni odczyt')} />
+                <StatCard label="BÓL" value={formatMetricNumber(v(row, 'pain', ''), { maximumFractionDigits: 1 })} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
+              </div>
+            </div>
+          </DashboardDisclosure>
+
+          <DashboardDisclosure eyebrow="OBCIĄŻENIE" title="7 / 28 dni" summary={`${formatMetricNumber(v(row, 'runKm7d', ''), { maximumFractionDigits: 2 })} km · sRPE ${formatMetricNumber(srpe7, { maximumFractionDigits: 0 })}`}>
+            <div className="load-grid">
+              <StatCard label="BIEG · 7D" value={formatMetricNumber(v(row, 'runKm7d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatMetricNumber(v(row, 'runCount7d', ''), { maximumFractionDigits: 0, fallback: '—' })} biegów`} />
+              <StatCard label="BIEG · 28D" value={formatMetricNumber(v(row, 'runKm28d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note="kontekst objętości" />
+              <StatCard label="sRPE · 7D" value={srpe7 ? formatMetricNumber(srpe7, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
+              <StatCard label="sRPE · 28D" value={srpe28 ? formatMetricNumber(srpe28, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
+              <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : ''} note={ratio !== null ? '7d / średnia tygodniowa z dni 8–28' : `kalibracja ${loadComputed.calibrationDays}`} />
+              <StatCard label="WAGA · TREND" value={weightDelta !== null ? `${weightDelta >= 0 ? '+' : ''}${formatMetricNumber(weightDelta, { maximumFractionDigits: 1, minimumFractionDigits: 1 })}` : ''} unit={weightDelta !== null ? 'kg' : ''} note="śr. 7d vs poprzednie 7d" />
+            </div>
+            <p className="method-note">Load ratio jest kontekstem, nie automatycznym limitem bezpieczeństwa.</p>
+          </DashboardDisclosure>
+
+          <DashboardDisclosure eyebrow="OSTATNI BIEG" title="Wykonanie i Execution" summary={executionSummary}>
+            <article className="last-run-card">
+              <div><span>DYSTANS</span><strong>{v(row, 'lastRunDistance', '') ? `${formatMetricNumber(v(row, 'lastRunDistance'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km` : '—'}</strong></div>
+              <div><span>TEMPO</span><strong>{v(row, 'lastRunPace', '—')}</strong></div>
+              <div><span>HR</span><strong>{formatMetricNumber(v(row, 'lastRunHrAvg', ''), { maximumFractionDigits: 0, fallback: '—' })} <small>/ {formatMetricNumber(v(row, 'lastRunHrMax', ''), { maximumFractionDigits: 0, fallback: '—' })}</small></strong></div>
+              <div><span>RPE</span><strong>{v(row, 'lastRunRpe', '') ? `${formatMetricNumber(v(row, 'lastRunRpe'), { maximumFractionDigits: 1 })}/10` : '—'}</strong></div>
+            </article>
+            <ExecutionCard execution={execution} />
+          </DashboardDisclosure>
+
+          <DashboardDisclosure eyebrow="HISTORIA" title="Dziennik decyzji" summary={`${journal.entries.length} ostatnie wpisy`}>
+            <DecisionJournal journal={journal} embedded />
+          </DashboardDisclosure>
+
+          <DashboardDisclosure eyebrow="CEL GŁÓWNY" title="Málaga 07.03.2027" summary={v(row, 'phase', '—')}>
+            <div className="goal-chips">
+              <span><b>A</b>{v(row, 'goalA', '1:45–1:48')}</span>
+              <span><b>B</b>{v(row, 'goalB', '1:48–1:52')}</span>
+              <span><b>C</b>{v(row, 'goalC', 'SUB 2:00')}</span>
+            </div>
+            <div className="race-table-shell">
+              <table className="race-table">
+                <thead><tr><th>Anchor</th><th>Meta</th><th>Tempo</th><th>5 km</th><th>10 km</th><th>15 km</th></tr></thead>
+                <tbody>{matrix.map((goal) => (
+                  <tr key={goal.id}><td data-label="Anchor"><b>{goal.id}</b></td><td data-label="Meta">{goal.finish}</td><td data-label="Tempo">{goal.pace}</td><td data-label="5 km">{goal.km5}</td><td data-label="10 km">{goal.km10}</td><td data-label="15 km">{goal.km15}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <p className="method-note">Anchory służą do matematyki tempa i międzyczasów; cele A/B/C są celami rozwojowymi.</p>
+          </DashboardDisclosure>
+        </div>
+      </section>
+
+      <StaffDrawer open={staffOpen} onClose={closeStaff} panel={staffPanel} decision={decision} />
     </>
   );
 }
