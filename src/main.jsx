@@ -28,7 +28,7 @@ import {
 } from './performance';
 import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
-import { buildDecisionJournal } from './decisionJournal';
+import { buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
@@ -46,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.9';
+const APP_VERSION = 'FINAL 5.10';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -327,6 +327,7 @@ function VerifierBanner({ mismatches }) {
   const severity = mismatches.some((item) => item.severity === 'error') ? 'error' : 'warning';
   const digits = (field) => field.startsWith('km') || field === 'weight' ? 2 : 0;
   const display = (item, value) => {
+    if (typeof value === 'string' && parseMetric(value) === null) return value || '—';
     const formatted = formatMetricNumber(value, { maximumFractionDigits: digits(item.field) });
     return item.unit ? `${formatted} ${item.unit}` : formatted;
   };
@@ -336,7 +337,7 @@ function VerifierBanner({ mismatches }) {
         ? 'NIEZGODNOŚĆ ŹRÓDEŁ — jedna z wartości jest błędna.'
         : 'RÓŻNICA ŹRÓDEŁ — sprawdź wartości przed decyzją.'}</strong>
       {mismatches.map((item) => (
-        <span key={item.field}>{item.label}: APP_FEED {display(item, item.fromFeed)} vs policzone {display(item, item.computed)}</span>
+        <span key={item.field}>{item.label}: APP_FEED {display(item, item.fromFeed)} vs {item.source || 'policzone'} {display(item, item.computed)}</span>
       ))}
     </div>
   );
@@ -699,12 +700,16 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const verifierEndDate = v(row, 'date', '') || now;
   const daily = useMemo(() => computeDailyMetrics(raw, verifierEndDate), [raw, verifierEndDate]);
   const journal = useMemo(() => buildDecisionJournal(raw, { limit: 4 }), [raw]);
+  const decisionStatusVerification = useMemo(() => verifyDecisionStatus({
+    date: v(row, 'date', ''),
+    status: v(row, 'status', ''),
+  }, journal.entries), [row, journal]);
   const computedMetrics = useMemo(() => computeVerifierMetrics(
     verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
   ), [log, raw, verifierEndDate]);
   const verifierMismatches = useMemo(() => verifierReady
-    ? crossValidate(computedMetrics, verifierFeedMetrics(row))
-    : [], [computedMetrics, row, verifierReady]);
+    ? [...crossValidate(computedMetrics, verifierFeedMetrics(row)), ...decisionStatusVerification.mismatches]
+    : [], [computedMetrics, row, verifierReady, decisionStatusVerification]);
   const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
   const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
   const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);

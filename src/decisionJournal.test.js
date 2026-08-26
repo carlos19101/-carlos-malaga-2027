@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDecisionJournal } from './decisionJournal.js';
+import { buildDecisionJournal, verifyDecisionStatus } from './decisionJournal.js';
 
 function row(date, timestamp, values = {}, source = 'Agent Garmin') {
   return {
@@ -96,5 +96,34 @@ describe('buildDecisionJournal', () => {
     const result = buildDecisionJournal([row('', '2026-08-25 08:00', { decision: 'B' }, 'Head Coach')]);
     expect(result.entries).toEqual([]);
     expect(result.issues).toContainEqual(expect.objectContaining({ id: 'undated-decision', severity: 'error' }));
+  });
+});
+
+describe('verifyDecisionStatus', () => {
+  it('potwierdza zgodny status APP_FEED i Raw_Data z tego samego dnia', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00', { status: 'YELLOW', decision: 'Recovery' }, 'Head Coach'),
+    ]);
+    expect(verifyDecisionStatus({ date: '2026-08-25', status: 'YELLOW' }, journal.entries)).toMatchObject({ state: 'verified', mismatches: [] });
+  });
+
+  it('raportuje błąd przy rozbieżnym statusie źródeł', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00', { status: 'RED', decision: 'Stop' }, 'Head Coach'),
+    ]);
+    const result = verifyDecisionStatus({ date: '2026-08-25', status: 'GREEN' }, journal.entries);
+    expect(result.state).toBe('mismatch');
+    expect(result.mismatches[0]).toMatchObject({ field: 'coachStatus', fromFeed: 'GREEN', computed: 'RED', severity: 'error' });
+  });
+
+  it('brak decyzji Raw_Data pozostawia jawny stan unverified bez fałszywego alarmu', () => {
+    expect(verifyDecisionStatus({ date: '2026-08-25', status: 'GREEN' }, [])).toMatchObject({ state: 'unverified', mismatches: [] });
+  });
+
+  it('nie porównuje decyzji z innego dnia', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-24', '2026-08-24 09:00', { status: 'RED', decision: 'Stop' }, 'Head Coach'),
+    ]);
+    expect(verifyDecisionStatus({ date: '2026-08-25', status: 'GREEN' }, journal.entries).state).toBe('unverified');
   });
 });

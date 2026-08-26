@@ -127,3 +127,34 @@ export function buildDecisionJournal(rawRows = [], options = {}) {
 
   return { entries, issues };
 }
+
+export function verifyDecisionStatus(feedDecision = {}, journalEntries = []) {
+  const date = dayKey(feedDecision.date);
+  const fromFeed = String(feedDecision.status ?? '').trim().toUpperCase();
+  if (!date || !fromFeed) return { state: 'unverified', checkedDate: date, entry: null, mismatches: [] };
+
+  const entry = (Array.isArray(journalEntries) ? journalEntries : [])
+    .find((candidate) => candidate.date === date) || null;
+  if (!entry) return { state: 'unverified', checkedDate: date, entry: null, mismatches: [] };
+
+  const fromRaw = String(entry.status ?? '').trim().toUpperCase();
+  if (fromRaw === fromFeed && ['GREEN', 'YELLOW', 'RED'].includes(fromRaw)) {
+    return { state: 'verified', checkedDate: date, entry, mismatches: [] };
+  }
+
+  return {
+    state: 'mismatch',
+    checkedDate: date,
+    entry,
+    mismatches: [{
+      field: 'coachStatus',
+      label: 'STATUS DECYZJI',
+      unit: '',
+      fromFeed: fromFeed || 'brak',
+      computed: fromRaw || 'brak',
+      delta: null,
+      severity: 'error',
+      source: 'Raw_Data',
+    }],
+  };
+}
