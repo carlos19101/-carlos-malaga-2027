@@ -635,6 +635,32 @@ tbody tr:last-child td { border-bottom: 0; }
 .info-card strong { display: block; margin-bottom: 7px; }
 .info-card p { margin: 0; color: var(--muted-2); line-height: 1.55; }
 
+.post-run-completion-section { margin-bottom: 34px; }
+.post-run-completion {
+  min-height: 170px;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 54px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: linear-gradient(135deg, rgba(100,216,162,.055), transparent 48%), var(--panel);
+}
+.post-run-completion.completion-done { border-color: rgba(100,216,162,.27); }
+.post-run-completion.completion-pending { border-color: rgba(243,200,70,.3); background: linear-gradient(135deg, rgba(243,200,70,.055), transparent 48%), var(--panel); }
+.completion-mark { width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid rgba(100,216,162,.35); border-radius: 18px; background: rgba(100,216,162,.1); color: #a9f5cf; font-size: 1.35rem; font-weight: 950; }
+.completion-pending .completion-mark { border-color: rgba(243,200,70,.38); background: rgba(243,200,70,.1); color: #ffe18c; }
+.completion-copy { min-width: 0; }
+.completion-copy > span { color: #aab2c2; font-size: .6rem; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+.completion-copy h2 { margin: 7px 0 0; font-size: clamp(1.45rem, 3vw, 2.05rem); letter-spacing: -.035em; }
+.completion-copy > p { margin: 8px 0 0; color: var(--muted-2); font-size: .78rem; line-height: 1.48; }
+.completion-statuses { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 7px; }
+.completion-statuses span { padding: 6px 9px; border-radius: 999px; font-size: .57rem; font-weight: 900; letter-spacing: .08em; }
+.completion-statuses .is-done { background: rgba(100,216,162,.09); color: #a9f5cf; }
+.completion-statuses .is-pending { background: rgba(243,200,70,.1); color: #ffe18c; }
+.completion-edit { min-height: 44px; padding: 0 16px; border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(255,255,255,.04); color: #dce1ea; cursor: pointer; font-size: .72rem; font-weight: 850; }
+
 .feedback-section { margin-bottom: 34px; }
 .feedback-card { padding: 22px; display: grid; gap: 18px; border: 1px solid rgba(88,197,232,.22); border-radius: 24px; background: linear-gradient(135deg, rgba(88,197,232,.055), transparent 50%), var(--panel); }
 .feedback-target { display: grid; gap: 4px; }
@@ -651,6 +677,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .feedback-actions > small { max-width: 540px; color: var(--muted); line-height: 1.4; }
 .feedback-card button { min-height: 46px; padding: 0 18px; border: 0; border-radius: 14px; background: var(--cyan); color: #071017; font-weight: 900; }
 .feedback-card button:disabled { opacity: .55; }
+.feedback-action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.feedback-card button.feedback-secondary { border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.045); color: #dce1ea; }
 .feedback-message { margin: 0; color: #c7eaf4; font-size: .76rem; line-height: 1.45; }
 .feedback-message.feedback-ok { color: #9ee8c5; }
 .feedback-message.feedback-error { color: #ffb3bd; }
@@ -827,7 +855,12 @@ tbody tr:last-child td { border-bottom: 0; }
   .feedback-scales { grid-template-columns: 1fr; }
   .tcx-import-fields, .tcx-preview { grid-template-columns: 1fr; }
   .feedback-actions, .feedback-login { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+  .feedback-action-buttons { display: grid; grid-template-columns: 1fr; }
   .feedback-card button { width: 100%; }
+  .post-run-completion { min-height: 0; padding: 19px; grid-template-columns: 44px 1fr; align-items: start; gap: 14px; border-radius: 22px; }
+  .completion-mark { width: 44px; height: 44px; border-radius: 15px; }
+  .completion-copy h2 { font-size: 1.45rem; }
+  .completion-edit { grid-column: 1 / -1; width: 100%; }
 
   .today-plan-card { padding: 20px; border-radius: 23px; }
   .today-plan-title strong, .today-plan-card > div:first-child > strong { font-size: 1.35rem; }

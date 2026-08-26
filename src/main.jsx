@@ -37,13 +37,14 @@ import {
   readFeedbackQueue,
 } from './trainingFeedback';
 import { MAX_TCX_FILE_BYTES, prepareTcxImport, tcxImportPreview } from './tcxImportClient';
+import { tcxDataStatus, trainingFeedbackStatus } from './postRunStatus';
 import { A, sheetContractError } from './schema';
 import './styles.css';
 
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.4';
+const APP_VERSION = 'FINAL 5.5';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -863,7 +864,59 @@ function LogCard({ row }) {
   );
 }
 
-function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit }) {
+function feedbackStatusForRow(row) {
+  return trainingFeedbackStatus({
+    rpe: v(row, 'logRpe', ''),
+    pain: v(row, 'logPain', ''),
+    legFatigue: v(row, 'logLegFatigue', ''),
+  });
+}
+
+function tcxStatusForRow(row) {
+  return tcxDataStatus({
+    targetMin: v(row, 'logHrTargetMin', ''),
+    targetMax: v(row, 'logHrTargetMax', ''),
+    timeInTarget: v(row, 'logTimeInTarget', ''),
+    timeAboveTarget: v(row, 'logTimeAboveTarget', ''),
+    timeBelowTarget: v(row, 'logTimeBelowTarget', ''),
+    analyzedDuration: v(row, 'logHrAnalyzedDuration', ''),
+  });
+}
+
+function PostRunCompletionPanel({ target, feedbackStatus, tcxStatus, tcxRequired, editingFeedback, onEditFeedback }) {
+  if (!target) return null;
+  const complete = feedbackStatus.complete && (!tcxRequired || tcxStatus.complete);
+  const missing = [
+    ...(!feedbackStatus.complete ? ['ocena zawodnika'] : []),
+    ...(tcxRequired && !tcxStatus.complete ? ['analiza TCX'] : []),
+  ];
+  const sessionLabel = `${formatDate(v(target, 'date', ''))} · ${v(target, 'logName', resolveLogSession(target, A.logType) || 'Sesja')}`;
+  return (
+    <section className="section-block post-run-completion-section">
+      <article className={`post-run-completion ${complete ? 'completion-done' : 'completion-pending'}`}>
+        <div className="completion-mark" aria-hidden="true">{complete ? '✓' : '!'}</div>
+        <div className="completion-copy">
+          <span>PO TRENINGU · {sessionLabel}</span>
+          <h2>{complete ? 'Sesja domknięta' : 'Dokończ zapis sesji'}</h2>
+          <p>{complete
+            ? 'Ocena zawodnika i dane wykonania są już zapisane. Nie musisz wprowadzać ich ponownie.'
+            : `Do uzupełnienia: ${missing.join(' i ')}.`}</p>
+          <div className="completion-statuses">
+            <span className={feedbackStatus.complete ? 'is-done' : 'is-pending'}>OCENA {feedbackStatus.complete ? 'ZAPISANA' : 'BRAK'}</span>
+            <span className={!tcxRequired || tcxStatus.complete ? 'is-done' : 'is-pending'}>TCX {!tcxRequired ? 'NIE DOTYCZY' : tcxStatus.complete ? 'ZAPISANY' : 'BRAK'}</span>
+          </div>
+        </div>
+        {feedbackStatus.complete ? (
+          <button type="button" className="completion-edit" onClick={onEditFeedback}>
+            {editingFeedback ? 'Zamknij edycję' : 'Popraw ocenę'}
+          </button>
+        ) : null}
+      </article>
+    </section>
+  );
+}
+
+function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel, onSaved }) {
   const [passcode, setPasscode] = useState('');
   const [values, setValues] = useState({ rpe: '', pain: '', legFatigue: '', notes: '' });
   const [state, setState] = useState({ busy: false, message: '' });
@@ -901,6 +954,7 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit }) {
           ? 'Ocena czeka — sesja nie pojawiła się jeszcze w Training Log.'
           : 'Ocena zapisana lokalnie i czeka na synchronizację.';
       setState({ busy: false, message });
+      if (result.synced.length) onSaved?.();
     } catch (error) {
       const first = Object.values(error.validation || {})[0];
       setState({ busy: false, message: first || 'Nie udało się przygotować oceny.' });
@@ -939,7 +993,10 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit }) {
           <label className="feedback-notes"><span>Notatka opcjonalna</span><textarea maxLength="500" rows="3" value={values.notes} onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))} placeholder="Odczucia, warunki, co zadziałało…" /></label>
           <div className="feedback-actions">
             <small>Najpierw zapis lokalny, potem idempotentna synchronizacja po Session_ID.</small>
-            <button type="submit" disabled={state.busy}>{state.busy ? 'Zapisuję…' : 'Zapisz ocenę'}</button>
+            <div className="feedback-action-buttons">
+              {onCancel ? <button type="button" className="feedback-secondary" onClick={onCancel} disabled={state.busy}>Anuluj</button> : null}
+              <button type="submit" disabled={state.busy}>{state.busy ? 'Zapisuję…' : 'Zapisz ocenę'}</button>
+            </div>
           </div>
           {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
         </form>
@@ -954,6 +1011,7 @@ function TcxImportPanel({ rows, access, onSubmit }) {
     && v(row, 'logSessionId', '')
     && parseMetric(v(row, 'logHrTargetMin', '')) !== null
     && parseMetric(v(row, 'logHrTargetMax', '')) !== null
+    && !tcxStatusForRow(row).complete
   )).slice(0, 12), [rows]);
   const [sessionId, setSessionId] = useState('');
   const [envelope, setEnvelope] = useState(null);
@@ -1073,10 +1131,37 @@ function TcxImportPanel({ rows, access, onSubmit }) {
 function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport }) {
   const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
   const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
+  const [editingFeedback, setEditingFeedback] = useState(false);
+  const feedbackStatus = useMemo(() => feedbackStatusForRow(feedbackTarget), [feedbackTarget]);
+  const tcxStatus = useMemo(() => tcxStatusForRow(feedbackTarget), [feedbackTarget]);
+  const tcxRequired = Boolean(feedbackTarget
+    && parseMetric(v(feedbackTarget, 'logHrTargetMin', '')) !== null
+    && parseMetric(v(feedbackTarget, 'logHrTargetMax', '')) !== null);
+
+  useEffect(() => { setEditingFeedback(false); }, [feedbackTarget]);
+
   return (
     <>
       <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, recovery i później boks są liczone jako realne obciążenie systemu.</p></section>
-      <FeedbackPanel target={feedbackTarget} access={feedbackAccess} queueCount={feedbackQueueCount} onLogin={onFeedbackLogin} onSubmit={onFeedbackSubmit} />
+      <PostRunCompletionPanel
+        target={feedbackTarget}
+        feedbackStatus={feedbackStatus}
+        tcxStatus={tcxStatus}
+        tcxRequired={tcxRequired}
+        editingFeedback={editingFeedback}
+        onEditFeedback={() => setEditingFeedback((current) => !current)}
+      />
+      {feedbackTarget && (!feedbackStatus.complete || editingFeedback) ? (
+        <FeedbackPanel
+          target={feedbackTarget}
+          access={feedbackAccess}
+          queueCount={feedbackQueueCount}
+          onLogin={onFeedbackLogin}
+          onSubmit={onFeedbackSubmit}
+          onCancel={feedbackStatus.complete ? () => setEditingFeedback(false) : null}
+          onSaved={() => setEditingFeedback(false)}
+        />
+      ) : null}
       <TcxImportPanel rows={sorted} access={feedbackAccess} onSubmit={onTcxImport} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
