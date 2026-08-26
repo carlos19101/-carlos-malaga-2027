@@ -17,6 +17,7 @@ import {
   validateDailyFeed,
 } from './parse';
 import {
+  coachActionLabel,
   daysUntilRace,
   metricDeltaPercent,
   millisecondsUntilNextLocalMidnight,
@@ -44,7 +45,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.6.3';
+const APP_VERSION = 'FINAL 5.7';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -667,7 +668,7 @@ function StaffDrawer({ open, onClose, panel, decision }) {
         </header>
         <div className="staff-drawer-scroll">
           <article className={`staff-drawer-decision coach-${decision.status.toLowerCase()}`}>
-            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{{ GREEN: 'TRENUJ ZGODNIE Z PLANEM', YELLOW: 'ODPOCZYNEK I REGENERACJA', RED: 'NIE TRENUJ' }[decision.status] || decision.status}</StatusChip></div>
+            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{coachActionLabel(decision.action)}</StatusChip></div>
             <strong>{decision.title}</strong>
             <p>{decision.recommendation}</p>
           </article>
@@ -708,11 +709,13 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const decision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
     sheetDecision: v(row, 'decision', ''),
+    plannedSession: todayPlan ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', '')) : '',
+    plannedStatus: todayPlan ? v(todayPlan, 'planStatus', '') : '',
     fallbackInput: {
       recovery: v(row, 'recovery', ''), sleep: v(row, 'sleep', ''), hrv: v(row, 'hrv', ''), hrv7d: v(row, 'hrv7d', ''),
       pain: v(row, 'pain', ''), doms: v(row, 'doms', ''), fatigue: v(row, 'fatigue', ''), dataOk: validation.ok,
     },
-  }), [row, validation.ok]);
+  }), [row, todayPlan, validation.ok]);
   const staffPanel = useMemo(() => buildStaffPanel({
     decision,
     plan: todayPlan ? {
@@ -765,7 +768,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const staffAlerts = allStaff
     .filter((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status)).length;
   const firstStaffAlert = allStaff.find((member) => ['YELLOW', 'RED', 'INCOMPLETE'].includes(member.status));
-  const decisionCode = { GREEN: 'TRENUJ ZGODNIE Z PLANEM', YELLOW: 'ODPOCZYNEK I REGENERACJA', RED: 'NIE TRENUJ' }[decision.status] || decision.status;
+  const decisionCode = coachActionLabel(decision.action);
   const todaySession = todayPlan
     ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', 'Sesja'))
     : 'Brak sesji na dziś';

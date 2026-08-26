@@ -45,7 +45,7 @@ describe('buildStaffPanel', () => {
     expect(panel.core.find(({ id }) => id === 'physiology')).toMatchObject({ status: 'YELLOW', direction: 'MODIFY' });
     expect(panel.dispute.evidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'GŁÓWNY TRENER', value: 'TRENUJ ZGODNIE Z PLANEM' }),
-      expect.objectContaining({ label: 'FIZJOLOG', value: 'ODPOCZYNEK I REGENERACJA' }),
+      expect.objectContaining({ label: 'FIZJOLOG', value: 'KONTROLUJ OBCIĄŻENIE' }),
     ]));
   });
 

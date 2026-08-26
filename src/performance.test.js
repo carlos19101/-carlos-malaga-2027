@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  COACH_ACTION,
+  coachActionLabel,
   classifyCoachStatus,
   daysUntilRace,
   metricDeltaPercent,
@@ -18,6 +20,7 @@ describe('coach decision', () => {
       fallbackInput: { recovery: 90, sleep: 90, dataOk: true },
     });
     expect(d.status).toBe('YELLOW');
+    expect(d.action).toBe(COACH_ACTION.RECOVERY);
     expect(d.recommendation).toContain('DOMS');
     expect(d.source).toBe('head-coach');
   });
@@ -25,10 +28,28 @@ describe('coach decision', () => {
   it('fallback daje YELLOW dla Recovery 57', () => {
     const d = classifyCoachStatus({ recovery: 57, sleep: 82, hrv: 54, hrv7d: 62, pain: 0, dataOk: true });
     expect(d.status).toBe('YELLOW');
+    expect(d.action).toBe(COACH_ACTION.CONTROL);
   });
 
   it('ból >=4 daje RED w fallbacku', () => {
-    expect(classifyCoachStatus({ recovery: 90, sleep: 90, pain: 4, dataOk: true }).status).toBe('RED');
+    expect(classifyCoachStatus({ recovery: 90, sleep: 90, pain: 4, dataOk: true })).toMatchObject({ status: 'RED', action: COACH_ACTION.NO_TRAIN });
+  });
+
+  it('żółty status rozróżnia trening kontrolowany od dnia regeneracyjnego', () => {
+    expect(resolveCoachDecision({ sheetStatus: 'YELLOW', sheetDecision: 'Zachowaj rezerwę.', plannedSession: 'Easy 6 km' }).action).toBe(COACH_ACTION.CONTROL);
+    expect(resolveCoachDecision({ sheetStatus: 'YELLOW', sheetDecision: 'Dziś OFF / recovery.' }).action).toBe(COACH_ACTION.RECOVERY);
+  });
+
+  it('brak integralnych danych nie udaje decyzji treningowej', () => {
+    const d = classifyCoachStatus({ recovery: 90, sleep: 90, dataOk: false });
+    expect(d).toMatchObject({ status: 'RED', action: COACH_ACTION.NO_DECISION });
+    expect(coachActionLabel(d.action)).toBe('BRAK PEWNEJ DECYZJI');
+  });
+
+  it('zielony status oznacza wykonanie planu', () => {
+    const d = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy zgodnie z planem.' });
+    expect(d.action).toBe(COACH_ACTION.TRAIN);
+    expect(coachActionLabel(d.action)).toBe('TRENUJ ZGODNIE Z PLANEM');
   });
 });
 

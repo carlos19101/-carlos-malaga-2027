@@ -1,4 +1,41 @@
-import { parseMetric } from './parse.js';
+import { normalize, parseMetric } from './parse.js';
+
+export const COACH_ACTION = Object.freeze({
+  TRAIN: 'TRAIN',
+  CONTROL: 'CONTROL',
+  RECOVERY: 'RECOVERY',
+  NO_TRAIN: 'NO_TRAIN',
+  NO_DECISION: 'NO_DECISION',
+});
+
+const COACH_ACTION_LABELS = Object.freeze({
+  [COACH_ACTION.TRAIN]: 'TRENUJ ZGODNIE Z PLANEM',
+  [COACH_ACTION.CONTROL]: 'TRENING KONTROLOWANY',
+  [COACH_ACTION.RECOVERY]: 'ODPOCZYNEK I REGENERACJA',
+  [COACH_ACTION.NO_TRAIN]: 'NIE TRENUJ',
+  [COACH_ACTION.NO_DECISION]: 'BRAK PEWNEJ DECYZJI',
+});
+
+export function coachActionLabel(action) {
+  return COACH_ACTION_LABELS[action] || COACH_ACTION_LABELS[COACH_ACTION.NO_DECISION];
+}
+
+function hasRecoveryIntent(...values) {
+  const text = normalize(values.filter(Boolean).join(' '));
+  return /(^|\s)(?:off|recovery|odpoczynek|regeneracja|odpuszczony|odpusc)(?:\s|$)/.test(text);
+}
+
+export function resolveCoachAction({ status, dataOk = true, plannedSession = '', plannedStatus = '', recommendation = '' } = {}) {
+  if (!dataOk) return COACH_ACTION.NO_DECISION;
+  if (status === 'GREEN') return COACH_ACTION.TRAIN;
+  if (status === 'RED') return COACH_ACTION.NO_TRAIN;
+  if (status === 'YELLOW') {
+    return hasRecoveryIntent(plannedSession, plannedStatus, recommendation)
+      ? COACH_ACTION.RECOVERY
+      : COACH_ACTION.CONTROL;
+  }
+  return COACH_ACTION.NO_DECISION;
+}
 
 export const MALAGA_RACE = {
   date: '2027-03-07',
@@ -35,10 +72,13 @@ export function classifyCoachStatus({
   doms,
   fatigue,
   dataOk = true,
+  plannedSession = '',
+  plannedStatus = '',
 }) {
   if (!dataOk) {
     return {
       status: 'RED',
+      action: COACH_ACTION.NO_DECISION,
       title: 'Najpierw popraw dane',
       recommendation: 'Nie zwiększaj obciążenia na podstawie niepełnego lub niespójnego odczytu.',
       reasons: ['brak lub anomalia danych krytycznych'],
@@ -76,6 +116,7 @@ export function classifyCoachStatus({
   if (red.length) {
     return {
       status: 'RED',
+      action: COACH_ACTION.NO_TRAIN,
       title: 'Regeneracja ma pierwszeństwo',
       recommendation: 'Odpoczynek albo bardzo lekka aktywność. Bez jakościowego biegu i bez dokładania intensywności.',
       reasons: red,
@@ -84,10 +125,12 @@ export function classifyCoachStatus({
   }
 
   if (yellow.length) {
+    const recommendation = 'Trzymaj intensywność nisko i nie dokładaj pracy ponad plan. Akcent tylko po potwierdzeniu świeżości.';
     return {
       status: 'YELLOW',
+      action: resolveCoachAction({ status: 'YELLOW', plannedSession, plannedStatus, recommendation }),
       title: 'Trening tylko kontrolowany',
-      recommendation: 'Trzymaj intensywność nisko i nie dokładaj pracy ponad plan. Akcent tylko po potwierdzeniu świeżości.',
+      recommendation,
       reasons: yellow,
       source: 'fallback',
     };
@@ -95,6 +138,7 @@ export function classifyCoachStatus({
 
   return {
     status: 'GREEN',
+    action: COACH_ACTION.TRAIN,
     title: 'Plan może iść zgodnie z założeniem',
     recommendation: 'Realizuj zaplanowaną jednostkę w docelowym HR/RPE, bez dokładania pracy ponad plan.',
     reasons: ['brak czerwonych lub żółtych sygnałów w dostępnych danych'],
@@ -102,7 +146,7 @@ export function classifyCoachStatus({
   };
 }
 
-export function resolveCoachDecision({ sheetStatus, sheetDecision, fallbackInput }) {
+export function resolveCoachDecision({ sheetStatus, sheetDecision, plannedSession = '', plannedStatus = '', fallbackInput }) {
   const status = normalizeCoachStatus(sheetStatus);
   const decision = String(sheetDecision ?? '').trim();
   if (status) {
@@ -111,19 +155,21 @@ export function resolveCoachDecision({ sheetStatus, sheetDecision, fallbackInput
       YELLOW: 'Kontroluj obciążenie',
       RED: 'Regeneracja ma pierwszeństwo',
     };
+    const recommendation = decision || (status === 'GREEN'
+      ? 'Realizuj zaplanowaną jednostkę bez dokładania pracy ponad plan.'
+      : status === 'YELLOW'
+        ? 'Zachowaj rezerwę i wykonuj tylko pracę kontrolowaną.'
+        : 'Priorytetem jest regeneracja; bez dokładania intensywności.');
     return {
       status,
+      action: resolveCoachAction({ status, plannedSession, plannedStatus, recommendation }),
       title: titles[status],
-      recommendation: decision || (status === 'GREEN'
-        ? 'Realizuj zaplanowaną jednostkę bez dokładania pracy ponad plan.'
-        : status === 'YELLOW'
-          ? 'Zachowaj rezerwę i wykonuj tylko pracę kontrolowaną.'
-          : 'Priorytetem jest regeneracja; bez dokładania intensywności.'),
+      recommendation,
       reasons: [],
       source: 'head-coach',
     };
   }
-  return classifyCoachStatus(fallbackInput);
+  return classifyCoachStatus({ ...fallbackInput, plannedSession, plannedStatus });
 }
 
 function startOfDay(value) {
