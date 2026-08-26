@@ -179,6 +179,7 @@ export function integrateCoachDecision({
   daily = null,
   execution = null,
   load = null,
+  patterns = {},
 } = {}) {
   const base = decision || {
     status: 'RED',
@@ -243,8 +244,34 @@ export function integrateCoachDecision({
   if (load?.loadRatio === null || load?.loadRatio === undefined) limitations.push(`Load ratio: ${load?.calibrationDays || 'kalibracja'}`);
   else evidence.push(`LOAD RATIO: ${Number(load.loadRatio).toFixed(2)}`);
 
+  const easyPattern = patterns.easyExecution;
+  if (easyPattern?.state === 'calibrating') {
+    evidence.push(`WZORZEC EASY: KALIBRACJA ${easyPattern.sample}`);
+    limitations.push(`wzorzec easy: ${easyPattern.sample}`);
+  } else if (easyPattern?.state === 'active') {
+    evidence.push(`WZORZEC EASY: ${easyPattern.sample} sesji ponad ${easyPattern.thresholdPct}% czasu powyżej celu`);
+  } else if (easyPattern?.state === 'clear') {
+    evidence.push(`WZORZEC EASY: brak serii przekroczeń w ostatnich ${easyPattern.required} sesjach`);
+  }
+
+  if (daily?.bridgeSignal?.active) evidence.push('TREND 3 DNI: RHR rośnie, HRV spada');
+
+  if (easyPattern?.active && easyPattern.appliesToday && base.action === COACH_ACTION.TRAIN) {
+    return {
+      ...base,
+      status: 'YELLOW',
+      action: COACH_ACTION.CONTROL,
+      title: 'Easy tylko z kontrolą intensywności',
+      recommendation: 'Ustaw alarm górnej granicy HR. Jeżeli przekroczenia wrócą, zacznij od 10 minut marszobiegu i nie zwiększaj planu.',
+      reasons: [...(base.reasons || []), `trzy kolejne easy ponad ${easyPattern.thresholdPct}% czasu powyżej celu`],
+      evidence,
+      limitations,
+      confidence: 'SUPPORTED',
+      engineAdjustments: ['repeated-easy-over-target'],
+    };
+  }
+
   if (daily?.bridgeSignal?.active) {
-    evidence.push('TREND 3 DNI: RHR rośnie, HRV spada');
     if (base.action === COACH_ACTION.TRAIN) {
       return {
         ...base,

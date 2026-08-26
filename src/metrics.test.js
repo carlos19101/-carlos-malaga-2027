@@ -1,12 +1,52 @@
 import { describe, expect, it } from 'vitest';
 import {
   compareVerifierMetrics,
+  computeEasyExecutionPattern,
   computeExecution,
   computeLoad,
   computeVerifierMetrics,
   crossValidate,
   rollingWindow,
 } from './metrics';
+
+describe('easy execution pattern', () => {
+  it('pozostaje w kalibracji, gdy nie ma trzech ostatnich sesji easy z danymi', () => {
+    const result = computeEasyExecutionPattern([
+      { date: '2026-08-20', session: 'Easy 5 km', aboveTargetPct: 51 },
+      { date: '2026-08-23', session: 'Easy long 6 km', aboveTargetPct: null },
+      { date: '2026-08-25', session: 'Easy base 6 km', aboveTargetPct: 44 },
+    ]);
+    expect(result).toMatchObject({ state: 'calibrating', active: false, sample: '2/3', totalEasy: 3 });
+  });
+
+  it('aktywuje regułę dopiero po trzech kolejnych easy ponad 40 procent', () => {
+    const result = computeEasyExecutionPattern([
+      { date: '2026-08-20', session: 'Easy 5 km', aboveTargetPct: 41 },
+      { date: '2026-08-23', session: 'Easy long 6 km', aboveTargetPct: 52 },
+      { date: '2026-08-25', session: 'Easy base 6 km', aboveTargetPct: 40.01 },
+    ]);
+    expect(result).toMatchObject({ state: 'active', active: true, sample: '3/3', thresholdPct: 40 });
+  });
+
+  it('dokładnie 40 procent nie przekracza progu i czyści wzorzec', () => {
+    const result = computeEasyExecutionPattern([
+      { date: '2026-08-20', session: 'Easy 5 km', aboveTargetPct: 61 },
+      { date: '2026-08-23', session: 'Easy 6 km', aboveTargetPct: 40 },
+      { date: '2026-08-25', session: 'Easy 7 km', aboveTargetPct: 55 },
+    ]);
+    expect(result).toMatchObject({ state: 'clear', active: false, sample: '3/3' });
+  });
+
+  it('inne rodzaje sesji nie wchodzą do trójki easy', () => {
+    const result = computeEasyExecutionPattern([
+      { date: '2026-08-20', session: 'Easy 5 km', aboveTargetPct: 50 },
+      { date: '2026-08-21', session: 'Tempo 4 km', aboveTargetPct: 90 },
+      { date: '2026-08-23', session: 'Easy 6 km', aboveTargetPct: 51 },
+      { date: '2026-08-25', session: 'Easy 7 km', aboveTargetPct: 52 },
+    ]);
+    expect(result).toMatchObject({ state: 'active', totalEasy: 3 });
+  });
+});
 
 describe('rollingWindow', () => {
   it('ma domknięte granice i raportuje niedatowane wiersze', () => {

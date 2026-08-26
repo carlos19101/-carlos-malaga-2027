@@ -104,6 +104,29 @@ describe('coach decision', () => {
     expect(result.evidence).toEqual(expect.arrayContaining(['OSTATNIA SESJA: over', 'LOAD RATIO: 1.51']));
     expect(result.engineAdjustments).toEqual([]);
   });
+
+  it('aktywny wzorzec trzech easy ogranicza kolejne easy, ale nie inną jednostkę', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Wykonaj plan.' });
+    const pattern = { state: 'active', active: true, appliesToday: true, sample: '3/3', required: 3, thresholdPct: 40 };
+    const result = integrateCoachDecision({
+      decision,
+      integrity: { validationOk: true, freshnessState: 'fresh' },
+      recovery: { pain: 0, doms: 2, fatigue: 2 },
+      daily: { state: 'ready', bridgeSignal: { active: false } },
+      patterns: { easyExecution: pattern },
+    });
+    expect(result).toMatchObject({ status: 'YELLOW', action: COACH_ACTION.CONTROL, confidence: 'SUPPORTED' });
+    expect(result.engineAdjustments).toEqual(['repeated-easy-over-target']);
+
+    const unrelated = integrateCoachDecision({
+      decision,
+      integrity: { validationOk: true, freshnessState: 'fresh' },
+      recovery: { pain: 0, doms: 2, fatigue: 2 },
+      daily: { state: 'ready', bridgeSignal: { active: false } },
+      patterns: { easyExecution: { ...pattern, appliesToday: false } },
+    });
+    expect(unrelated.action).toBe(COACH_ACTION.TRAIN);
+  });
 });
 
 describe('metricDeltaPercent', () => {

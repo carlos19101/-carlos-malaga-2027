@@ -26,7 +26,7 @@ import {
   resolveCoachDecision,
   sourceFreshness,
 } from './performance';
-import { computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
+import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
 import { buildDecisionJournal } from './decisionJournal';
 import { buildStaffPanel } from './staffPanel';
@@ -46,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.8';
+const APP_VERSION = 'FINAL 5.9';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -692,6 +692,8 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const validation = useMemo(() => validateFeed(row, weightReading?.value || ''), [row, weightReading]);
   const loadComputed = useMemo(() => computeLoad(verifierTrainingRecords(log), now), [log, now]);
   const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
+  const todayPlannedSession = todayPlan ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', '')) : '';
+  const todayPlannedStatus = todayPlan ? v(todayPlan, 'planStatus', '') : '';
   const upcoming = useMemo(() => getUpcomingPlan(plan, 2, now), [plan, now]);
   const matrix = useMemo(() => raceGoalMatrix(), []);
   const verifierEndDate = v(row, 'date', '') || now;
@@ -706,17 +708,33 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
   const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
   const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
+  const easyExecutionPattern = useMemo(() => {
+    const history = sortedRows(log, 'asc').filter(isRunLogRow).map((logRow) => {
+      const planRow = planForLogRow(plan, logRow);
+      const result = computeExecution(executionInput(logRow, planRow));
+      return {
+        date: v(logRow, 'date', ''),
+        session: [v(logRow, 'logName', ''), planRow ? v(planRow, 'planMorning', v(planRow, 'planSession', '')) : ''].filter(Boolean).join(' '),
+        aboveTargetPct: result.aboveTargetPct,
+        status: result.status,
+      };
+    });
+    return {
+      ...computeEasyExecutionPattern(history),
+      appliesToday: /(^|\s)easy(?:\s|$)/.test(normalize(todayPlannedSession)),
+    };
+  }, [log, plan, todayPlannedSession]);
 
   const baseDecision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
     sheetDecision: v(row, 'decision', ''),
-    plannedSession: todayPlan ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', '')) : '',
-    plannedStatus: todayPlan ? v(todayPlan, 'planStatus', '') : '',
+    plannedSession: todayPlannedSession,
+    plannedStatus: todayPlannedStatus,
     fallbackInput: {
       recovery: v(row, 'recovery', ''), sleep: v(row, 'sleep', ''), hrv: v(row, 'hrv', ''), hrv7d: v(row, 'hrv7d', ''),
       pain: v(row, 'pain', ''), doms: v(row, 'doms', ''), fatigue: v(row, 'fatigue', ''), dataOk: validation.ok,
     },
-  }), [row, todayPlan, validation.ok]);
+  }), [row, todayPlannedSession, todayPlannedStatus, validation.ok]);
   const decision = useMemo(() => integrateCoachDecision({
     decision: baseDecision,
     integrity: {
@@ -733,7 +751,8 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     daily,
     execution,
     load: loadComputed,
-  }), [baseDecision, validation.ok, freshnessState, verifierMismatches, daily, execution, loadComputed, row]);
+    patterns: { easyExecution: easyExecutionPattern },
+  }), [baseDecision, validation.ok, freshnessState, verifierMismatches, daily, execution, loadComputed, easyExecutionPattern, row]);
   const staffPanel = useMemo(() => buildStaffPanel({
     decision,
     plan: todayPlan ? {

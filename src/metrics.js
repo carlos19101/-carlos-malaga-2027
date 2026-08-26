@@ -266,3 +266,38 @@ export function computeExecution(session = {}) {
     status,
   });
 }
+
+export function computeEasyExecutionPattern(sessions = [], options = {}) {
+  const required = Number.isInteger(options.required) && options.required > 0 ? options.required : 3;
+  const thresholdPct = parseNumber(options.thresholdPct) ?? 40;
+  const easySessions = (Array.isArray(sessions) ? sessions : [])
+    .filter(({ session }) => /(^|\s)easy(?:\s|$)/.test(normalize(session)))
+    .map((session, index) => ({
+      ...session,
+      index,
+      dateValue: parseDate(session.date)?.getTime() ?? null,
+      aboveTargetPct: parseNumber(session.aboveTargetPct),
+    }))
+    .sort((a, b) => {
+      if (a.dateValue === null && b.dateValue === null) return a.index - b.index;
+      if (a.dateValue === null) return -1;
+      if (b.dateValue === null) return 1;
+      return a.dateValue - b.dateValue || a.index - b.index;
+    });
+  const recent = easySessions.slice(-required);
+  const analyzed = recent.filter(({ aboveTargetPct }) => aboveTargetPct !== null);
+  const base = {
+    required,
+    thresholdPct,
+    available: analyzed.length,
+    totalEasy: easySessions.length,
+    sample: `${analyzed.length}/${required}`,
+    sessions: recent.map(({ date, session, aboveTargetPct, status }) => ({ date, session, aboveTargetPct, status })),
+  };
+
+  if (recent.length < required || analyzed.length < required) {
+    return { ...base, state: 'calibrating', active: false };
+  }
+  const active = analyzed.every(({ aboveTargetPct }) => aboveTargetPct > thresholdPct);
+  return { ...base, state: active ? 'active' : 'clear', active };
+}
