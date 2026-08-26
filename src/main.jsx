@@ -596,10 +596,14 @@ function ExecutionSplit({ execution }) {
 }
 
 function HrTargetBand({ row, execution }) {
-  const average = metric(v(row, 'logHrAvg', ''));
-  const maximum = metric(v(row, 'logHrMax', ''));
-  const targetLo = metric(execution.targetLo);
-  const targetHi = metric(execution.targetHi);
+  const roundMetric = (value) => {
+    const numeric = metric(value);
+    return numeric === null ? null : Math.round(numeric);
+  };
+  const average = roundMetric(v(row, 'logHrAvg', ''));
+  const maximum = roundMetric(v(row, 'logHrMax', ''));
+  const targetLo = roundMetric(execution.targetLo);
+  const targetHi = roundMetric(execution.targetHi);
   if ([average, maximum, targetLo, targetHi].some((value) => value === null)) {
     return <p className="dashboard-data-note">Brak pełnego zestawu HR średnie / maksymalne / cel — porównanie nie jest rysowane.</p>;
   }
