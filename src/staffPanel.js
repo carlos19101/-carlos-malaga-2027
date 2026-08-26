@@ -28,10 +28,10 @@ function runningCoach({ plan, execution }) {
 
   if (!session) {
     return {
-      id: 'running', role: 'RUNNING COACH', scope: 'plan i wykonanie', status: 'INFO', direction: null,
+      id: 'running', role: 'TRENER BIEGOWY', scope: 'plan i wykonanie', status: 'INFO', direction: null,
       evidence: planEvidence,
       interpretation: 'Plan nie zawiera sesji z dzisiejszą datą. To nie jest automatycznie dzień wolny ani błąd danych.',
-      recommendation: 'Nie twórz nowej jednostki w aplikacji; obowiązuje jawny werdykt Head Coacha i następny wpis w Planie.',
+      recommendation: 'Nie twórz nowej jednostki w aplikacji; obowiązuje jawny werdykt Głównego Trenera i następny wpis w Planie.',
     };
   }
 
@@ -44,7 +44,7 @@ function runningCoach({ plan, execution }) {
   const over = executionStatus === 'over';
 
   return {
-    id: 'running', role: 'RUNNING COACH', scope: 'plan i wykonanie', status: over ? 'YELLOW' : 'INFO', direction: null,
+    id: 'running', role: 'TRENER BIEGOWY', scope: 'plan i wykonanie', status: over ? 'YELLOW' : 'INFO', direction: null,
     evidence: [...planEvidence, executionEvidence],
     interpretation: over
       ? 'Ostatni bieg był kosztowniejszy niż plan. To kontekst wykonania, nie samodzielna zmiana dzisiejszej jednostki.'
@@ -53,7 +53,7 @@ function runningCoach({ plan, execution }) {
         : 'Brak podstaw do liczbowej oceny ostatniego wykonania.',
     recommendation: over
       ? 'Wykonaj dzisiejszy plan bez dokładania intensywności; przy easy użyj kontroli górnej granicy HR.'
-      : 'Realizuj tylko jednostkę zapisaną w Planie i zgodną z werdyktem Head Coacha.',
+      : 'Realizuj tylko jednostkę zapisaną w Planie i zgodną z werdyktem Głównego Trenera.',
   };
 }
 
@@ -65,7 +65,7 @@ function physiologist({ daily }) {
 
   if (bridge?.active) {
     return {
-      id: 'physiology', role: 'PHYSIOLOGIST', scope: 'HRV, RHR i trend', status: 'YELLOW', direction: 'MODIFY',
+      id: 'physiology', role: 'FIZJOLOG', scope: 'HRV, RHR i trend', status: 'YELLOW', direction: 'MODIFY',
       evidence: [
         evidence('HRV dziś', hrv, 'ms'),
         evidence('RHR dziś', rhr, 'bpm'),
@@ -77,7 +77,7 @@ function physiologist({ daily }) {
   }
 
   return {
-    id: 'physiology', role: 'PHYSIOLOGIST', scope: 'HRV, RHR i trend', status: ready ? 'INFO' : 'CALIBRATION', direction: null,
+    id: 'physiology', role: 'FIZJOLOG', scope: 'HRV, RHR i trend', status: ready ? 'INFO' : 'CALIBRATION', direction: null,
     evidence: [
       evidence('HRV dziś', hrv ?? 'brak danych', hrv === null ? '' : 'ms'),
       evidence('RHR dziś', rhr ?? 'brak danych', rhr === null ? '' : 'bpm'),
@@ -114,15 +114,15 @@ function recoverySpecialist({ recovery }) {
 
   if (red) {
     return {
-      id: 'recovery', role: 'MUSCULOSKELETAL / RECOVERY', scope: 'ból i zmęczenie', status: 'RED', direction: 'STOP',
+      id: 'recovery', role: 'REGENERACJA I UKŁAD RUCHU', scope: 'ból i zmęczenie', status: 'RED', direction: 'STOP',
       evidence: evidenceItems,
       interpretation: 'Co najmniej jeden sygnał przekroczył istniejący czerwony próg aplikacji. To nie jest diagnoza medyczna.',
-      recommendation: 'Nie wydawaj GO bez jawnego rozstrzygnięcia przez Head Coacha; nowe lub narastające objawy wymagają oceny poza aplikacją.',
+      recommendation: 'Nie wydawaj GO bez jawnego rozstrzygnięcia przez Głównego Trenera; nowe lub narastające objawy wymagają oceny poza aplikacją.',
     };
   }
   if (yellow) {
     return {
-      id: 'recovery', role: 'MUSCULOSKELETAL / RECOVERY', scope: 'ból i zmęczenie', status: 'YELLOW', direction: 'MODIFY',
+      id: 'recovery', role: 'REGENERACJA I UKŁAD RUCHU', scope: 'ból i zmęczenie', status: 'YELLOW', direction: 'MODIFY',
       evidence: evidenceItems,
       interpretation: 'Sygnały subiektywne wymagają ostrożniejszego wykonania, ale same nie tworzą diagnozy.',
       recommendation: 'Utrzymaj kontrolowaną intensywność i potwierdź możliwość kontynuacji po 10–15 minutach rozgrzewki.',
@@ -130,7 +130,7 @@ function recoverySpecialist({ recovery }) {
   }
 
   return {
-    id: 'recovery', role: 'MUSCULOSKELETAL / RECOVERY', scope: 'ból i zmęczenie', status: complete ? 'GREEN' : 'INCOMPLETE', direction: null,
+    id: 'recovery', role: 'REGENERACJA I UKŁAD RUCHU', scope: 'ból i zmęczenie', status: complete ? 'GREEN' : 'INCOMPLETE', direction: null,
     evidence: evidenceItems,
     interpretation: complete
       ? 'Podane wartości nie przekraczają progów ostrzegawczych aplikacji.'
@@ -144,7 +144,7 @@ function recoverySpecialist({ recovery }) {
 function loadIntegrator({ load }) {
   const ratioReady = load?.loadRatio !== null && load?.loadRatio !== undefined;
   return {
-    id: 'load', role: 'LOAD & INTEGRATION', scope: '7 / 28 dni', status: ratioReady ? 'INFO' : 'CALIBRATION', direction: null,
+    id: 'load', role: 'OBCIĄŻENIE I INTEGRACJA', scope: '7 / 28 dni', status: ratioReady ? 'INFO' : 'CALIBRATION', direction: null,
     evidence: [
       evidence('Bieg 7d', load?.km7 ?? 0, 'km'),
       evidence('sRPE 7d', load?.srpe7 ?? 0),
@@ -174,7 +174,7 @@ function dataSteward({ integrity, execution }) {
   const error = missing.length || suspicious.length || dailyIssues.some(({ severity }) => severity === 'error')
     || verifier.some(({ severity }) => severity === 'error') || executionError;
   return {
-    id: 'data', role: 'DATA STEWARD', scope: 'integralność i świeżość', status: error ? 'RED' : 'YELLOW', direction: null,
+    id: 'data', role: 'OPIEKUN DANYCH', scope: 'integralność i świeżość', status: error ? 'RED' : 'YELLOW', direction: null,
     evidence: [
       evidence('Pola wymagane', missing.length ? `brak: ${missing.join(', ')}` : 'kompletne'),
       evidence('Verifier', verifier.length ? `${verifier.length} rozbieżności` : 'zgodny'),
@@ -194,11 +194,11 @@ function buildDispute(decision, core) {
   return {
     status: 'YELLOW',
     evidence: [
-      evidence('HEAD COACH', headDirection),
+      evidence('GŁÓWNY TRENER', headDirection),
       ...divergent.map(({ role, direction }) => evidence(role, direction)),
     ],
-    interpretation: 'Co najmniej jedna domena wskazuje inny kierunek niż końcowy werdykt Head Coacha.',
-    recommendation: 'Rozbieżność wymaga jawnego uzasadnienia przed treningiem; panel nie nadpisuje automatycznie werdyktu Head Coacha.',
+    interpretation: 'Co najmniej jedna domena wskazuje inny kierunek niż końcowy werdykt Głównego Trenera.',
+    recommendation: 'Rozbieżność wymaga jawnego uzasadnienia przed treningiem; panel nie nadpisuje automatycznie werdyktu Głównego Trenera.',
   };
 }
 
@@ -214,6 +214,6 @@ export function buildStaffPanel(input = {}) {
     core,
     specialists,
     dispute: buildDispute(input.decision, core),
-    methodology: 'DOWODY → INTERPRETACJA → REKOMENDACJA; Head Coach pozostaje właścicielem decyzji końcowej.',
+    methodology: 'DOWODY → INTERPRETACJA → REKOMENDACJA; Główny Trener pozostaje właścicielem decyzji końcowej.',
   };
 }

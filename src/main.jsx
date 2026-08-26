@@ -44,7 +44,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.6';
+const APP_VERSION = 'FINAL 5.6.1';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -460,12 +460,16 @@ function staffEvidenceText(item) {
 
 function StaffRoleCard({ member }) {
   const tone = ['GREEN', 'YELLOW', 'RED'].includes(member.status) ? member.status : '';
+  const visibleStatus = {
+    GREEN: 'OK', YELLOW: 'UWAGA', RED: 'ALARM', INFO: 'INFORMACJA',
+    CALIBRATION: 'KALIBRACJA', INCOMPLETE: 'NIEKOMPLETNE',
+  }[member.status] || member.status;
   return (
     <details className={`staff-role-card staff-${member.status.toLowerCase()}`}>
       <summary className="staff-role-summary">
         <div className="staff-role-heading">
           <div><span>{member.role}</span><small>{member.scope}</small></div>
-          <StatusChip status={tone}>{member.status}</StatusChip>
+          <StatusChip status={tone}>{visibleStatus}</StatusChip>
         </div>
         <p>{member.recommendation}</p>
         <span className="staff-role-toggle">Pokaż dowody</span>
@@ -488,7 +492,7 @@ function StaffPanel({ panel, showHeading = true }) {
   return (
     <section className={showHeading ? 'section-block staff-panel' : 'staff-panel staff-panel-embedded'}>
       {showHeading ? <div className="section-heading">
-        <div><span className="eyebrow">PANEL SZTABU · 4 CORE</span><h2>Konsultacja domenowa</h2></div>
+        <div><span className="eyebrow">PANEL SZTABU · 4 GŁÓWNE ROLE</span><h2>Konsultacja domenowa</h2></div>
         <span className="section-aside">dowody, nie głosowanie</span>
       </div> : null}
       {panel.dispute ? (
@@ -663,7 +667,7 @@ function StaffDrawer({ open, onClose, panel, decision }) {
         </header>
         <div className="staff-drawer-scroll">
           <article className={`staff-drawer-decision coach-${decision.status.toLowerCase()}`}>
-            <div><span>HEAD COACH</span><StatusChip status={decision.status} /></div>
+            <div><span>GŁÓWNY TRENER</span><StatusChip status={decision.status}>{{ GREEN: 'GO', YELLOW: 'MODIFY', RED: 'STOP' }[decision.status] || decision.status}</StatusChip></div>
             <strong>{decision.title}</strong>
             <p>{decision.recommendation}</p>
           </article>
@@ -803,7 +807,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
 
       <section className="section-block dashboard-command-section">
         <button type="button" className={`decision-summary-card decision-${decision.status.toLowerCase()}`} onClick={() => setDecisionOpen(true)}>
-          <span><small>WERDYKT HEAD COACHA</small><strong>{decision.title}</strong></span>
+          <span><small>WERDYKT GŁÓWNEGO TRENERA</small><strong>{decision.title}</strong></span>
           <b aria-hidden="true">›</b>
         </button>
       </section>
@@ -1372,7 +1376,7 @@ function Plan({ rows, loading, now }) {
   const undated = useMemo(() => rows.filter((r) => !rowDate(r)), [rows]);
   return (
     <>
-      <section className="section-hero"><span className="eyebrow">DROGA DO CELU</span><h1>Plan</h1><p>Mikrocykl jest adaptacyjny. Status Head Coacha i regeneracja mogą zmienić wykonanie jednostki bez zmiany celu całego bloku.</p></section>
+      <section className="section-hero"><span className="eyebrow">DROGA DO CELU</span><h1>Plan</h1><p>Mikrocykl jest adaptacyjny. Werdykt Głównego Trenera i regeneracja mogą zmienić wykonanie jednostki bez zmiany celu całego bloku.</p></section>
       <section className="section-block plan-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : dated.map((row, i) => <PlanCard row={row} now={now} key={`${v(row, 'date', '')}-${i}`} />)}
       </section>
