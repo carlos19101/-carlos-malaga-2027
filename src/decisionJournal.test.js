@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDecisionJournal, verifyDecisionStatus } from './decisionJournal.js';
+import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal.js';
 
 function row(date, timestamp, values = {}, source = 'Agent Garmin') {
   return {
@@ -125,5 +125,52 @@ describe('verifyDecisionStatus', () => {
       row('2026-08-24', '2026-08-24 09:00', { status: 'RED', decision: 'Stop' }, 'Head Coach'),
     ]);
     expect(verifyDecisionStatus({ date: '2026-08-25', status: 'GREEN' }, journal.entries).state).toBe('unverified');
+  });
+});
+
+describe('attachDecisionOutcomes', () => {
+  it('łączy decyzję z sesją z tego samego dnia i reakcją następnego dnia', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 08:00', { hrv: 60, rhr: 45 }),
+      row('2026-08-25', '2026-08-25 09:00', { status: 'GREEN', decision: 'Easy' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [
+      { date: '2026-08-25', name: 'Easy 6 km', rpe: 2, executionStatus: 'ok' },
+    ], [
+      { date: '2026-08-26', values: { hrv: 66, rhr: 47 } },
+    ], { today: '2026-08-27' });
+    expect(result.entries[0].outcome).toMatchObject({
+      state: 'observed',
+      sessions: [expect.objectContaining({ name: 'Easy 6 km', executionStatus: 'ok' })],
+      reaction: { date: '2026-08-26', hrv: 66, rhr: 47, hrvDelta: 6, rhrDelta: 2 },
+    });
+    expect(result.outcomeCalibration).toMatchObject({ state: 'calibrating', sample: '1/3' });
+  });
+
+  it('nie udaje wyniku, gdy brakuje zapisu sesji lub następnego pomiaru', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00', { status: 'YELLOW', decision: 'Recovery' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [], [], { today: '2026-08-27' });
+    expect(result.entries[0].outcome).toMatchObject({ state: 'no-session-recorded', sessions: [], reaction: null });
+  });
+
+  it('oznacza dzisiejszą decyzję bez sesji jako pending', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-27', '2026-08-27 09:00', { status: 'GREEN', decision: 'Easy' }, 'Head Coach'),
+    ]);
+    expect(attachDecisionOutcomes(journal, [], [], { today: '2026-08-27' }).entries[0].outcome.state).toBe('pending');
+  });
+
+  it('kalibruje się dopiero po trzech zaobserwowanych decyzjach', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-23', '2026-08-23 09:00', { status: 'GREEN', decision: 'A' }, 'Head Coach'),
+      row('2026-08-24', '2026-08-24 09:00', { status: 'GREEN', decision: 'B' }, 'Head Coach'),
+      row('2026-08-25', '2026-08-25 09:00', { status: 'GREEN', decision: 'C' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [
+      { date: '2026-08-23' }, { date: '2026-08-24' }, { date: '2026-08-25' },
+    ], [], { today: '2026-08-27' });
+    expect(result.outcomeCalibration).toMatchObject({ state: 'ready', sample: '3/3' });
   });
 });

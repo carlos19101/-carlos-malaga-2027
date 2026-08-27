@@ -158,3 +158,56 @@ export function verifyDecisionStatus(feedDecision = {}, journalEntries = []) {
     }],
   };
 }
+
+function shiftedDayKey(dateValue, offset) {
+  const date = parseDate(dateValue);
+  if (!date) return null;
+  date.setDate(date.getDate() + offset);
+  return dayKey(date);
+}
+
+export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = [], options = {}) {
+  const today = dayKey(options.today || new Date());
+  const required = Number.isInteger(options.required) && options.required > 0 ? options.required : 3;
+  const sessionRows = Array.isArray(sessions) ? sessions : [];
+  const dayRows = Array.isArray(dailyDays) ? dailyDays : [];
+  const entries = (journal.entries || []).map((entry) => {
+    const matchedSessions = sessionRows.filter(({ date }) => dayKey(date) === entry.date);
+    const nextDate = shiftedDayKey(entry.date, 1);
+    const reactionDay = dayRows.find(({ date }) => dayKey(date) === nextDate) || null;
+    const evidenceValue = (field) => parseNumber(entry.evidence?.find((item) => item.field === field)?.value);
+    const nextHrv = parseNumber(reactionDay?.values?.hrv);
+    const nextRhr = parseNumber(reactionDay?.values?.rhr);
+    const hrvAtDecision = evidenceValue('hrv');
+    const rhrAtDecision = evidenceValue('rhr');
+    const state = matchedSessions.length
+      ? 'observed'
+      : today && entry.date >= today ? 'pending' : 'no-session-recorded';
+
+    return {
+      ...entry,
+      outcome: {
+        state,
+        sessions: matchedSessions,
+        reaction: reactionDay ? {
+          date: nextDate,
+          hrv: nextHrv,
+          rhr: nextRhr,
+          hrvDelta: nextHrv !== null && hrvAtDecision !== null ? nextHrv - hrvAtDecision : null,
+          rhrDelta: nextRhr !== null && rhrAtDecision !== null ? nextRhr - rhrAtDecision : null,
+        } : null,
+      },
+    };
+  });
+  const observed = entries.filter(({ outcome }) => outcome.state === 'observed').length;
+  return {
+    ...journal,
+    entries,
+    outcomeCalibration: {
+      state: observed >= required ? 'ready' : 'calibrating',
+      observed,
+      required,
+      sample: `${Math.min(observed, required)}/${required}`,
+    },
+  };
+}

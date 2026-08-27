@@ -28,7 +28,7 @@ import {
 } from './performance';
 import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
-import { buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
+import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
@@ -46,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.10';
+const APP_VERSION = 'FINAL 5.11';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -385,14 +385,24 @@ function journalEvidenceText(item) {
 
 function DecisionJournal({ journal, embedded = false }) {
   if (!journal.entries.length) return null;
+  const outcomeLabel = (outcome) => ({
+    observed: 'WYKONANIE ZAPISANE',
+    pending: 'OCZEKUJE NA WYKONANIE',
+    'no-session-recorded': 'BRAK ZAPISANEJ SESJI',
+  }[outcome?.state] || 'BRAK DANYCH');
+  const reactionText = (reaction) => {
+    if (!reaction) return 'reakcja następnego dnia: brak odczytu';
+    const delta = (value, unit) => value === null ? 'brak porównania' : `${value > 0 ? '+' : ''}${formatMetricNumber(value, { maximumFractionDigits: 0 })} ${unit}`;
+    return `reakcja następnego dnia: HRV ${delta(reaction.hrvDelta, 'ms')} · RHR ${delta(reaction.rhrDelta, 'bpm')}`;
+  };
   return (
     <section className={embedded ? 'embedded-section' : 'section-block'}>
       <div className="section-heading">
         <div><span className="eyebrow">DZIENNIK DECYZJI</span><h2>Co wiedział sztab</h2></div>
-        <span className="section-aside">dowody dostępne w chwili decyzji</span>
+        <span className="section-aside">wyniki · {journal.outcomeCalibration?.state === 'ready' ? 'obserwacja' : `kalibracja ${journal.outcomeCalibration?.sample || '0/3'}`}</span>
       </div>
       <div className="decision-journal-list">
-        {journal.entries.map((entry) => (
+        {journal.entries.slice(0, 4).map((entry) => (
           <article className="decision-journal-card" key={entry.id}>
             <div className="decision-journal-heading">
               <div><span>{formatDate(entry.timestamp, true)}</span><small>{entry.source || 'źródło niepodane'}</small></div>
@@ -404,10 +414,19 @@ function DecisionJournal({ journal, embedded = false }) {
               </div>
             ) : <small className="decision-no-evidence">Brak atomowych dowodów dostępnych przed tą decyzją.</small>}
             <p>{entry.recommendation || 'Status bez zapisanej rekomendacji.'}</p>
+            <div className="decision-evidence" aria-label="Obserwacja po decyzji">
+              <span>{outcomeLabel(entry.outcome)}</span>
+              {entry.outcome?.sessions?.map((session, index) => (
+                <span key={`${entry.id}-session-${index}`}>
+                  {session.name || session.type || 'sesja'} · RPE {formatMetricNumber(session.rpe, { maximumFractionDigits: 0 })} · {session.executionStatus ? `Execution ${session.executionStatus.toUpperCase()}` : 'Execution: brak danych'}
+                </span>
+              ))}
+              {entry.outcome?.state === 'observed' ? <span>{reactionText(entry.outcome.reaction)}</span> : null}
+            </div>
           </article>
         ))}
       </div>
-      <p className="method-note">DOWODY są ograniczone czasowo: późniejszy pomiar z tego samego dnia nie jest dopisywany wstecz do wcześniejszej decyzji. Tekst rekomendacji pozostaje cytatem ze źródła.</p>
+      <p className="method-note">DOWODY są ograniczone czasowo: późniejszy pomiar z tego samego dnia nie jest dopisywany wstecz do wcześniejszej decyzji. Wyniki opisują fakty po decyzji, nie oceniają jeszcze jej skuteczności; przed trzema zapisanymi wykonaniami pozostają w kalibracji.</p>
     </section>
   );
 }
@@ -699,11 +718,11 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const matrix = useMemo(() => raceGoalMatrix(), []);
   const verifierEndDate = v(row, 'date', '') || now;
   const daily = useMemo(() => computeDailyMetrics(raw, verifierEndDate), [raw, verifierEndDate]);
-  const journal = useMemo(() => buildDecisionJournal(raw, { limit: 4 }), [raw]);
+  const journalBase = useMemo(() => buildDecisionJournal(raw), [raw]);
   const decisionStatusVerification = useMemo(() => verifyDecisionStatus({
     date: v(row, 'date', ''),
     status: v(row, 'status', ''),
-  }, journal.entries), [row, journal]);
+  }, journalBase.entries), [row, journalBase]);
   const computedMetrics = useMemo(() => computeVerifierMetrics(
     verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
   ), [log, raw, verifierEndDate]);
@@ -729,6 +748,20 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       appliesToday: /(^|\s)easy(?:\s|$)/.test(normalize(todayPlannedSession)),
     };
   }, [log, plan, todayPlannedSession]);
+  const journal = useMemo(() => {
+    const sessions = sortedRows(log, 'asc').map((logRow) => {
+      const planRow = planForLogRow(plan, logRow);
+      const sessionExecution = isRunLogRow(logRow) ? computeExecution(executionInput(logRow, planRow)) : null;
+      return {
+        date: v(logRow, 'date', ''),
+        name: v(logRow, 'logName', '') || v(planRow, 'planMorning', v(planRow, 'planSession', '')),
+        type: resolveLogSession(logRow, A.logType),
+        rpe: v(logRow, 'logRpe', ''),
+        executionStatus: sessionExecution?.status || null,
+      };
+    });
+    return attachDecisionOutcomes(journalBase, sessions, daily.days, { today: now });
+  }, [journalBase, log, plan, daily.days, now]);
 
   const baseDecision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
