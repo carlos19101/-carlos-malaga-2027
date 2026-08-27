@@ -28,6 +28,7 @@ import {
 } from './performance';
 import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeLoadMap, parseSessionMinutes } from './loadMap';
+import { computeWeeklySnapshot } from './weeklySnapshot';
 import { computeDailyMetrics } from './dailyMetrics';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
@@ -190,6 +191,23 @@ function verifierTrainingRecords(rows) {
     pain: v(row, 'logPain', ''),
     legFatigue: v(row, 'logLegFatigue', ''),
   }));
+}
+
+function weeklySnapshotRecords(logRows, planRows) {
+  return (logRows || []).map((logRow) => {
+    const planRow = planForLogRow(planRows, logRow);
+    return {
+      date: v(logRow, 'date', ''),
+      timestamp: logTimestamp(logRow),
+      type: resolveLogSession(logRow, A.logType),
+      name: v(logRow, 'logName', ''),
+      km: v(logRow, 'logDistance', ''),
+      duration: v(logRow, 'logDuration', ''),
+      rpe: v(logRow, 'logRpe', ''),
+      srpe: v(logRow, 'logSrpe', ''),
+      execution: isRunLogRow(logRow) ? computeExecution(executionInput(logRow, planRow)) : null,
+    };
+  });
 }
 
 function verifierWeightRecords(rows) {
@@ -606,6 +624,54 @@ function DashboardDisclosure({ eyebrow, title, summary, children, defaultOpen = 
   );
 }
 
+function snapshotDuration(minutes) {
+  if (minutes === null || minutes === undefined || !Number.isFinite(Number(minutes))) return '—';
+  const total = Math.max(0, Math.round(Number(minutes)));
+  const hours = Math.floor(total / 60);
+  return hours ? `${hours} h ${total % 60} min` : `${total} min`;
+}
+
+function WeeklySnapshot({ snapshot }) {
+  if (snapshot.state === 'missing') {
+    return <p className="method-note">Brak zapisanych aktywności z ostatnich 7 dni. Snapshot nie zastępuje braku danych zerem.</p>;
+  }
+  const { activity, execution, internal, dataQuality } = snapshot;
+  const executionValue = execution.state === 'data-error' ? 'BŁĄD DANYCH'
+    : execution.observedRuns ? `${execution.observedRuns}/${execution.eligibleRuns}` : '';
+  const executionNote = execution.state === 'data-error'
+    ? `${execution.dataErrorRuns} sesja/e z niespójnymi czasami atomowymi`
+    : execution.observedRuns
+      ? `pełne dane dla ${execution.observedRuns} z ${execution.eligibleRuns} biegów`
+      : activity.runningSessions ? 'brak kompletnych danych atomowych' : 'brak biegów';
+  const outcomeValue = execution.observedRuns
+    ? `OK ${execution.outcomes.ok} · OVER ${execution.outcomes.over} · UNDER ${execution.outcomes.under}`
+    : '';
+  const internalValue = internal.state === 'ready' ? 'GOTOWE'
+    : internal.state === 'unreliable' ? 'NIEPEŁNE' : '';
+  const internalNote = internal.state === 'ready'
+    ? `${internal.activeSessions} aktywnych sesji z RPE i sRPE`
+    : `RPE 0: ${internal.rpeZero} · brak RPE: ${internal.missingRpe} · brak sRPE: ${internal.missingSrpe}`;
+  return (
+    <>
+      <div className="load-map-intro weekly-snapshot-intro">
+        <strong>Co faktycznie zostało zapisane</strong>
+        <span>To podsumowanie wykonania i jakości danych, a nie nowy werdykt treningowy.</span>
+      </div>
+      <div className="load-grid weekly-snapshot-grid">
+        <StatCard label="BIEGANIE" value={activity.runningDistanceState === 'missing' ? '' : formatMetricNumber(activity.runningKm, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatRunCount(activity.runningSessions)} · ${activity.runningDistanceState === 'partial' ? 'część dystansów nieuzupełniona' : 'komplet dystansów'}`} />
+        <StatCard label="CZAS BIEGU" value={activity.runningDurationState === 'ready' ? snapshotDuration(activity.runningMinutes) : ''} note={activity.runningDurationState === 'partial' ? 'część czasów nieuzupełniona' : `${activity.activeDays}/7 dni z aktywnością`} />
+        <StatCard label="AKTYWNOŚĆ" value={`${activity.activeDays}/7`} unit="dni" note={`${activity.sessions} zapisanych aktywności`} />
+        <StatCard label="BOKS / SIŁA" value={`${activity.boxingSessions} / ${activity.strengthSessions}`} note="liczone osobno, bez przeliczenia na kilometry" />
+        <StatCard label="EXECUTION" value={executionValue} note={executionNote} tone={execution.state === 'data-error' ? 'red' : execution.state === 'partial' ? 'yellow' : ''} />
+        <StatCard label="WYNIK EXECUTION" value={outcomeValue} note={execution.observedRuns ? 'wynik tylko dla sesji z danymi atomowymi' : 'brak oceny wykonania'} />
+        <StatCard label="RPE / sRPE" value={internalValue} note={internalNote} tone={internal.state === 'unreliable' ? 'yellow' : ''} />
+        <StatCard label="INTEGRALNOŚĆ" value={dataQuality.undatedRows || dataQuality.runsWithoutDistance ? 'SPRAWDŹ' : 'OK'} note={dataQuality.undatedRows ? `bez daty: ${dataQuality.undatedRows}` : dataQuality.runsWithoutDistance ? `biegi bez dystansu: ${dataQuality.runsWithoutDistance}` : 'wszystkie uwzględnione wiersze mają datę i dystans'} tone={dataQuality.undatedRows || dataQuality.runsWithoutDistance ? 'yellow' : 'green'} />
+      </div>
+      <p className="method-note">Snapshot nie pokazuje średniej realizacji ani trendu „formy”, dopóki próbka nie jest reprezentatywna. Session Execution opisuje tylko biegi z pełnymi atomowymi czasami HR.</p>
+    </>
+  );
+}
+
 function DashboardSignal({ label, value, unit = '', note = '', tone = '' }) {
   const shown = value !== null && value !== undefined && !/^(?:|—|–|-)$/.test(String(value).trim());
   return (
@@ -796,6 +862,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
   const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
   const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
+  const weeklySnapshot = useMemo(() => computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now), [log, plan, now]);
   const easyExecutionPattern = useMemo(() => {
     const history = sortedRows(log, 'asc').filter(isRunLogRow).map((logRow) => {
       const planRow = planForLogRow(plan, logRow);
@@ -1030,6 +1097,10 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
                 <StatCard label="BÓL" value={formatMetricNumber(v(row, 'pain', ''), { maximumFractionDigits: 1 })} unit="/10" note="subiektywnie" tone={metric(v(row, 'pain', '')) >= 4 ? 'red' : ''} />
               </div>
             </div>
+          </DashboardDisclosure>
+
+          <DashboardDisclosure eyebrow="TYDZIEŃ" title="Podsumowanie 7 dni" summary={weeklySnapshot.state === 'missing' ? 'brak zapisanych aktywności' : `${formatMetricNumber(weeklySnapshot.activity.runningKm, { maximumFractionDigits: 2 })} km · ${formatRunCount(weeklySnapshot.activity.runningSessions)}`}>
+            <WeeklySnapshot snapshot={weeklySnapshot} />
           </DashboardDisclosure>
 
           <DashboardDisclosure eyebrow="LOAD MAP" title="Wielowymiarowa mapa obciążenia" summary={loadMap.state === 'missing' ? 'brak danych z Training Log' : `${formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2 })} km · ${formatRunCount(loadMap.running.count7)} / 7 dni`}>
