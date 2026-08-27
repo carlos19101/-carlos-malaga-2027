@@ -29,6 +29,7 @@ import {
 import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeDailyMetrics } from './dailyMetrics';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
+import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
@@ -46,7 +47,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.14';
+const APP_VERSION = 'FINAL 5.15';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -201,12 +202,7 @@ function planForLogRow(planRows, logRow) {
 }
 
 function logTimestamp(row) {
-  const date = rowDate(row);
-  const match = String(v(row, 'logTime', '')).trim().match(/^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/);
-  if (!date || !match) return null;
-  const hours = Number(match[1]);
-  if (hours > 23) return null;
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, Number(match[2]), Number(match[3] || 0));
+  return parseTrainingLogTimestamp(v(row, 'date', ''), v(row, 'logTime', ''));
 }
 
 function executionInput(logRow, planRow) {
@@ -393,6 +389,16 @@ function DecisionJournalStatus({ issues = [] }) {
     <div className="data-quality-banner verifier-warning" role="status">
       <strong>DZIENNIK DECYZJI — wpis sztabu wymaga uzupełnienia.</strong>
       {incomplete.slice(0, 3).map((item) => <span key={item.id}>{item.date}: {item.detail}</span>)}
+    </div>
+  );
+}
+
+function TrainingLogTimingStatus({ issues = [] }) {
+  if (!issues.length) return null;
+  return (
+    <div className="data-quality-banner verifier-warning" role="status">
+      <strong>TRAINING LOG — uzupełnij godziny sesji.</strong>
+      {issues.slice(0, 3).map((item) => <span key={item.id}>{item.detail}</span>)}
     </div>
   );
 }
@@ -750,6 +756,11 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const matrix = useMemo(() => raceGoalMatrix(), []);
   const verifierEndDate = v(row, 'date', '') || now;
   const daily = useMemo(() => computeDailyMetrics(raw, verifierEndDate), [raw, verifierEndDate]);
+  const logTimingIssues = useMemo(() => auditTrainingLogTimes(log.map((logRow) => ({
+    date: v(logRow, 'date', ''),
+    time: v(logRow, 'logTime', ''),
+    name: v(logRow, 'logName', resolveLogSession(logRow, A.logType)),
+  }))), [log]);
   const journalBase = useMemo(() => buildDecisionJournal(raw), [raw]);
   const decisionStatusVerification = useMemo(() => verifyDecisionStatus({
     date: v(row, 'date', ''),
@@ -916,6 +927,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         <VerifierBanner mismatches={verifierMismatches} />
         <DailyMetricsStatus daily={daily} showMethod={false} />
         <DecisionJournalStatus issues={journalBase.issues} />
+        <TrainingLogTimingStatus issues={logTimingIssues} />
       </div>
 
       <section className="section-block dashboard-command-section">

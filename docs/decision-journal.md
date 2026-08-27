@@ -20,6 +20,8 @@ Prawidłowy wpis sztabu zawiera parę `Coach_Status` oraz `Coach_Decision`. Jeś
 
 Sesję traktujemy jako wykonanie po decyzji tylko wtedy, gdy `Training Log.Time` jest czytelne i wypada po `Raw_Data.Timestamp` decyzji tego samego dnia. Sesja wcześniejsza albo bez godziny pozostaje widoczna, ale nie zasila kalibracji reakcji decyzji. Dzięki temu aplikacja nie myli zwykłej zbieżności dat z następstwem decyzji.
 
+Dashboard raportuje też brakującą lub nieczytelną godzinę `Time` w `Training Log`, aby problem dało się poprawić w źródle danych, zanim zacznie blokować kolejne obserwacje.
+
 ## Audyt
 
 ```bash
