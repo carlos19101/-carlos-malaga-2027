@@ -82,31 +82,28 @@ describe('buildDecisionJournal', () => {
     expect(result.issues).toContainEqual(expect.objectContaining({ id: 'invalid-evidence-rhr' }));
   });
 
-  it('pomija zwykłe rekordy i respektuje limit', () => {
+  it('pomija zwykłe rekordy oraz notatkę bez statusu i respektuje limit', () => {
     const result = buildDecisionJournal([
       row('2026-08-23', '2026-08-23 08:00', { hrv: 60 }),
-      row('2026-08-24', '2026-08-24 08:00', { decision: 'A' }, 'Head Coach'),
-      row('2026-08-25', '2026-08-25 08:00', { decision: 'B' }, 'Head Coach'),
+      row('2026-08-24', '2026-08-24 08:00', { decision: 'notatka post-run' }, 'Head Coach'),
+      row('2026-08-25', '2026-08-25 08:00', { status: 'GREEN', decision: 'B' }, 'Head Coach'),
     ], { limit: 1 });
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0].recommendation).toBe('B');
   });
 
-  it('oznacza status albo rekomendację bez pary jako niekompletną decyzję', () => {
+  it('oznacza status bez rekomendacji jako niekompletną decyzję, ale nie myli notatki z decyzją', () => {
     const result = buildDecisionJournal([
       row('2026-08-24', '2026-08-24 08:00', { status: 'YELLOW' }, 'Head Coach'),
       row('2026-08-25', '2026-08-25 08:00', { decision: 'Easy' }, 'Head Coach'),
     ]);
-    expect(result.entries).toHaveLength(2);
-    expect(result.issues.filter(({ id }) => id.startsWith('incomplete-decision-'))).toHaveLength(2);
-    expect(result.issues.map(({ detail }) => detail)).toEqual(expect.arrayContaining([
-      expect.stringContaining('brak Coach_Decision'),
-      expect.stringContaining('brak Coach_Status'),
-    ]));
+    expect(result.entries).toHaveLength(1);
+    expect(result.issues.filter(({ id }) => id.startsWith('incomplete-decision-'))).toHaveLength(1);
+    expect(result.issues[0].detail).toContain('brak Coach_Decision');
   });
 
   it('raportuje decyzję bez daty', () => {
-    const result = buildDecisionJournal([row('', '2026-08-25 08:00', { decision: 'B' }, 'Head Coach')]);
+    const result = buildDecisionJournal([row('', '2026-08-25 08:00', { status: 'GREEN', decision: 'B' }, 'Head Coach')]);
     expect(result.entries).toEqual([]);
     expect(result.issues).toContainEqual(expect.objectContaining({ id: 'undated-decision', severity: 'error' }));
   });

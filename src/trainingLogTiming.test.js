@@ -26,4 +26,10 @@ describe('auditTrainingLogTimes', () => {
       expect.stringContaining('nieczytelna godzina Time'),
     ]));
   });
+
+  it('nie wymaga godziny dla wpisu, który nie jest sesją ocenianą chronologicznie', () => {
+    expect(auditTrainingLogTimes([
+      { date: '2026-08-24', time: '', name: 'Recovery', requiresTimestamp: false },
+    ])).toEqual([]);
+  });
 });

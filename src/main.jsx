@@ -47,7 +47,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.16';
+const APP_VERSION = 'FINAL 5.17';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -760,6 +760,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     date: v(logRow, 'date', ''),
     time: v(logRow, 'logTime', ''),
     name: v(logRow, 'logName', resolveLogSession(logRow, A.logType)),
+    requiresTimestamp: isRunLogRow(logRow),
   }))), [log]);
   const journalBase = useMemo(() => buildDecisionJournal(raw), [raw]);
   const decisionStatusVerification = useMemo(() => verifyDecisionStatus({

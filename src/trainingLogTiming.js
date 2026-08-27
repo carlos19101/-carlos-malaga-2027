@@ -11,6 +11,7 @@ export function parseTrainingLogTimestamp(dateValue, timeValue) {
 
 export function auditTrainingLogTimes(entries = []) {
   return (Array.isArray(entries) ? entries : []).flatMap((entry, index) => {
+    if (entry.requiresTimestamp === false) return [];
     if (parseTrainingLogTimestamp(entry.date, entry.time)) return [];
     const rawTime = String(entry.time ?? '').trim();
     return [{

@@ -100,7 +100,9 @@ export function buildDecisionJournal(rawRows = [], options = {}) {
   const entries = rows.flatMap((row, rowIndex) => {
     const recommendation = String(exactValue(row, FIELDS.decision, '') || '').trim();
     const rawStatus = String(exactValue(row, FIELDS.status, '') || '').trim();
-    if (!recommendation && !rawStatus) return [];
+    // Coach_Status is the explicit marker of a daily decision. A text-only Coach_Decision
+    // may be a post-run note and must not be promoted to a decision retrospectively.
+    if (!rawStatus) return [];
     const rawDate = exactValue(row, FIELDS.date, '');
     const date = dayKey(rawDate);
     if (!date) {
@@ -110,12 +112,12 @@ export function buildDecisionJournal(rawRows = [], options = {}) {
     const rawTimestamp = exactValue(row, FIELDS.timestamp, '');
     const timestamp = parseRawTimestamp(rawTimestamp) || parseDate(rawDate);
     if (!timestamp) return [];
-    if (!rawStatus || !recommendation) {
+    if (!recommendation) {
       issues.push({
         id: `incomplete-decision-${date}-${timestamp.getTime()}-${rowIndex}`,
         severity: 'warning',
         date,
-        detail: `Decyzja sztabu jest niekompletna: ${!rawStatus ? 'brak Coach_Status' : 'brak Coach_Decision'}.`,
+        detail: 'Decyzja sztabu jest niekompletna: brak Coach_Decision.',
       });
     }
     const evidence = Object.entries(DECISION_EVIDENCE_FIELDS).map(([field, definition]) => (
