@@ -95,11 +95,16 @@ describe('Google Sheets service account', () => {
 
   it('import TCX zapisuje tylko ciągły blok atomowy dopasowanej sesji', async () => {
     const { privateKey } = keyPair();
-    const headers = [
-      'Date', 'Session_ID', 'HR_Target_Min_bpm', 'HR_Target_Max_bpm',
+    const headers = Array.from({ length: 43 }, (_, index) => `Column_${index + 1}`);
+    headers[0] = 'Date';
+    headers[23] = 'Session_ID';
+    headers.splice(35, 6,
+      'HR_Target_Min_bpm', 'HR_Target_Max_bpm',
       'Time_In_Target_s', 'Time_Above_Target_s', 'Time_Below_Target_s', 'HR_Analyzed_Duration_s',
-    ];
-    const row = ['2026-08-25', '2026-08-25-run-01', 145, 158, '', '', '', ''];
+    );
+    const row = Array(43).fill('');
+    row[0] = '2026-08-25';
+    row[23] = '2026-08-25-run-01';
     const envelope = createTcxImport(`
       <Lap><Track>
         <Trackpoint><Time>2026-08-25T18:00:00Z</Time><HeartRateBpm><Value>150</Value></HeartRateBpm></Trackpoint>
@@ -111,7 +116,7 @@ describe('Google Sheets service account', () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(jsonResponse(200, { access_token: 'tcx-token', expires_in: 3600 }))
       .mockResolvedValueOnce(jsonResponse(200, { values: [headers, row] }))
-      .mockResolvedValueOnce(jsonResponse(200, { responses: [{ updatedRange: "'Training Log'!C2:H2" }] }));
+      .mockResolvedValueOnce(jsonResponse(200, { responses: [{ updatedRange: "'Training Log'!AJ2:AO2" }] }));
 
     const result = await updateTcxImport(envelope, {
       env: {
@@ -121,12 +126,12 @@ describe('Google Sheets service account', () => {
       },
       fetchImpl,
     });
-    expect(result).toMatchObject({ action: 'update', rowNumber: 2, range: 'C2:H2' });
+    expect(result).toMatchObject({ action: 'update', rowNumber: 2, range: 'AJ2:AO2' });
     expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
     const writeBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(writeBody).toMatchObject({
       valueInputOption: 'RAW',
-      data: [{ range: "'Training Log'!C2:H2", values: [[145, 158, 1, 0, 0, 1]] }],
+      data: [{ range: "'Training Log'!AJ2:AO2", values: [[145, 158, 1, 0, 0, 1]] }],
     });
   });
 });
