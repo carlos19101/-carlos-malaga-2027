@@ -164,6 +164,14 @@ function formatNumericDate(value) {
   return new Intl.DateTimeFormat('pl-PL', { day: '2-digit', month: '2-digit' }).format(date);
 }
 
+function formatRunCount(value) {
+  const count = Math.max(0, Math.round(Number(value) || 0));
+  if (count === 1) return '1 bieg';
+  const lastTwo = count % 100;
+  const last = count % 10;
+  return `${count} ${last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? 'biegi' : 'biegów'}`;
+}
+
 function sourceTime(feedRow) {
   return parseDate(v(feedRow, 'lastSynced', '')) || parseDate(v(feedRow, 'date', ''));
 }
@@ -1024,13 +1032,13 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
             </div>
           </DashboardDisclosure>
 
-          <DashboardDisclosure eyebrow="LOAD MAP" title="Wielowymiarowa mapa obciążenia" summary={loadMap.state === 'missing' ? 'brak danych z Training Log' : `${formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2 })} km · ${loadMap.running.count7} biegów / 7 dni`}>
+          <DashboardDisclosure eyebrow="LOAD MAP" title="Wielowymiarowa mapa obciążenia" summary={loadMap.state === 'missing' ? 'brak danych z Training Log' : `${formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2 })} km · ${formatRunCount(loadMap.running.count7)} / 7 dni`}>
             <div className="load-map-intro">
               <strong>Bez jednej liczby Master Load</strong>
               <span>Objętość, długi bieg, zmiana dystansu, sRPE, boks/siła i odpowiedź mechaniczna są oceniane osobno.</span>
             </div>
             <div className="load-grid load-map-grid">
-              <StatCard label="BIEGANIE · 7D" value={loadMap.running.state === 'missing' ? '' : formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${loadMap.running.count7} biegów · średnio ${formatMetricNumber(loadMap.running.averageDistance7, { maximumFractionDigits: 2 })} km`} />
+              <StatCard label="BIEGANIE · 7D" value={loadMap.running.state === 'missing' ? '' : formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatRunCount(loadMap.running.count7)} · średnio ${formatMetricNumber(loadMap.running.averageDistance7, { maximumFractionDigits: 2 })} km`} />
               <StatCard label="BIEGANIE · 28D" value={loadMap.running.state === 'missing' ? '' : formatMetricNumber(loadMap.running.km28, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={loadMap.running.state === 'ready' ? 'pełne 28 dni historii' : `KALIBRACJA ${Math.min(loadMap.running.historyDays, 28)}/28`} />
               <StatCard label="DŁUGI BIEG" value={formatMetricNumber(loadMap.longRun.latestKm, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`najdłuższy 30d: ${formatMetricNumber(loadMap.longRun.longest30Km, { maximumFractionDigits: 2 })} km · udział 7d: ${formatMetricNumber(loadMap.longRun.share7Pct, { maximumFractionDigits: 1 })}%`} />
               <StatCard label="ZMIANA DYSTANSU SESJI" value={loadMap.sessionSpike.valuePct === null ? '' : `${loadMap.sessionSpike.valuePct >= 0 ? '+' : ''}${formatMetricNumber(loadMap.sessionSpike.valuePct, { maximumFractionDigits: 1 })}%`} note={loadMap.sessionSpike.valuePct === null ? '' : `względem wcześniejszego maksimum ${formatMetricNumber(loadMap.sessionSpike.referenceKm, { maximumFractionDigits: 2 })} km · historia ${loadMap.sessionSpike.historyDays}/30`} />

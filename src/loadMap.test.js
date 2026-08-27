@@ -49,6 +49,15 @@ describe('computeLoadMap', () => {
     expect(result.sessionSpike).toMatchObject({ valuePct: null, state: 'no-reference', confidence: 'none' });
   });
 
+  it('nie pokazuje ujemnego zera przy praktycznie identycznym dystansie', () => {
+    const result = computeLoadMap([
+      { date: '2026-08-23', type: 'Bieg', km: 6.80067, duration: '50:00', rpe: 2, srpe: 100 },
+      { date: '2026-08-25', type: 'Bieg', km: 6.8, duration: '50:00', rpe: 2, srpe: 100 },
+    ], '2026-08-25');
+    expect(result.sessionSpike.valuePct).toBe(0);
+    expect(Object.is(result.sessionSpike.valuePct, -0)).toBe(false);
+  });
+
   it('pełne 30 dni historii kończy kalibrację bez progu liczby treningów', () => {
     const result = computeLoadMap([
       { date: '2026-07-27', type: 'Bieg', km: 5, duration: '40:00', rpe: 2, srpe: 80 },

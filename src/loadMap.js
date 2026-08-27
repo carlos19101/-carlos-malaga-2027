@@ -162,9 +162,12 @@ export function computeLoadMap(inputRows = [], today = new Date()) {
   const longest7Km = runs7.length ? Math.max(...runs7.map(({ km }) => km)) : null;
   const km7 = sum(runs7, 'km');
   const km28 = sum(runs28, 'km');
-  const sessionSpikePct = latestRun && previousLongest30 !== null && previousLongest30 > 0
+  const rawSessionSpikePct = latestRun && previousLongest30 !== null && previousLongest30 > 0
     ? Number((((latestRun.km / previousLongest30) - 1) * 100).toFixed(2))
     : null;
+  const sessionSpikePct = rawSessionSpikePct !== null && Math.abs(rawSessionSpikePct) < 0.05
+    ? 0
+    : rawSessionSpikePct;
   const spikeHistoryDays = latestRun ? historyDays(previousRuns, latestRun.day, 30) : 0;
   const latestMechanical = [...sessions].reverse().find(({ pain, legFatigue }) => pain !== null || legFatigue !== null) || null;
   const boxing7 = sessions7.filter(({ type, name }) => includesAny(`${type} ${name}`, ['boks', 'boxing'])).length;
