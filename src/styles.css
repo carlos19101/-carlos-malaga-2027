@@ -211,6 +211,8 @@ main {
 .decision-evidence { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
 .decision-evidence span { padding: 6px 9px; border-radius: 999px; background: rgba(255,255,255,.055); color: #c8ced9; font-size: .66rem; font-variant-numeric: tabular-nums; }
 .decision-journal-card > p { margin: 15px 0 0; color: #dfe3ea; font-size: .82rem; line-height: 1.55; overflow-wrap: anywhere; }
+.response-monitor { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--line); }
+.response-monitor-grid { margin-top: 16px; }
 
 .race-hero {
   position: relative;

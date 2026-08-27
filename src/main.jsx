@@ -29,6 +29,7 @@ import {
 import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeLoadMap, parseSessionMinutes } from './loadMap';
 import { computeWeeklySnapshot } from './weeklySnapshot';
+import { computePerformanceResponse } from './performanceResponse';
 import { computeDailyMetrics } from './dailyMetrics';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
@@ -503,6 +504,33 @@ function DecisionJournal({ journal, embedded = false }) {
   );
 }
 
+function PerformanceResponseMonitor({ monitor }) {
+  const responseValue = monitor.state === 'observed' ? 'OBSERWACJE ZEBRANE'
+    : monitor.state === 'calibrating' ? `KALIBRACJA ${monitor.calibration.sample}` : '';
+  const responseNote = monitor.state === 'observed'
+    ? `${monitor.completePairs} kompletnych par decyzja → sesja → następny poranek`
+    : 'potrzebne są sesja po decyzji oraz HRV i RHR następnego dnia';
+  const hasObservedSession = monitor.observedSessions > 0;
+  const missingReaction = monitor.partialReaction + monitor.missingReaction;
+  const executionValue = monitor.execution.observed
+    ? `OK ${monitor.execution.ok} · OVER ${monitor.execution.over} · UNDER ${monitor.execution.under}` : '';
+  return (
+    <section className="response-monitor" aria-label="Monitor odpowiedzi organizmu">
+      <div className="load-map-intro">
+        <strong>Odpowiedź organizmu po sesji</strong>
+        <span>Łączy wyłącznie decyzję, wykonaną później sesję i następny poranny odczyt.</span>
+      </div>
+      <div className="load-grid response-monitor-grid">
+        <StatCard label="PARY ODPOWIEDZI" value={responseValue} note={responseNote} />
+        <StatCard label="SESJE PO DECYZJI" value={monitor.observedSessions ? formatMetricNumber(monitor.observedSessions, { maximumFractionDigits: 0 }) : ''} note="sesje zapisane po czasie werdyktu sztabu" />
+        <StatCard label="BRAK REAKCJI" value={hasObservedSession ? formatMetricNumber(missingReaction, { maximumFractionDigits: 0 }) : ''} note={!hasObservedSession ? 'brak sesji po decyzji do połączenia z następnym porankiem' : missingReaction ? `częściowy odczyt: ${monitor.partialReaction} · brak poranka: ${monitor.missingReaction}` : 'wszystkie zapisane pary mają HRV i RHR następnego dnia'} tone={!hasObservedSession ? '' : missingReaction ? 'yellow' : 'green'} />
+        <StatCard label="EXECUTION W PARACH" value={executionValue} note={monitor.execution.observed ? 'tylko sesje z atomowymi czasami HR' : 'brak kompletnego Execution w parach'} />
+      </div>
+      <p className="method-note">{monitor.methodology} Do zebrania {monitor.contract.requiredPairs} kompletnych par nie oceniamy skuteczności decyzji ani nie tworzymy automatycznej korekty planu.</p>
+    </section>
+  );
+}
+
 function executionDuration(value) {
   const seconds = Math.max(0, Math.round(Number(value) || 0));
   const minutes = Math.floor(seconds / 60);
@@ -894,6 +922,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     });
     return attachDecisionOutcomes(journalBase, sessions, daily.days, { today: now });
   }, [journalBase, log, plan, daily.days, now]);
+  const performanceResponse = useMemo(() => computePerformanceResponse(journal), [journal]);
 
   const baseDecision = useMemo(() => resolveCoachDecision({
     sheetStatus: v(row, 'status', ''),
@@ -1134,6 +1163,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
 
           <DashboardDisclosure eyebrow="PLAYBOOK" title="Decyzje, wykonanie i reakcje" summary={`${journal.entries.length} zapisanych snapshotów`}>
             <DecisionJournal journal={journal} embedded />
+            <PerformanceResponseMonitor monitor={performanceResponse} />
           </DashboardDisclosure>
 
           <DashboardDisclosure eyebrow="CEL GŁÓWNY" title="Málaga 07.03.2027" summary={v(row, 'phase', '—')}>
