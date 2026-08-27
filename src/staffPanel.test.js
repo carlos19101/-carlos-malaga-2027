@@ -98,4 +98,13 @@ describe('buildStaffPanel', () => {
     expect(running.status).toBe('INFO');
     expect(running.interpretation).toContain('nie jest automatycznie dzień wolny');
   });
+
+  it('odróżnia niewiarygodne RPE od zwykłej kalibracji historii', () => {
+    const panel = buildStaffPanel(input({
+      load: { km7: 13.6, srpe7: 0, srpe28: 0, loadRatio: null, ratioStatus: 'unreliable-internal-load', calibrationDays: '28/28' },
+    }));
+    const load = panel.core.find(({ id }) => id === 'load');
+    expect(load).toMatchObject({ status: 'INCOMPLETE' });
+    expect(load.evidence).toContainEqual(expect.objectContaining({ label: 'Load ratio', value: 'WYŁĄCZONE — RPE/sRPE niepełne' }));
+  });
 });

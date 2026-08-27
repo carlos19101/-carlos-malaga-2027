@@ -241,7 +241,11 @@ export function integrateCoachDecision({
   if (pain === null || doms === null || fatigue === null) limitations.push('brak pełnej deklaracji bólu, DOMS lub zmęczenia');
   if (daily?.state !== 'ready') limitations.push(`Daily Metrics: ${daily?.state || 'brak danych'}`);
   if (execution?.status) evidence.push(`OSTATNIA SESJA: ${execution.status}`);
-  if (load?.loadRatio === null || load?.loadRatio === undefined) limitations.push(`Load ratio: ${load?.calibrationDays || 'kalibracja'}`);
+  if (load?.loadRatio === null || load?.loadRatio === undefined) {
+    limitations.push(load?.ratioStatus === 'unreliable-internal-load'
+      ? 'Load ratio: wyłączone — niepełne RPE/sRPE'
+      : `Load ratio: ${load?.calibrationDays || 'kalibracja'}`);
+  }
   else evidence.push(`LOAD RATIO: ${Number(load.loadRatio).toFixed(2)}`);
 
   const easyPattern = patterns.easyExecution;

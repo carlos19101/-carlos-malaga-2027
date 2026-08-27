@@ -548,6 +548,10 @@ main {
 .stat-card > small { color: var(--muted); line-height: 1.4; font-size: .72rem; }
 .tone-red { border-color: rgba(239,72,103,.35); }
 .load-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+.load-map-intro { margin-bottom: 14px; padding: 15px 17px; display: grid; gap: 5px; border: 1px solid rgba(88,197,232,.16); border-radius: 18px; background: rgba(88,197,232,.045); }
+.load-map-intro strong { color: #e9edf5; font-size: .8rem; }
+.load-map-intro span { color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.load-map-grid .stat-card > strong { overflow-wrap: anywhere; font-size: clamp(1.35rem, 2.8vw, 2.2rem); }
 
 .last-run-card {
   padding: 24px;

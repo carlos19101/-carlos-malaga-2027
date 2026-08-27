@@ -105,6 +105,19 @@ describe('coach decision', () => {
     expect(result.engineAdjustments).toEqual([]);
   });
 
+  it('niepełne RPE wyłącza load ratio i pozostawia jawne ograniczenie metodologiczne', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({
+      decision,
+      integrity: { validationOk: true, freshnessState: 'fresh' },
+      recovery: { pain: 0, doms: 2, fatigue: 2 },
+      daily: { state: 'ready', bridgeSignal: { active: false } },
+      load: { loadRatio: null, ratioStatus: 'unreliable-internal-load', calibrationDays: '28/28' },
+    });
+    expect(result.limitations).toContain('Load ratio: wyłączone — niepełne RPE/sRPE');
+    expect(result.evidence).not.toEqual(expect.arrayContaining([expect.stringContaining('LOAD RATIO:')]));
+  });
+
   it('aktywny wzorzec trzech easy ogranicza kolejne easy, ale nie inną jednostkę', () => {
     const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Wykonaj plan.' });
     const pattern = { state: 'active', active: true, appliesToday: true, sample: '3/3', required: 3, thresholdPct: 40 };

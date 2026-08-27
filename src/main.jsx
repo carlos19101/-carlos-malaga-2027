@@ -27,6 +27,7 @@ import {
   sourceFreshness,
 } from './performance';
 import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
+import { computeLoadMap, parseSessionMinutes } from './loadMap';
 import { computeDailyMetrics } from './dailyMetrics';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
@@ -47,7 +48,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.19';
+const APP_VERSION = 'FINAL 6.0';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -170,9 +171,16 @@ function sourceTime(feedRow) {
 function verifierTrainingRecords(rows) {
   return rows.map((row) => ({
     date: v(row, 'date', ''),
+    timestamp: logTimestamp(row),
     type: resolveLogSession(row, A.logType),
+    name: v(row, 'logName', ''),
     km: v(row, 'logDistance', ''),
+    duration: v(row, 'logDuration', ''),
+    minutes: parseSessionMinutes(v(row, 'logDuration', '')),
+    rpe: v(row, 'logRpe', ''),
     srpe: v(row, 'logSrpe', ''),
+    pain: v(row, 'logPain', ''),
+    legFatigue: v(row, 'logLegFatigue', ''),
   }));
 }
 
@@ -435,7 +443,7 @@ function DecisionJournal({ journal, embedded = false }) {
   return (
     <section className={embedded ? 'embedded-section' : 'section-block'}>
       <div className="section-heading">
-        <div><span className="eyebrow">DZIENNIK DECYZJI</span><h2>Co wiedział sztab</h2></div>
+        <div><span className="eyebrow">CARLOS PLAYBOOK · V1</span><h2>Co wiedział sztab i co stało się później</h2></div>
         <span className="section-aside">wyniki · {journal.outcomeCalibration?.state === 'ready' ? 'obserwacja' : `kalibracja ${journal.outcomeCalibration?.sample || '0/3'}`}</span>
       </div>
       <div className="decision-journal-list">
@@ -464,7 +472,7 @@ function DecisionJournal({ journal, embedded = false }) {
           </article>
         ))}
       </div>
-      <p className="method-note">DOWODY są ograniczone czasowo: późniejszy pomiar z tego samego dnia nie jest dopisywany wstecz do wcześniejszej decyzji. Wyniki opisują fakty po decyzji, nie oceniają jeszcze jej skuteczności; przed trzema zapisanymi wykonaniami pozostają w kalibracji.</p>
+      <p className="method-note">PLAYBOOK jest zapisem historycznym: późniejszy pomiar z tego samego dnia nie jest dopisywany wstecz do wcześniejszej decyzji. Snapshot pokazuje dowody dostępne w chwili decyzji, wykonanie oraz reakcję następnego dnia. Nie dowodzi związku przyczynowego; przed trzema zapisanymi wykonaniami pozostaje w kalibracji.</p>
     </section>
   );
 }
@@ -749,6 +757,10 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const weightReading = useMemo(() => resolveWeight(row, raw, now), [row, raw, now]);
   const validation = useMemo(() => validateFeed(row, weightReading?.value || ''), [row, weightReading]);
   const loadComputed = useMemo(() => computeLoad(verifierTrainingRecords(log), now), [log, now]);
+  const loadMap = useMemo(() => computeLoadMap(verifierTrainingRecords(log), now), [log, now]);
+  const loadForDecision = useMemo(() => loadMap.internal.state28 === 'unreliable'
+    ? { ...loadComputed, loadRatio: null, ratioStatus: 'unreliable-internal-load' }
+    : loadComputed, [loadComputed, loadMap.internal.state28]);
   const todayPlan = useMemo(() => getTodayPlan(plan, now), [plan, now]);
   const todayPlannedSession = todayPlan ? v(todayPlan, 'planMorning', v(todayPlan, 'planSession', '')) : '';
   const todayPlannedStatus = todayPlan ? v(todayPlan, 'planStatus', '') : '';
@@ -833,9 +845,9 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     },
     daily,
     execution,
-    load: loadComputed,
+    load: loadForDecision,
     patterns: { easyExecution: easyExecutionPattern },
-  }), [baseDecision, validation.ok, freshnessState, verifierMismatches, daily, execution, loadComputed, easyExecutionPattern, row]);
+  }), [baseDecision, validation.ok, freshnessState, verifierMismatches, daily, execution, loadForDecision, easyExecutionPattern, row]);
   const staffPanel = useMemo(() => buildStaffPanel({
     decision,
     plan: todayPlan ? {
@@ -853,20 +865,21 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       recovery: v(row, 'recovery', ''),
       bodyBattery: v(row, 'bodyBattery', ''),
     },
-    load: loadComputed,
+    load: loadForDecision,
     integrity: {
       validation,
       verifierMismatches,
       dailyIssues: daily.issues,
       freshnessState,
     },
-  }), [decision, todayPlan, execution, daily, row, loadComputed, validation, verifierMismatches, freshnessState]);
+  }), [decision, todayPlan, execution, daily, row, loadForDecision, validation, verifierMismatches, freshnessState]);
 
   const hrvDelta = metricDeltaPercent(v(row, 'hrv', ''), v(row, 'hrv7d', ''));
-  const weightDelta = metric(v(row, 'weightDelta7d', ''));
   const srpe7 = metric(v(row, 'srpe7d', '')) ?? (log.length ? loadComputed.srpe7 : null);
-  const srpe28 = metric(v(row, 'srpe28d', '')) ?? (log.length ? loadComputed.srpe28 : null);
-  const ratio = loadComputed.loadRatio;
+  const ratio = loadForDecision.loadRatio;
+  const ratioUnavailableNote = loadMap.internal.state28 === 'unreliable'
+    ? `Load ratio wyłączone: w 28 dniach RPE 0 występuje w ${loadMap.internal.rpeZeroSessions28} sesji, brakuje RPE w ${loadMap.internal.missingRpeSessions28}, a sRPE w ${loadMap.internal.missingSrpeSessions28}.`
+    : `Load ratio pozostaje w kalibracji: ${loadComputed.calibrationDays}. Nie pokazujemy zastępczej liczby.`;
 
   const sourceSignals = [
     ...(decision.evidence || []),
@@ -947,7 +960,14 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
             <DashboardSignal label="BODY BATTERY" value={formatMetricNumber(bodyBattery, { maximumFractionDigits: 0 })} unit="/100" tone={scoreTone(bodyBattery, 60, 25)} note={`Body Battery ${formatMetricNumber(bodyBattery, { maximumFractionDigits: 0 })}/100 — poranny poziom energii zapisany w źródle.`} />
             <DashboardSignal label="HRV" value={formatMetricNumber(hrv, { maximumFractionDigits: 0 })} unit="ms" tone={baselineTone(daily?.metrics?.hrv) || (hrvDelta === null ? '' : hrvDelta < -10 ? 'bad' : hrvDelta < -5 ? 'mid' : 'good')} note={`${v(row, 'hrv7d', '') ? `Średnia 7d: ${formatMetricNumber(v(row, 'hrv7d'), { maximumFractionDigits: 0 })} ms. ` : ''}${calibrationLabel}.`} />
             <DashboardSignal label="RHR" value={formatMetricNumber(rhr, { maximumFractionDigits: 0 })} unit="bpm" tone={baselineTone(daily?.metrics?.rhr, true) || (metric(rhr) !== null && !daily?.bridgeSignal?.active ? 'good' : daily?.bridgeSignal?.active ? 'mid' : '')} note={`Tętno spoczynkowe z porannego odczytu · ${calibrationLabel}.`} />
-            <DashboardSignal label="OBCIĄŻENIE" value={srpe7 === null ? '—' : `sRPE ${formatMetricNumber(srpe7, { maximumFractionDigits: 0 })}`} tone={ratio === null ? '' : ratio > 1.5 ? 'bad' : ratio > 1.2 ? 'mid' : 'good'} note={ratio === null ? `Load ratio pozostaje w kalibracji: ${loadComputed.calibrationDays}. Nie pokazujemy zastępczej liczby.` : `Load ratio 7/28 dni: ${formatMetricNumber(ratio, { maximumFractionDigits: 2 })}. To kontekst obciążenia, nie automatyczny zakaz treningu.`} />
+            <DashboardSignal
+              label="OBCIĄŻENIE"
+              value={loadMap.internal.state === 'ready' ? `sRPE ${formatMetricNumber(srpe7, { maximumFractionDigits: 0 })}` : loadMap.internal.state === 'unreliable' ? 'NIEPEŁNE' : '—'}
+              tone={loadMap.internal.state === 'unreliable' ? 'mid' : ratio === null ? '' : ratio > 1.5 ? 'bad' : ratio > 1.2 ? 'mid' : 'good'}
+              note={loadMap.internal.state === 'unreliable'
+                ? `sRPE nie jest używane jako wiarygodny load: RPE 0 w ${loadMap.internal.rpeZeroSessions7} sesji, brak RPE w ${loadMap.internal.missingRpeSessions7}, brak sRPE w ${loadMap.internal.missingSrpeSessions7}.`
+                : ratio === null ? ratioUnavailableNote : `Load ratio 7/28 dni: ${formatMetricNumber(ratio, { maximumFractionDigits: 2 })}. To kontekst obciążenia, nie automatyczny zakaz treningu.`}
+            />
           </div>
         )}
       </section>
@@ -1004,16 +1024,23 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
             </div>
           </DashboardDisclosure>
 
-          <DashboardDisclosure eyebrow="OBCIĄŻENIE" title="7 / 28 dni" summary={`${formatMetricNumber(v(row, 'runKm7d', ''), { maximumFractionDigits: 2 })} km · sRPE ${formatMetricNumber(srpe7, { maximumFractionDigits: 0 })}`}>
-            <div className="load-grid">
-              <StatCard label="BIEG · 7D" value={formatMetricNumber(v(row, 'runKm7d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatMetricNumber(v(row, 'runCount7d', ''), { maximumFractionDigits: 0, fallback: '—' })} biegów`} />
-              <StatCard label="BIEG · 28D" value={formatMetricNumber(v(row, 'runKm28d', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note="kontekst objętości" />
-              <StatCard label="sRPE · 7D" value={srpe7 ? formatMetricNumber(srpe7, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
-              <StatCard label="sRPE · 28D" value={srpe28 ? formatMetricNumber(srpe28, { maximumFractionDigits: 0 }) : ''} note="wszystkie sesje" />
-              <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : ''} note={ratio !== null ? '7d / średnia tygodniowa z dni 8–28' : `kalibracja ${loadComputed.calibrationDays}`} />
-              <StatCard label="WAGA · TREND" value={weightDelta !== null ? `${weightDelta >= 0 ? '+' : ''}${formatMetricNumber(weightDelta, { maximumFractionDigits: 1, minimumFractionDigits: 1 })}` : ''} unit={weightDelta !== null ? 'kg' : ''} note="śr. 7d vs poprzednie 7d" />
+          <DashboardDisclosure eyebrow="LOAD MAP" title="Wielowymiarowa mapa obciążenia" summary={loadMap.state === 'missing' ? 'brak danych z Training Log' : `${formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2 })} km · ${loadMap.running.count7} biegów / 7 dni`}>
+            <div className="load-map-intro">
+              <strong>Bez jednej liczby Master Load</strong>
+              <span>Objętość, długi bieg, zmiana dystansu, sRPE, boks/siła i odpowiedź mechaniczna są oceniane osobno.</span>
             </div>
-            <p className="method-note">Load ratio jest kontekstem, nie automatycznym limitem bezpieczeństwa.</p>
+            <div className="load-grid load-map-grid">
+              <StatCard label="BIEGANIE · 7D" value={loadMap.running.state === 'missing' ? '' : formatMetricNumber(loadMap.running.km7, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${loadMap.running.count7} biegów · średnio ${formatMetricNumber(loadMap.running.averageDistance7, { maximumFractionDigits: 2 })} km`} />
+              <StatCard label="BIEGANIE · 28D" value={loadMap.running.state === 'missing' ? '' : formatMetricNumber(loadMap.running.km28, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={loadMap.running.state === 'ready' ? 'pełne 28 dni historii' : `KALIBRACJA ${Math.min(loadMap.running.historyDays, 28)}/28`} />
+              <StatCard label="DŁUGI BIEG" value={formatMetricNumber(loadMap.longRun.latestKm, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`najdłuższy 30d: ${formatMetricNumber(loadMap.longRun.longest30Km, { maximumFractionDigits: 2 })} km · udział 7d: ${formatMetricNumber(loadMap.longRun.share7Pct, { maximumFractionDigits: 1 })}%`} />
+              <StatCard label="ZMIANA DYSTANSU SESJI" value={loadMap.sessionSpike.valuePct === null ? '' : `${loadMap.sessionSpike.valuePct >= 0 ? '+' : ''}${formatMetricNumber(loadMap.sessionSpike.valuePct, { maximumFractionDigits: 1 })}%`} note={loadMap.sessionSpike.valuePct === null ? '' : `względem wcześniejszego maksimum ${formatMetricNumber(loadMap.sessionSpike.referenceKm, { maximumFractionDigits: 2 })} km · historia ${loadMap.sessionSpike.historyDays}/30`} />
+              <StatCard label="sRPE · JAKOŚĆ" value={loadMap.internal.state === 'ready' ? 'GOTOWE' : loadMap.internal.state === 'unreliable' ? 'NIEPEŁNE' : ''} note={loadMap.internal.state === 'ready' ? `sRPE 7d: ${formatMetricNumber(loadMap.internal.srpe7, { maximumFractionDigits: 0 })}` : `RPE 0: ${loadMap.internal.rpeZeroSessions7} · brak RPE: ${loadMap.internal.missingRpeSessions7} · brak sRPE: ${loadMap.internal.missingSrpeSessions7}`} />
+              <StatCard label="BOKS / SIŁA · 7D" value={loadMap.systemic.state === 'missing' ? '' : `${loadMap.systemic.boxing7} / ${loadMap.systemic.strength7}`} note="liczone osobno; bez sztucznego przeliczenia na kilometry" />
+              <StatCard label="MECHANICZNA" value={loadMap.mechanical.state === 'observed' ? `${formatMetricNumber(loadMap.mechanical.pain, { maximumFractionDigits: 0 })} / ${formatMetricNumber(loadMap.mechanical.legFatigue, { maximumFractionDigits: 0 })}` : ''} note="ból / zmęczenie nóg z ostatniej dostępnej oceny" />
+              <StatCard label="ROZKŁAD INTENSYWNOŚCI" value={loadMap.state === 'missing' ? '' : 'NIEPEŁNE'} note="brak pełnego czasu w domenach; Execution nie jest rozkładem wszystkich stref" />
+              <StatCard label="LOAD RATIO" value={ratio !== null ? formatMetricNumber(ratio, { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : loadMap.internal.state28 === 'unreliable' ? 'WYŁĄCZONE' : 'KALIBRACJA'} note={ratio !== null ? 'kontekst 7/28 dni, nie automatyczny limit' : loadMap.internal.state28 === 'unreliable' ? 'dane RPE/sRPE są niepełne' : loadComputed.calibrationDays} />
+            </div>
+            <p className="method-note">Zmiana dystansu jest obserwacją względem wcześniejszego najdłuższego biegu, bez progu „10% = alarm”. Nie zmienia samodzielnie decyzji treningowej.</p>
           </DashboardDisclosure>
 
           <DashboardDisclosure eyebrow="OSTATNI BIEG" title="Wykonanie i Execution" summary={executionSummary}>
@@ -1026,7 +1053,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
             <ExecutionCard execution={execution} />
           </DashboardDisclosure>
 
-          <DashboardDisclosure eyebrow="HISTORIA" title="Dziennik decyzji" summary={`${journal.entries.length} ostatnie wpisy`}>
+          <DashboardDisclosure eyebrow="PLAYBOOK" title="Decyzje, wykonanie i reakcje" summary={`${journal.entries.length} zapisanych snapshotów`}>
             <DecisionJournal journal={journal} embedded />
           </DashboardDisclosure>
 

@@ -149,20 +149,25 @@ function recoverySpecialist({ recovery }) {
 
 function loadIntegrator({ load }) {
   const ratioReady = load?.loadRatio !== null && load?.loadRatio !== undefined;
+  const internalLoadUnreliable = load?.ratioStatus === 'unreliable-internal-load';
   return {
-    id: 'load', role: 'OBCIĄŻENIE I INTEGRACJA', scope: '7 / 28 dni', status: ratioReady ? 'INFO' : 'CALIBRATION', direction: null,
+    id: 'load', role: 'OBCIĄŻENIE I INTEGRACJA', scope: '7 / 28 dni', status: ratioReady ? 'INFO' : internalLoadUnreliable ? 'INCOMPLETE' : 'CALIBRATION', direction: null,
     evidence: [
       evidence('Bieg 7d', load?.km7 ?? 0, 'km'),
       evidence('sRPE 7d', load?.srpe7 ?? 0),
       evidence('sRPE 28d', load?.srpe28 ?? 0),
-      evidence('Load ratio', ratioReady ? load.loadRatio : `KALIBRACJA ${load?.calibrationDays || '0/28'}`),
+      evidence('Load ratio', ratioReady ? load.loadRatio : internalLoadUnreliable ? 'WYŁĄCZONE — RPE/sRPE niepełne' : `KALIBRACJA ${load?.calibrationDays || '0/28'}`),
     ],
     interpretation: ratioReady
       ? 'Load ratio jest dostępny jako kontekst obciążenia, nie jako automatyczny limit bezpieczeństwa.'
-      : 'Rozpiętość historii nie wystarcza do wiarygodnego load ratio.',
+      : internalLoadUnreliable
+        ? 'Historia może być wystarczająco długa, ale niepełne RPE/sRPE unieważnia wiarygodność load ratio.'
+        : 'Rozpiętość historii nie wystarcza do wiarygodnego load ratio.',
     recommendation: ratioReady
       ? 'Uwzględnij trend obciążenia w decyzji, ale nie zmieniaj planu wyłącznie na podstawie ratio.'
-      : 'Nie pokazuj zastępczej liczby; utrzymuj stan kalibracji do 28 dni dostępności.',
+      : internalLoadUnreliable
+        ? 'Nie używaj ratio w decyzji; najpierw zbierz wiarygodne RPE dla wykonanych sesji.'
+        : 'Nie pokazuj zastępczej liczby; utrzymuj stan kalibracji do 28 dni dostępności.',
   };
 }
 
