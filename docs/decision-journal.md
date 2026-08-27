@@ -16,6 +16,10 @@ Tekst jest cytatem z `Coach_Decision`. Aplikacja nie rozdziela go sztucznie na i
 
 Prawidłowy wpis sztabu zawiera parę `Coach_Status` oraz `Coach_Decision`. Jeśli jedno z pól jest puste, aplikacja zachowuje dostępny fragment jako zapis historyczny, ale pokazuje ostrzeżenie `DZIENNIK DECYZJI — wpis sztabu wymaga uzupełnienia`. Jest to sygnał integralności danych, nie automatyczna zmiana decyzji treningowej.
 
+## Chronologia wykonania
+
+Sesję traktujemy jako wykonanie po decyzji tylko wtedy, gdy `Training Log.Time` jest czytelne i wypada po `Raw_Data.Timestamp` decyzji tego samego dnia. Sesja wcześniejsza albo bez godziny pozostaje widoczna, ale nie zasila kalibracji reakcji decyzji. Dzięki temu aplikacja nie myli zwykłej zbieżności dat z następstwem decyzji.
+
 ## Audyt
 
 ```bash

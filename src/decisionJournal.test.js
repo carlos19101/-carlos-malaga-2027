@@ -148,7 +148,7 @@ describe('attachDecisionOutcomes', () => {
       row('2026-08-25', '2026-08-25 09:00', { status: 'GREEN', decision: 'Easy' }, 'Head Coach'),
     ]);
     const result = attachDecisionOutcomes(journal, [
-      { date: '2026-08-25', name: 'Easy 6 km', rpe: 2, executionStatus: 'ok' },
+      { date: '2026-08-25', timestamp: '2026-08-25 18:00', name: 'Easy 6 km', rpe: 2, executionStatus: 'ok' },
     ], [
       { date: '2026-08-26', values: { hrv: 66, rhr: 47 } },
     ], { today: '2026-08-27' });
@@ -184,7 +184,7 @@ describe('attachDecisionOutcomes', () => {
       row('2026-08-25', '2026-08-25 09:00', { status: 'GREEN', decision: 'C' }, 'Head Coach'),
     ]);
     const result = attachDecisionOutcomes(journal, [
-      { date: '2026-08-23' }, { date: '2026-08-24' }, { date: '2026-08-25' },
+      { date: '2026-08-23', timestamp: '2026-08-23 18:00' }, { date: '2026-08-24', timestamp: '2026-08-24 18:00' }, { date: '2026-08-25', timestamp: '2026-08-25 18:00' },
     ], [], { today: '2026-08-27' });
     expect(result.outcomeCalibration).toMatchObject({ state: 'ready', sample: '3/3' });
   });
@@ -193,7 +193,7 @@ describe('attachDecisionOutcomes', () => {
     const journal = buildDecisionJournal([
       row('2026-08-25', '2026-08-25 09:00', { status: 'YELLOW', decision: 'OFF / recovery' }, 'Head Coach'),
     ]);
-    const result = attachDecisionOutcomes(journal, [{ date: '2026-08-25', name: 'Easy 6 km' }], [], { today: '2026-08-27' });
+    const result = attachDecisionOutcomes(journal, [{ date: '2026-08-25', timestamp: '2026-08-25 18:00', name: 'Easy 6 km' }], [], { today: '2026-08-27' });
     expect(result.entries[0].outcome).toMatchObject({
       state: 'observed', intent: 'recovery', executionRecord: 'session-during-recovery',
     });
@@ -205,5 +205,37 @@ describe('attachDecisionOutcomes', () => {
     ]);
     const result = attachDecisionOutcomes(journal, [], [], { today: '2026-08-27' });
     expect(result.entries[0].outcome.executionRecord).toBe('training-not-recorded');
+  });
+
+  it('nie przypisuje sesji sprzed decyzji jako jej wyniku', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 18:00', { status: 'GREEN', decision: 'Easy bieg' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [
+      { date: '2026-08-25', timestamp: '2026-08-25 07:00', name: 'Poranny bieg' },
+    ], [], { today: '2026-08-27' });
+    expect(result.entries[0].outcome).toMatchObject({
+      state: 'session-before-decision', sessions: [], preDecisionSessions: [expect.objectContaining({ name: 'Poranny bieg' })],
+    });
+  });
+
+  it('nie liczy sesji bez godziny jako obserwacji przyczynowej', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00', { status: 'GREEN', decision: 'Easy bieg' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [{ date: '2026-08-25', name: 'Easy' }], [], { today: '2026-08-27' });
+    expect(result.entries[0].outcome).toMatchObject({ state: 'same-day-time-unknown', sessions: [] });
+  });
+
+  it('rozstrzyga chronologię także po sekundach', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00:30', { status: 'GREEN', decision: 'Easy bieg' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [
+      { date: '2026-08-25', timestamp: '2026-08-25 09:00:15', name: 'Za wcześnie' },
+      { date: '2026-08-25', timestamp: '2026-08-25 09:00:45', name: 'Po decyzji' },
+    ], [], { today: '2026-08-27' });
+    expect(result.entries[0].outcome.sessions.map(({ name }) => name)).toEqual(['Po decyzji']);
+    expect(result.entries[0].outcome.preDecisionSessions.map(({ name }) => name)).toEqual(['Za wcześnie']);
   });
 });

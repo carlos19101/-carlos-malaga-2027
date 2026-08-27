@@ -46,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.13';
+const APP_VERSION = 'FINAL 5.14';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -198,6 +198,15 @@ function planForLogRow(planRows, logRow) {
   const date = logRow ? rowDate(logRow) : null;
   if (!date) return null;
   return planRows.find((planRow) => sameCalendarDay(rowDate(planRow), date)) || null;
+}
+
+function logTimestamp(row) {
+  const date = rowDate(row);
+  const match = String(v(row, 'logTime', '')).trim().match(/^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/);
+  if (!date || !match) return null;
+  const hours = Number(match[1]);
+  if (hours > 23) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, Number(match[2]), Number(match[3] || 0));
 }
 
 function executionInput(logRow, planRow) {
@@ -398,6 +407,8 @@ function DecisionJournal({ journal, embedded = false }) {
   if (!journal.entries.length) return null;
   const outcomeLabel = (outcome) => ({
     observed: 'WYKONANIE ZAPISANE',
+    'session-before-decision': 'SESJA PRZED DECYZJĄ — NIE ŁĄCZYMY JEJ Z WERDYKTEM',
+    'same-day-time-unknown': 'SESJA TEGO SAMEGO DNIA — BRAK GODZINY',
     pending: 'OCZEKUJE NA WYKONANIE',
     'no-session-recorded': 'BRAK ZAPISANEJ SESJI',
   }[outcome?.state] || 'BRAK DANYCH');
@@ -406,6 +417,8 @@ function DecisionJournal({ journal, embedded = false }) {
     'session-during-recovery': 'DECYZJA O REGENERACJI · SESJA ZAPISANA',
     'training-not-recorded': 'DECYZJA TRENINGOWA · BRAK ZAPISU SESJI',
     'recovery-not-verifiable': 'DECYZJA O REGENERACJI · BRAK DOWODU WYKONANIA',
+    'session-before-decision': 'SESJA PRZED DECYZJĄ · BEZ ŁĄCZENIA Z WERDYKTEM',
+    'same-day-time-unknown': 'SESJA TEGO SAMEGO DNIA · BRAK GODZINY',
     pending: 'DECYZJA DZISIAJ · OCZEKUJE NA ZAPIS',
   }[outcome?.executionRecord] || 'DECYZJA · BRAK KLASYFIKACJI WYKONANIA');
   const reactionText = (reaction) => {
@@ -757,6 +770,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       const result = computeExecution(executionInput(logRow, planRow));
       return {
         date: v(logRow, 'date', ''),
+        timestamp: logTimestamp(logRow),
         session: [v(logRow, 'logName', ''), planRow ? v(planRow, 'planMorning', v(planRow, 'planSession', '')) : ''].filter(Boolean).join(' '),
         aboveTargetPct: result.aboveTargetPct,
         status: result.status,

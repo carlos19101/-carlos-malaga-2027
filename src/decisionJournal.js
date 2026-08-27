@@ -182,14 +182,22 @@ function decisionIntent(recommendation) {
   return 'unknown';
 }
 
-function executionRecord(intent, sessionCount, entryDate, today) {
+function executionRecord(intent, sessionCount, preDecisionCount, unknownTimeCount, entryDate, today) {
   if (sessionCount > 0) {
     return intent === 'recovery' ? 'session-during-recovery' : 'session-recorded';
   }
+  if (preDecisionCount > 0) return 'session-before-decision';
+  if (unknownTimeCount > 0) return 'same-day-time-unknown';
   if (entryDate >= today) return 'pending';
   if (intent === 'training') return 'training-not-recorded';
   if (intent === 'recovery') return 'recovery-not-verifiable';
   return 'unknown';
+}
+
+function sessionTimestamp(value) {
+  if (!value) return null;
+  const parsed = value instanceof Date ? value : parseRawTimestamp(value);
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
 }
 
 export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = [], options = {}) {
@@ -198,7 +206,16 @@ export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = 
   const sessionRows = Array.isArray(sessions) ? sessions : [];
   const dayRows = Array.isArray(dailyDays) ? dailyDays : [];
   const entries = (journal.entries || []).map((entry) => {
-    const matchedSessions = sessionRows.filter(({ date }) => dayKey(date) === entry.date);
+    const sameDaySessions = sessionRows.filter(({ date }) => dayKey(date) === entry.date);
+    const matchedSessions = sameDaySessions.filter((session) => {
+      const timestamp = sessionTimestamp(session.timestamp);
+      return timestamp && timestamp.getTime() >= entry.timestamp.getTime();
+    });
+    const preDecisionSessions = sameDaySessions.filter((session) => {
+      const timestamp = sessionTimestamp(session.timestamp);
+      return timestamp && timestamp.getTime() < entry.timestamp.getTime();
+    });
+    const unknownTimeSessions = sameDaySessions.filter(({ timestamp }) => !sessionTimestamp(timestamp));
     const nextDate = shiftedDayKey(entry.date, 1);
     const reactionDay = dayRows.find(({ date }) => dayKey(date) === nextDate) || null;
     const evidenceValue = (field) => parseNumber(entry.evidence?.find((item) => item.field === field)?.value);
@@ -209,15 +226,19 @@ export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = 
     const intent = decisionIntent(entry.recommendation);
     const state = matchedSessions.length
       ? 'observed'
-      : today && entry.date >= today ? 'pending' : 'no-session-recorded';
+      : preDecisionSessions.length ? 'session-before-decision'
+        : unknownTimeSessions.length ? 'same-day-time-unknown'
+          : today && entry.date >= today ? 'pending' : 'no-session-recorded';
 
     return {
       ...entry,
       outcome: {
         state,
         intent,
-        executionRecord: executionRecord(intent, matchedSessions.length, entry.date, today),
+        executionRecord: executionRecord(intent, matchedSessions.length, preDecisionSessions.length, unknownTimeSessions.length, entry.date, today),
         sessions: matchedSessions,
+        preDecisionSessions,
+        unknownTimeSessions,
         reaction: reactionDay ? {
           date: nextDate,
           hrv: nextHrv,
