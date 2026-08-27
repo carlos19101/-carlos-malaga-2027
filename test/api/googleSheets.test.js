@@ -53,6 +53,7 @@ describe('Google Sheets service account', () => {
       now: new Date('2026-08-25T20:01:00.000Z'),
     });
     expect(result).toMatchObject({ action: 'update', rowNumber: 2, srpe: 120 });
+    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
     const writeBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(writeBody.valueInputOption).toBe('RAW');
     expect(writeBody.data).toEqual(expect.arrayContaining([
@@ -121,6 +122,7 @@ describe('Google Sheets service account', () => {
       fetchImpl,
     });
     expect(result).toMatchObject({ action: 'update', rowNumber: 2, range: 'C2:H2' });
+    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
     const writeBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(writeBody).toMatchObject({
       valueInputOption: 'RAW',

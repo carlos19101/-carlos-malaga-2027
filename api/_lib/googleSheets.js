@@ -11,6 +11,8 @@ export const APPLICATION_SHEET_RANGES = {
   raw: "'Raw_Data'",
 };
 
+const TRAINING_LOG_TABLE_RANGE = "'Training Log'!A1:AQ2000";
+
 function base64urlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
@@ -94,7 +96,7 @@ export async function updateTrainingFeedback(feedback, options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const token = await accessToken(env, fetchImpl);
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, "'Training Log'!A1:AI2000")}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, TRAINING_LOG_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
@@ -121,7 +123,7 @@ export async function updateTcxImport(envelope, options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
   const token = await accessToken(env, fetchImpl);
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, "'Training Log'!A1:AI2000")}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, TRAINING_LOG_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);

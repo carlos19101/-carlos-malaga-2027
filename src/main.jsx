@@ -47,7 +47,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.17';
+const APP_VERSION = 'FINAL 5.18';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
