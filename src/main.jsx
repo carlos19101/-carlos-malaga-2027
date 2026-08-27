@@ -506,7 +506,7 @@ function DecisionJournal({ journal, embedded = false }) {
 
 function PerformanceResponseMonitor({ monitor }) {
   const responseValue = monitor.state === 'observed' ? 'OBSERWACJE ZEBRANE'
-    : monitor.state === 'calibrating' ? `KALIBRACJA ${monitor.calibration.sample}` : '';
+    : `KALIBRACJA ${monitor.calibration.sample}`;
   const responseNote = monitor.state === 'observed'
     ? `${monitor.completePairs} kompletnych par decyzja → sesja → następny poranek`
     : 'potrzebne są sesja po decyzji oraz HRV i RHR następnego dnia';
@@ -522,9 +522,9 @@ function PerformanceResponseMonitor({ monitor }) {
       </div>
       <div className="load-grid response-monitor-grid">
         <StatCard label="PARY ODPOWIEDZI" value={responseValue} note={responseNote} />
-        <StatCard label="SESJE PO DECYZJI" value={monitor.observedSessions ? formatMetricNumber(monitor.observedSessions, { maximumFractionDigits: 0 }) : ''} note="sesje zapisane po czasie werdyktu sztabu" />
-        <StatCard label="BRAK REAKCJI" value={hasObservedSession ? formatMetricNumber(missingReaction, { maximumFractionDigits: 0 }) : ''} note={!hasObservedSession ? 'brak sesji po decyzji do połączenia z następnym porankiem' : missingReaction ? `częściowy odczyt: ${monitor.partialReaction} · brak poranka: ${monitor.missingReaction}` : 'wszystkie zapisane pary mają HRV i RHR następnego dnia'} tone={!hasObservedSession ? '' : missingReaction ? 'yellow' : 'green'} />
-        <StatCard label="EXECUTION W PARACH" value={executionValue} note={monitor.execution.observed ? 'tylko sesje z atomowymi czasami HR' : 'brak kompletnego Execution w parach'} />
+        <StatCard label="SESJE PO DECYZJI" value={monitor.observedSessions ? formatMetricNumber(monitor.observedSessions, { maximumFractionDigits: 0 }) : 'BRAK PARY'} note="sesje zapisane po czasie werdyktu sztabu" />
+        <StatCard label="BRAK REAKCJI" value={hasObservedSession ? formatMetricNumber(missingReaction, { maximumFractionDigits: 0 }) : 'BRAK PARY'} note={!hasObservedSession ? 'brak sesji po decyzji do połączenia z następnym porankiem' : missingReaction ? `częściowy odczyt: ${monitor.partialReaction} · brak poranka: ${monitor.missingReaction}` : 'wszystkie zapisane pary mają HRV i RHR następnego dnia'} tone={!hasObservedSession ? '' : missingReaction ? 'yellow' : 'green'} />
+        <StatCard label="EXECUTION W PARACH" value={executionValue || 'BRAK PARY'} note={monitor.execution.observed ? 'tylko sesje z atomowymi czasami HR' : 'brak kompletnego Execution w parach'} />
       </div>
       <p className="method-note">{monitor.methodology} Do zebrania {monitor.contract.requiredPairs} kompletnych par nie oceniamy skuteczności decyzji ani nie tworzymy automatycznej korekty planu.</p>
     </section>
