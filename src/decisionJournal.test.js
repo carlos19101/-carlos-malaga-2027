@@ -141,6 +141,8 @@ describe('attachDecisionOutcomes', () => {
     ], { today: '2026-08-27' });
     expect(result.entries[0].outcome).toMatchObject({
       state: 'observed',
+      intent: 'training',
+      executionRecord: 'session-recorded',
       sessions: [expect.objectContaining({ name: 'Easy 6 km', executionStatus: 'ok' })],
       reaction: { date: '2026-08-26', hrv: 66, rhr: 47, hrvDelta: 6, rhrDelta: 2 },
     });
@@ -172,5 +174,23 @@ describe('attachDecisionOutcomes', () => {
       { date: '2026-08-23' }, { date: '2026-08-24' }, { date: '2026-08-25' },
     ], [], { today: '2026-08-27' });
     expect(result.outcomeCalibration).toMatchObject({ state: 'ready', sample: '3/3' });
+  });
+
+  it('oznacza sesję zapisaną mimo jawnej decyzji o regeneracji bez oceniania jej skutku', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00', { status: 'YELLOW', decision: 'OFF / recovery' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [{ date: '2026-08-25', name: 'Easy 6 km' }], [], { today: '2026-08-27' });
+    expect(result.entries[0].outcome).toMatchObject({
+      state: 'observed', intent: 'recovery', executionRecord: 'session-during-recovery',
+    });
+  });
+
+  it('oznacza wyłącznie brak zapisu po decyzji treningowej', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 09:00', { status: 'GREEN', decision: 'Easy bieg' }, 'Head Coach'),
+    ]);
+    const result = attachDecisionOutcomes(journal, [], [], { today: '2026-08-27' });
+    expect(result.entries[0].outcome.executionRecord).toBe('training-not-recorded');
   });
 });

@@ -166,6 +166,24 @@ function shiftedDayKey(dateValue, offset) {
   return dayKey(date);
 }
 
+function decisionIntent(recommendation) {
+  const text = normalize(recommendation);
+  if (!text) return 'unknown';
+  if (/\b(off|recovery|odpoczynek|regeneracja|rest|bez treningu)\b/.test(text)) return 'recovery';
+  if (/\b(bieg|biegnij|trening|easy|run|marszobieg)\b/.test(text)) return 'training';
+  return 'unknown';
+}
+
+function executionRecord(intent, sessionCount, entryDate, today) {
+  if (sessionCount > 0) {
+    return intent === 'recovery' ? 'session-during-recovery' : 'session-recorded';
+  }
+  if (entryDate >= today) return 'pending';
+  if (intent === 'training') return 'training-not-recorded';
+  if (intent === 'recovery') return 'recovery-not-verifiable';
+  return 'unknown';
+}
+
 export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = [], options = {}) {
   const today = dayKey(options.today || new Date());
   const required = Number.isInteger(options.required) && options.required > 0 ? options.required : 3;
@@ -180,6 +198,7 @@ export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = 
     const nextRhr = parseNumber(reactionDay?.values?.rhr);
     const hrvAtDecision = evidenceValue('hrv');
     const rhrAtDecision = evidenceValue('rhr');
+    const intent = decisionIntent(entry.recommendation);
     const state = matchedSessions.length
       ? 'observed'
       : today && entry.date >= today ? 'pending' : 'no-session-recorded';
@@ -188,6 +207,8 @@ export function attachDecisionOutcomes(journal = {}, sessions = [], dailyDays = 
       ...entry,
       outcome: {
         state,
+        intent,
+        executionRecord: executionRecord(intent, matchedSessions.length, entry.date, today),
         sessions: matchedSessions,
         reaction: reactionDay ? {
           date: nextDate,

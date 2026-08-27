@@ -46,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.11';
+const APP_VERSION = 'FINAL 5.12';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -390,6 +390,13 @@ function DecisionJournal({ journal, embedded = false }) {
     pending: 'OCZEKUJE NA WYKONANIE',
     'no-session-recorded': 'BRAK ZAPISANEJ SESJI',
   }[outcome?.state] || 'BRAK DANYCH');
+  const executionRecordLabel = (outcome) => ({
+    'session-recorded': 'DECYZJA TRENINGOWA · SESJA ZAPISANA',
+    'session-during-recovery': 'DECYZJA O REGENERACJI · SESJA ZAPISANA',
+    'training-not-recorded': 'DECYZJA TRENINGOWA · BRAK ZAPISU SESJI',
+    'recovery-not-verifiable': 'DECYZJA O REGENERACJI · BRAK DOWODU WYKONANIA',
+    pending: 'DECYZJA DZISIAJ · OCZEKUJE NA ZAPIS',
+  }[outcome?.executionRecord] || 'DECYZJA · BRAK KLASYFIKACJI WYKONANIA');
   const reactionText = (reaction) => {
     if (!reaction) return 'reakcja następnego dnia: brak odczytu';
     const delta = (value, unit) => value === null ? 'brak porównania' : `${value > 0 ? '+' : ''}${formatMetricNumber(value, { maximumFractionDigits: 0 })} ${unit}`;
@@ -416,6 +423,7 @@ function DecisionJournal({ journal, embedded = false }) {
             <p>{entry.recommendation || 'Status bez zapisanej rekomendacji.'}</p>
             <div className="decision-evidence" aria-label="Obserwacja po decyzji">
               <span>{outcomeLabel(entry.outcome)}</span>
+              <span>{executionRecordLabel(entry.outcome)}</span>
               {entry.outcome?.sessions?.map((session, index) => (
                 <span key={`${entry.id}-session-${index}`}>
                   {session.name || session.type || 'sesja'} · RPE {formatMetricNumber(session.rpe, { maximumFractionDigits: 0 })} · {session.executionStatus ? `Execution ${session.executionStatus.toUpperCase()}` : 'Execution: brak danych'}
