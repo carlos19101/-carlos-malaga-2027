@@ -23,7 +23,7 @@ export default async function handler(request, response) {
 
   try {
     const body = await readJson(request, 4096);
-    const validated = validateTrainingFeedback(body);
+    const validated = validateTrainingFeedback(body, { allowLegacyRpeZero: true });
     if (!validated.ok) {
       sendJson(response, 422, { ok: false, error: 'validation-error', fields: validated.errors });
       return;

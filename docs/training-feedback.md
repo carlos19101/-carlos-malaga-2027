@@ -4,7 +4,7 @@ Formularz aktualizuje wyłącznie istniejącą sesję w `Training Log`, dopasowa
 
 ## Dane
 
-Wymagane są `RPE`, `Pain` i `Leg_Fatigue_0_10` w skali 0–10. Notatka jest opcjonalna i ograniczona do 500 znaków. Serwer przelicza `sRPE = Duration_min × RPE`; bez `Duration_min` pozostawia sRPE puste.
+Wymagane są `RPE` w skali 1–10 oraz `Pain` i `Leg_Fatigue_0_10` w skali 0–10. W ukończonym biegu `RPE = 0` nie jest przyjmowane, ponieważ dawałoby pozorne `sRPE = 0`; `1` oznacza wysiłek bardzo lekki. Notatka jest opcjonalna i ograniczona do 500 znaków. Serwer przelicza `sRPE = Duration_min × RPE`; bez `Duration_min` pozostawia sRPE puste.
 
 Kolumny ścieżki zapisu są dopisane po dotychczasowym kontrakcie Training Log:
 
@@ -17,6 +17,8 @@ Kolumny ścieżki zapisu są dopisane po dotychczasowym kontrakcie Training Log:
 ## Idempotencja i kolejka offline
 
 Każda ocena ma `Feedback_ID`. Ponowienie tej samej paczki daje `noop`. Serwer porównuje również `Feedback_Submitted_At`, dlatego starsza paczka nie może nadpisać nowszej oceny. Kolejka przeglądarki zachowuje tylko najnowszą paczkę dla konkretnego `Session_ID`.
+
+Nowe formularze wysyłają pakiet w wersji 2. Stare, lokalnie zapisane pakiety bez wersji z `RPE = 0` są zachowane wyłącznie dla zgodności i nie są przepisywane ani poprawiane automatycznie.
 
 HTTP 404 oznacza, że sesja nie istnieje jeszcze w Training Log — paczka pozostaje w kolejce. Błąd walidacji 400/422 usuwa wadliwą paczkę, a brak sieci, 401/403 i błędy serwera zachowują ją do ponowienia.
 

@@ -1407,13 +1407,13 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
           <div className="feedback-target"><span>SESJA</span><strong>{sessionLabel}</strong><small>{sessionId}</small></div>
           <div className="feedback-scales">
             {[
-              ['rpe', 'RPE', 'Jak ciężki był cały trening?'],
-              ['pain', 'Ból', '0 = nic nie boli'],
-              ['legFatigue', 'Zmęczenie nóg', '0 = świeże nogi'],
-            ].map(([field, label, note]) => (
+              ['rpe', 'RPE', '1 = bardzo lekko · 10 = maksymalnie', 1],
+              ['pain', 'Ból', '0 = nic nie boli', 0],
+              ['legFatigue', 'Zmęczenie nóg', '0 = świeże nogi', 0],
+            ].map(([field, label, note, minimum]) => (
               <label key={field}>
                 <span>{label}</span>
-                <input type="number" min="0" max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => setValues((current) => ({ ...current, [field]: event.target.value }))} required />
+                <input type="number" min={minimum} max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => setValues((current) => ({ ...current, [field]: event.target.value }))} required />
                 <small>{note}</small>
               </label>
             ))}

@@ -22,6 +22,7 @@ function valid(overrides = {}) {
     sessionId: '2026-08-25-run-01',
     feedbackId: 'feedback-12345678',
     submittedAt: '2026-08-25T20:00:00.000Z',
+    schemaVersion: 2,
     rpe: 3,
     pain: 0,
     legFatigue: 2,
@@ -40,9 +41,20 @@ describe('validateTrainingFeedback', () => {
   });
 
   it.each([
-    ['rpe', -1], ['rpe', 11], ['pain', '#N/A'], ['legFatigue', ''],
+    ['rpe', 0], ['rpe', -1], ['rpe', 11], ['pain', '#N/A'], ['legFatigue', ''],
   ])('odrzuca %s=%s poza skalą', (field, value) => {
     expect(validateTrainingFeedback(valid({ [field]: value })).ok).toBe(false);
+  });
+
+  it('czyta starą lokalną paczkę z RPE 0 bez zmiany jej danych', () => {
+    const legacy = valid({ schemaVersion: undefined, rpe: 0 });
+    const storage = memoryStorage({ [FEEDBACK_QUEUE_KEY]: JSON.stringify([legacy]) });
+    expect(validateTrainingFeedback(legacy).ok).toBe(false);
+    expect(validateTrainingFeedback(legacy, { allowLegacyRpeZero: true })).toMatchObject({
+      ok: true,
+      value: expect.objectContaining({ rpe: 0, schemaVersion: 2 }),
+    });
+    expect(readFeedbackQueue(storage)).toEqual([legacy]);
   });
 
   it('odrzuca nieprawidłowe identyfikatory, czas i zbyt długą notatkę', () => {

@@ -1,11 +1,13 @@
 import { isNullish, parseNumber } from './parse.js';
 
 export const FEEDBACK_QUEUE_KEY = 'carlos:training-feedback:v1';
-export const FEEDBACK_SCALE = { min: 0, max: 10 };
+export const TRAINING_FEEDBACK_SCHEMA_VERSION = 2;
+export const RPE_SCALE = { min: 1, max: 10 };
+export const SYMPTOM_SCALE = { min: 0, max: 10 };
 
-function scaleValue(value) {
+function scaleValue(value, scale) {
   const numeric = parseNumber(value);
-  if (numeric === null || numeric < FEEDBACK_SCALE.min || numeric > FEEDBACK_SCALE.max) return null;
+  if (numeric === null || numeric < scale.min || numeric > scale.max) return null;
   return numeric;
 }
 
@@ -14,20 +16,21 @@ function isoTimestamp(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-export function validateTrainingFeedback(input = {}) {
+export function validateTrainingFeedback(input = {}, options = {}) {
+  const allowLegacyRpeZero = options.allowLegacyRpeZero === true && !input.schemaVersion;
   const sessionId = String(input.sessionId || '').trim();
   const feedbackId = String(input.feedbackId || '').trim();
   const submittedAt = isoTimestamp(input.submittedAt);
-  const rpe = scaleValue(input.rpe);
-  const pain = scaleValue(input.pain);
-  const legFatigue = scaleValue(input.legFatigue);
+  const rpe = scaleValue(input.rpe, allowLegacyRpeZero ? SYMPTOM_SCALE : RPE_SCALE);
+  const pain = scaleValue(input.pain, SYMPTOM_SCALE);
+  const legFatigue = scaleValue(input.legFatigue, SYMPTOM_SCALE);
   const notes = isNullish(input.notes) ? '' : String(input.notes).trim();
   const errors = {};
 
   if (!/^[a-z0-9][a-z0-9._:-]{5,119}$/i.test(sessionId)) errors.sessionId = 'Nieprawidłowy Session_ID.';
   if (!/^[a-z0-9][a-z0-9-]{7,79}$/i.test(feedbackId)) errors.feedbackId = 'Nieprawidłowy identyfikator feedbacku.';
   if (!submittedAt) errors.submittedAt = 'Nieprawidłowy czas wysłania.';
-  if (rpe === null) errors.rpe = 'RPE musi być liczbą 0–10.';
+  if (rpe === null) errors.rpe = 'RPE ukończonego biegu musi być liczbą 1–10.';
   if (pain === null) errors.pain = 'Ból musi być liczbą 0–10.';
   if (legFatigue === null) errors.legFatigue = 'Zmęczenie nóg musi być liczbą 0–10.';
   if (notes.length > 500) errors.notes = 'Notatka może mieć maksymalnie 500 znaków.';
@@ -36,6 +39,7 @@ export function validateTrainingFeedback(input = {}) {
     ok: Object.keys(errors).length === 0,
     errors,
     value: Object.keys(errors).length ? null : {
+      schemaVersion: input.schemaVersion || TRAINING_FEEDBACK_SCHEMA_VERSION,
       sessionId, feedbackId, submittedAt, rpe, pain, legFatigue, notes,
     },
   };
@@ -58,7 +62,7 @@ export function readFeedbackQueue(storage) {
   try {
     const parsed = JSON.parse(storage?.getItem(FEEDBACK_QUEUE_KEY) || '[]');
     return Array.isArray(parsed)
-      ? parsed.filter((item) => validateTrainingFeedback(item).ok)
+      ? parsed.filter((item) => validateTrainingFeedback(item, { allowLegacyRpeZero: true }).ok)
       : [];
   } catch {
     return [];
