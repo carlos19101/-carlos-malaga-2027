@@ -7,6 +7,7 @@ import {
   reconcileTcxImport,
   resolveTcxTarget,
   TCX_IMPORT_HEADERS,
+  TCX_TIMING_HEADER,
   validateTcxImportEnvelope,
 } from './tcxImport.js';
 
@@ -30,6 +31,7 @@ function liveTable(atomicValues = ['', '', '', '', '', ''], rowNumber = 7) {
     ...TCX_IMPORT_HEADERS,
   ];
   const values = Array(headers.length).fill('');
+  values[0] = '2026-08-23';
   values[23] = '2026-08-23-run-01';
   atomicValues.forEach((value, index) => { values[24 + index] = value; });
   return { headers, rows: [{ rowNumber, values }] };
@@ -42,6 +44,16 @@ const envelope = createTcxImport(fixture, {
   sourceSha256: 'AB860110AA046542ECC9FABAC31DB380C561F466B55C42FE3F9B9B0C40A148D1',
 });
 
+const timedEnvelope = {
+  ...envelope,
+  timing: {
+    startedAt: '2026-08-23T16:05:30.000Z',
+    timeZone: 'Europe/Warsaw',
+    localDate: '2026-08-23',
+    localTime: '18:05:30',
+  },
+};
+
 describe('createTcxImport', () => {
   it('buduje wersjonowaną kopertę z odtwarzalnymi atomami', () => {
     expect(envelope).toMatchObject({
@@ -49,6 +61,7 @@ describe('createTcxImport', () => {
       sessionId: '2026-08-23-run-01',
       sourceSha256: 'AB860110AA046542ECC9FABAC31DB380C561F466B55C42FE3F9B9B0C40A148D1',
       idempotencyKey: expect.stringMatching(/^tcx-v1-[0-9a-f]{8}$/),
+      timing: expect.objectContaining({ timeZone: 'Europe/Warsaw', localDate: '2000-01-01', localTime: '01:00:00' }),
       atomic: {
         HR_Target_Min_bpm: 150,
         HR_Target_Max_bpm: 162,
@@ -68,6 +81,8 @@ describe('createTcxImport', () => {
     })).toMatchObject({ action: 'contract-error', reason: 'Czasy atomowe nie sumują się do analizowanego czasu.' });
     expect(validateTcxImportEnvelope({ ...envelope, sourceSha256: 'NOT-A-HASH' }))
       .toMatchObject({ action: 'contract-error', reason: 'Nieprawidłowy SHA-256 pliku TCX.' });
+    expect(validateTcxImportEnvelope({ ...envelope, timing: { ...envelope.timing, localTime: '25:00:00' } }))
+      .toMatchObject({ action: 'contract-error', reason: 'Nieprawidłowy czas rozpoczęcia TCX.' });
   });
 });
 
@@ -90,6 +105,32 @@ describe('reconcileTcxImport', () => {
   it('ponowny import identycznych danych jest no-op', () => {
     expect(reconcileTcxImport(table([150, 162, 1169, 1376, 87, 2632]), envelope))
       .toMatchObject({ action: 'noop', rowNumber: 2 });
+  });
+
+  it('uzupełnia puste Time rzeczywistą godziną TCX bez naruszania atomów', () => {
+    const result = reconcileTcxImport(liveTable([], 7), timedEnvelope);
+    expect(result).toMatchObject({ action: 'update', timing: { action: 'update', range: 'B7', values: ['18:05:30'] } });
+    expect(result.updates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'atomic', range: 'Y7:AD7' }),
+      expect.objectContaining({ kind: 'timing', range: 'B7', values: ['18:05:30'] }),
+    ]));
+  });
+
+  it('może uzupełnić wyłącznie Time, gdy atomy są już identyczne', () => {
+    const result = reconcileTcxImport(liveTable([150, 162, 1169, 1376, 87, 2632], 7), timedEnvelope);
+    expect(result).toMatchObject({ action: 'update', range: 'B7', timing: { action: 'update' } });
+    expect(result.updates).toEqual([expect.objectContaining({ kind: 'timing', range: 'B7', values: ['18:05:30'] })]);
+  });
+
+  it('nie nadpisuje istniejącej Time ani nie zapisuje czasu, gdy data z TCX nie pasuje', () => {
+    const withTime = liveTable([], 7);
+    withTime.rows[0].values[1] = '17:45:00';
+    expect(reconcileTcxImport(withTime, timedEnvelope)).toMatchObject({
+      action: 'update', timing: { action: 'preserved', current: '17:45:00' },
+    });
+    expect(reconcileTcxImport(liveTable([], 7), envelope)).toMatchObject({
+      action: 'update', timing: { action: 'date-mismatch', rowDate: '2026-08-23', tcxDate: '2000-01-01' },
+    });
   });
 
   it('nie nadpisuje istniejącej innej metodologii ani celu', () => {
@@ -176,6 +217,18 @@ describe('buildSheetsBatchUpdate', () => {
         fields: 'userEnteredValue',
       },
     }]);
+  });
+
+  it('zapisuje Time jako tekst w osobnej komórce, gdy jest puste', () => {
+    const reconciliation = reconcileTcxImport(liveTable([], 7), timedEnvelope);
+    const requests = buildSheetsBatchUpdate(reconciliation, 684258501);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(expect.objectContaining({
+      updateCells: expect.objectContaining({
+        range: expect.objectContaining({ startColumnIndex: 1, endColumnIndex: 2 }),
+        rows: [{ values: [{ userEnteredValue: { stringValue: '18:05:30' } }] }],
+      }),
+    }));
   });
 
   it('no-op nie generuje żadnego zapisu', () => {

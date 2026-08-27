@@ -1,4 +1,5 @@
 const DEFAULT_MAX_GAP_SECONDS = 5;
+export const DEFAULT_TCX_TIME_ZONE = 'Europe/Warsaw';
 const XML_PREFIX = String.raw`(?:[A-Za-z_][\w.-]*:)?`;
 
 function blocks(xml, tagName) {
@@ -36,6 +37,28 @@ function requireFiniteNumber(value, label) {
   const number = Number(value);
   if (!Number.isFinite(number)) throw new TypeError(`${label} musi być liczbą.`);
   return number;
+}
+
+export function formatTcxActivityTiming(value, timeZone = DEFAULT_TCX_TIME_ZONE) {
+  const timeMs = value instanceof Date ? value.getTime() : Date.parse(String(value ?? ''));
+  if (!Number.isFinite(timeMs)) throw new TypeError('Czas rozpoczęcia TCX musi być prawidłową datą ISO.');
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(timeMs));
+  } catch {
+    throw new TypeError(`Nieprawidłowa strefa czasowa TCX: ${timeZone}.`);
+  }
+  const valueFor = (type) => parts.find((part) => part.type === type)?.value || '';
+  const localDate = `${valueFor('year')}-${valueFor('month')}-${valueFor('day')}`;
+  const localTime = `${valueFor('hour')}:${valueFor('minute')}:${valueFor('second')}`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate) || !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(localTime)) {
+    throw new TypeError('Nie udało się sformatować czasu rozpoczęcia TCX.');
+  }
+  return { startedAt: new Date(timeMs).toISOString(), timeZone, localDate, localTime };
 }
 
 export function analyzeTcx(tcxText, options = {}) {
@@ -82,6 +105,7 @@ export function analyzeTcx(tcxText, options = {}) {
   }
 
   return {
+    startedAt: new Date(points[0].timeMs).toISOString(),
     targetMin,
     targetMax,
     maxGapSeconds,

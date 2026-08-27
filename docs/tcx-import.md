@@ -19,6 +19,7 @@ HR_Analyzed_Duration_s
 - inne istniejące atomy zwracają `conflict` i nie są nadpisywane;
 - częściowo puste, ale niesprzeczne atomy mogą zostać uzupełnione;
 - zapis obejmuje jeden dopasowany wiersz i sześć kolumn atomowych;
+- gdy `Time` jest puste, importer uzupełnia je rzeczywistą godziną pierwszej próbki TCX w `Europe/Warsaw`; istniejącej godziny nigdy nie nadpisuje;
 - źródłowy SHA-256 oraz fingerprint importu są zwracane w wyniku.
 
 ## Import w aplikacji
@@ -30,7 +31,7 @@ W zakładce **Log → Importuj bieg**:
 3. sprawdź podgląd czasu w oknie, ponad i poniżej celu;
 4. potwierdź zapis.
 
-TCX jest analizowany lokalnie w przeglądarce. Do `/api/tcx-import` trafia wersjonowana koperta z SHA-256, metodologią i sześcioma wartościami atomowymi, nie surowy plik. Endpoint wymaga sesji HttpOnly i dozwolonego `Origin`. Serwer ponownie waliduje sumę czasów, metodologię, hash oraz kontrakt Training Log.
+TCX jest analizowany lokalnie w przeglądarce. Do `/api/tcx-import` trafia wersjonowana koperta z SHA-256, metodologią, godziną pierwszej próbki oraz sześcioma wartościami atomowymi, nie surowy plik. Endpoint wymaga sesji HttpOnly i dozwolonego `Origin`. Serwer ponownie waliduje sumę czasów, metodologię, hash oraz kontrakt Training Log.
 
 ## Analiza bez arkusza
 

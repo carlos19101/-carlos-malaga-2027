@@ -1439,7 +1439,7 @@ function TcxImportPanel({ rows, access, onSubmit }) {
     && v(row, 'logSessionId', '')
     && parseMetric(v(row, 'logHrTargetMin', '')) !== null
     && parseMetric(v(row, 'logHrTargetMax', '')) !== null
-    && !tcxStatusForRow(row).complete
+    && (!tcxStatusForRow(row).complete || !v(row, 'logTime', ''))
   )).slice(0, 12), [rows]);
   const [sessionId, setSessionId] = useState('');
   const [envelope, setEnvelope] = useState(null);
@@ -1499,7 +1499,9 @@ function TcxImportPanel({ rows, access, onSubmit }) {
     setState({ busy: true, message: 'Zapisuję dane atomowe…', tone: '' });
     const result = await onSubmit(envelope);
     const messages = {
-      update: 'Dane atomowe zapisane i potwierdzone przez Training Log.',
+      update: result.timing?.action === 'update'
+        ? `Dane TCX potwierdzone; Time uzupełniono z TCX (${result.timing.values?.[0]}).`
+        : 'Dane atomowe zapisane i potwierdzone przez Training Log.',
       noop: 'Identyczne dane są już zapisane — bez duplikatu i bez zmian.',
       conflict: 'Konflikt z istniejącymi danymi. Nic nie zostało nadpisane.',
       'missing-session': 'Session_ID nie istnieje już w Training Log.',

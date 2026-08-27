@@ -1,5 +1,5 @@
-import { isNullish, normalize, parseNumber } from './parse.js';
-import { analyzeTcx } from './tcx.js';
+import { isNullish, normalize, parseDate, parseNumber } from './parse.js';
+import { analyzeTcx, formatTcxActivityTiming } from './tcx.js';
 
 export const TCX_IMPORT_SCHEMA = 'carlos.tcx-import.v1';
 export const TCX_IMPORT_HEADERS = [
@@ -11,6 +11,7 @@ export const TCX_IMPORT_HEADERS = [
   'HR_Analyzed_Duration_s',
 ];
 export const SESSION_ID_HEADER = 'Session_ID';
+export const TCX_TIMING_HEADER = 'Time';
 
 const TCX_IMPORT_ID_PATTERN = /^tcx-v1-[0-9a-f]{8}$/;
 const SESSION_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{5,119}$/i;
@@ -31,6 +32,27 @@ function valueFingerprint(values) {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+function localDateKey(value) {
+  const date = parseDate(value);
+  if (!date) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function validateTiming(timing) {
+  if (timing === undefined) return { valid: true, value: null };
+  const source = timing && typeof timing === 'object' ? timing : null;
+  const startedAt = String(source?.startedAt ?? '').trim();
+  const timeZone = String(source?.timeZone ?? '').trim();
+  const localDate = String(source?.localDate ?? '').trim();
+  const localTime = String(source?.localTime ?? '').trim();
+  if (!source || !Number.isFinite(Date.parse(startedAt)) || !timeZone
+    || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)
+    || !/^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(localTime)) {
+    return { valid: false };
+  }
+  return { valid: true, value: { startedAt, timeZone, localDate, localTime } };
+}
+
 export function createTcxImport(tcxText, options = {}) {
   const sessionId = requiredText(options.sessionId, 'sessionId');
   const sourceSha256 = String(options.sourceSha256 ?? '').trim().toUpperCase();
@@ -39,6 +61,7 @@ export function createTcxImport(tcxText, options = {}) {
     targetMax: options.targetMax,
     ...(options.maxGapSeconds === undefined ? {} : { maxGapSeconds: options.maxGapSeconds }),
   });
+  const timing = formatTcxActivityTiming(analysis.startedAt, options.timeZone);
   const values = [
     analysis.targetMin,
     analysis.targetMax,
@@ -47,13 +70,14 @@ export function createTcxImport(tcxText, options = {}) {
     analysis.timeBelowTarget,
     analysis.analyzedDuration,
   ];
-  const idempotencyKey = `tcx-v1-${valueFingerprint([sessionId, sourceSha256 || 'NO_SHA256', ...values])}`;
+  const idempotencyKey = `tcx-v1-${valueFingerprint([sessionId, sourceSha256 || 'NO_SHA256', timing.localDate, timing.localTime, ...values])}`;
 
   return {
     schema: TCX_IMPORT_SCHEMA,
     sessionId,
     sourceSha256: sourceSha256 || null,
     idempotencyKey,
+    timing,
     methodology: {
       intervalOwner: 'previous-trackpoint',
       inclusiveTarget: true,
@@ -85,6 +109,8 @@ export function validateTcxImportEnvelope(envelope = {}) {
   if (envelope.sourceSha256 !== null && !SHA256_PATTERN.test(String(envelope.sourceSha256 ?? ''))) {
     return result('contract-error', { reason: 'Nieprawidłowy SHA-256 pliku TCX.' });
   }
+  const timing = validateTiming(envelope.timing);
+  if (!timing.valid) return result('contract-error', { reason: 'Nieprawidłowy czas rozpoczęcia TCX.' });
 
   const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic?.[header]);
   const invalidAtomicHeaders = TCX_IMPORT_HEADERS.filter((_, index) => (
@@ -108,7 +134,7 @@ export function validateTcxImportEnvelope(envelope = {}) {
     || methodology.maxGapSeconds <= 0) {
     return result('contract-error', { reason: 'Nieprawidłowa metodologia analizy TCX.' });
   }
-  return result('valid', { envelope });
+  return result('valid', { envelope: timing.value ? { ...envelope, timing: timing.value } : envelope });
 }
 
 function parseCsvRecords(text) {
@@ -180,6 +206,27 @@ function columnLetter(zeroBasedIndex) {
 
 function result(action, details = {}) {
   return { action, ...details };
+}
+
+function resolveTimingUpdate(headers, row, timing) {
+  if (!timing) return { action: 'not-provided' };
+  const dateIndex = headerIndex(headers, 'Date');
+  const timeIndex = headerIndex(headers, TCX_TIMING_HEADER);
+  if (dateIndex === -1 || timeIndex === -1) return { action: 'missing-column' };
+  const rowDate = localDateKey(row.values?.[dateIndex]);
+  if (!rowDate) return { action: 'invalid-row-date' };
+  if (rowDate !== timing.localDate) return { action: 'date-mismatch', rowDate, tcxDate: timing.localDate };
+  const current = String(row.values?.[timeIndex] ?? '').trim();
+  if (!isNullish(current)) return {
+    action: current === timing.localTime ? 'already-recorded' : 'preserved',
+    current,
+  };
+  return {
+    action: 'update',
+    startColumnIndex: timeIndex,
+    range: `${columnLetter(timeIndex)}${row.rowNumber}`,
+    values: [timing.localTime],
+  };
 }
 
 export function resolveTcxTarget(table = {}, sessionIdValue = '') {
@@ -263,19 +310,32 @@ export function reconcileTcxImport(table = {}, envelope = {}) {
     }
   });
 
+  const timing = resolveTimingUpdate(headers, row, validation.envelope.timing);
+  const atomicUpdate = blanks > 0;
+  const atomicRange = `${columnLetter(expectedAtomicStart)}${row.rowNumber}:${columnLetter(expectedAtomicStart + proposed.length - 1)}${row.rowNumber}`;
+  const updates = [
+    ...(atomicUpdate ? [{
+      kind: 'atomic', range: atomicRange, startColumnIndex: expectedAtomicStart, values: proposed,
+    }] : []),
+    ...(timing.action === 'update' ? [{
+      kind: 'timing', range: timing.range, startColumnIndex: timing.startColumnIndex, values: timing.values,
+    }] : []),
+  ];
   const base = {
     sessionId: envelope.sessionId,
     idempotencyKey: envelope.idempotencyKey,
     rowNumber: row.rowNumber,
-    range: `${columnLetter(expectedAtomicStart)}${row.rowNumber}:${columnLetter(expectedAtomicStart + proposed.length - 1)}${row.rowNumber}`,
+    range: updates[0]?.range || atomicRange,
     startColumnIndex: expectedAtomicStart,
     values: proposed,
     current: Object.fromEntries(TCX_IMPORT_HEADERS.map((header, index) => [header, currentRaw[index]])),
     proposed: envelope.atomic,
+    timing,
+    updates,
   };
 
   if (conflicts.length) return result('conflict', { ...base, conflicts });
-  if (blanks === 0) return result('noop', base);
+  if (!updates.length) return result('noop', base);
   return result('update', base);
 }
 
@@ -287,19 +347,27 @@ export function buildSheetsBatchUpdate(reconciliation, sheetId) {
   const numericSheetId = Number(sheetId);
   if (!Number.isInteger(numericSheetId) || numericSheetId < 0) throw new TypeError('sheetId musi być nieujemną liczbą całkowitą.');
 
-  return [{
+  const updates = reconciliation.updates || [{
+    startColumnIndex: reconciliation.startColumnIndex,
+    values: reconciliation.values,
+  }];
+  return updates.map((update) => ({
     updateCells: {
       range: {
         sheetId: numericSheetId,
         startRowIndex: reconciliation.rowNumber - 1,
         endRowIndex: reconciliation.rowNumber,
-        startColumnIndex: reconciliation.startColumnIndex,
-        endColumnIndex: reconciliation.startColumnIndex + reconciliation.values.length,
+        startColumnIndex: update.startColumnIndex,
+        endColumnIndex: update.startColumnIndex + update.values.length,
       },
       rows: [{
-        values: reconciliation.values.map((number) => ({ userEnteredValue: { numberValue: number } })),
+        values: update.values.map((value) => (
+          typeof value === 'number'
+            ? { userEnteredValue: { numberValue: value } }
+            : { userEnteredValue: { stringValue: String(value) } }
+        )),
       }],
       fields: 'userEnteredValue',
     },
-  }];
+  }));
 }

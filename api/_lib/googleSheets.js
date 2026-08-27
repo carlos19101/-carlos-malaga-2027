@@ -141,10 +141,10 @@ export async function updateTcxImport(envelope, options = {}) {
     body: JSON.stringify({
       valueInputOption: 'RAW',
       includeValuesInResponse: true,
-      data: [{
-        range: `'Training Log'!${reconciliation.range}`,
-        values: [reconciliation.values],
-      }],
+      data: reconciliation.updates.map((update) => ({
+        range: `'Training Log'!${update.range}`,
+        values: [update.values],
+      })),
     }),
   });
   if (!updateResponse.ok) throw new Error(`google-write-${updateResponse.status}`);

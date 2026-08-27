@@ -51,6 +51,7 @@ export default async function handler(request, response) {
       range: result.range,
       conflicts: result.conflicts,
       missingHeaders: result.missingHeaders,
+      timing: result.timing,
     });
   } catch (error) {
     console.error('tcx-import', error.message);

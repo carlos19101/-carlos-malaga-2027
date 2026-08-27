@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { analyzeTcx, parseTcxLaps, sanitizeTcx } from './tcx.js';
+import { analyzeTcx, formatTcxActivityTiming, parseTcxLaps, sanitizeTcx } from './tcx.js';
 
 const fixtureUrl = new URL('../test/fixtures/2026-08-23-run-01.sanitized.tcx', import.meta.url);
 
@@ -19,6 +19,7 @@ describe('analyzeTcx', () => {
     const result = analyzeTcx(source, { targetMin: 150, targetMax: 162 });
 
     expect(result).toMatchObject({
+      startedAt: '2000-01-01T00:00:00.000Z',
       timeInTarget: 1169,
       timeAboveTarget: 1376,
       timeBelowTarget: 87,
@@ -27,6 +28,15 @@ describe('analyzeTcx', () => {
       lapCount: 9,
       trackpointCount: 2641,
       nonPositiveIntervals: 8,
+    });
+  });
+
+  it('formatuje godzinę pierwszej próbki w jawnej strefie Warszawy', () => {
+    expect(formatTcxActivityTiming('2026-08-27T16:05:09.000Z')).toEqual({
+      startedAt: '2026-08-27T16:05:09.000Z',
+      timeZone: 'Europe/Warsaw',
+      localDate: '2026-08-27',
+      localTime: '18:05:09',
     });
   });
 
