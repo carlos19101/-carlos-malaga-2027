@@ -1350,8 +1350,9 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
   const [state, setState] = useState({ busy: false, message: '' });
 
   useEffect(() => {
+    const storedRpe = v(target, 'logRpe', '');
     setValues({
-      rpe: v(target, 'logRpe', ''),
+      rpe: parseMetric(storedRpe) === 0 ? '' : storedRpe,
       pain: v(target, 'logPain', ''),
       legFatigue: v(target, 'logLegFatigue', ''),
       notes: v(target, 'logFeedbackNotes', ''),
@@ -1362,6 +1363,7 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
   if (!access.checked || !access.configured || !target) return null;
   const sessionId = v(target, 'logSessionId', '');
   const sessionLabel = `${formatDate(v(target, 'date', ''))} · ${v(target, 'logName', resolveLogSession(target, A.logType) || 'Sesja')}`;
+  const legacyRpeZero = parseMetric(v(target, 'logRpe', '')) === 0;
 
   const submitLogin = async (event) => {
     event.preventDefault();
@@ -1405,6 +1407,7 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
       ) : (
         <form className="feedback-card" onSubmit={submitFeedback}>
           <div className="feedback-target"><span>SESJA</span><strong>{sessionLabel}</strong><small>{sessionId}</small></div>
+          {legacyRpeZero ? <p className="feedback-message">W historii jest RPE 0. Dla ukończonego biegu wybierz teraz rzeczywistą ocenę 1–10; poprzedni wpis nie zostanie zmieniony, dopóki go nie zapiszesz.</p> : null}
           <div className="feedback-scales">
             {[
               ['rpe', 'RPE', '1 = bardzo lekko · 10 = maksymalnie', 1],
