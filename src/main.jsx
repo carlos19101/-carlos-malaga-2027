@@ -46,7 +46,7 @@ import './styles.css';
 const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
 const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
-const APP_VERSION = 'FINAL 5.12';
+const APP_VERSION = 'FINAL 5.13';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_REFRESH_MS = 15000;
@@ -374,6 +374,17 @@ function DailyMetricsStatus({ daily, showMethod = true }) {
       ) : null}
       {showMethod ? <p className="method-note"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline 30 dni wyklucza oceniany dzień; przed kalibracją nie pokazujemy z-score.</p> : null}
     </>
+  );
+}
+
+function DecisionJournalStatus({ issues = [] }) {
+  const incomplete = issues.filter(({ id }) => String(id).startsWith('incomplete-decision-'));
+  if (!incomplete.length) return null;
+  return (
+    <div className="data-quality-banner verifier-warning" role="status">
+      <strong>DZIENNIK DECYZJI — wpis sztabu wymaga uzupełnienia.</strong>
+      {incomplete.slice(0, 3).map((item) => <span key={item.id}>{item.date}: {item.detail}</span>)}
+    </div>
   );
 }
 
@@ -890,6 +901,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         ) : null}
         <VerifierBanner mismatches={verifierMismatches} />
         <DailyMetricsStatus daily={daily} showMethod={false} />
+        <DecisionJournalStatus issues={journalBase.issues} />
       </div>
 
       <section className="section-block dashboard-command-section">

@@ -92,6 +92,19 @@ describe('buildDecisionJournal', () => {
     expect(result.entries[0].recommendation).toBe('B');
   });
 
+  it('oznacza status albo rekomendację bez pary jako niekompletną decyzję', () => {
+    const result = buildDecisionJournal([
+      row('2026-08-24', '2026-08-24 08:00', { status: 'YELLOW' }, 'Head Coach'),
+      row('2026-08-25', '2026-08-25 08:00', { decision: 'Easy' }, 'Head Coach'),
+    ]);
+    expect(result.entries).toHaveLength(2);
+    expect(result.issues.filter(({ id }) => id.startsWith('incomplete-decision-'))).toHaveLength(2);
+    expect(result.issues.map(({ detail }) => detail)).toEqual(expect.arrayContaining([
+      expect.stringContaining('brak Coach_Decision'),
+      expect.stringContaining('brak Coach_Status'),
+    ]));
+  });
+
   it('raportuje decyzję bez daty', () => {
     const result = buildDecisionJournal([row('', '2026-08-25 08:00', { decision: 'B' }, 'Head Coach')]);
     expect(result.entries).toEqual([]);

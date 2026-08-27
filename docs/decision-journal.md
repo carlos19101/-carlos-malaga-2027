@@ -12,6 +12,10 @@ Obecny kontrakt obejmuje sen, HRV, RHR, Readiness, Body Battery, ból, DOMS i zm
 
 Tekst jest cytatem z `Coach_Decision`. Aplikacja nie rozdziela go sztucznie na interpretację i rekomendację, ponieważ obecny schemat źródła nie posiada dwóch osobnych pól.
 
+## Integralność decyzji
+
+Prawidłowy wpis sztabu zawiera parę `Coach_Status` oraz `Coach_Decision`. Jeśli jedno z pól jest puste, aplikacja zachowuje dostępny fragment jako zapis historyczny, ale pokazuje ostrzeżenie `DZIENNIK DECYZJI — wpis sztabu wymaga uzupełnienia`. Jest to sygnał integralności danych, nie automatyczna zmiana decyzji treningowej.
+
 ## Audyt
 
 ```bash

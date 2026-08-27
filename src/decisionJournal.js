@@ -110,6 +110,14 @@ export function buildDecisionJournal(rawRows = [], options = {}) {
     const rawTimestamp = exactValue(row, FIELDS.timestamp, '');
     const timestamp = parseRawTimestamp(rawTimestamp) || parseDate(rawDate);
     if (!timestamp) return [];
+    if (!rawStatus || !recommendation) {
+      issues.push({
+        id: `incomplete-decision-${date}-${timestamp.getTime()}-${rowIndex}`,
+        severity: 'warning',
+        date,
+        detail: `Decyzja sztabu jest niekompletna: ${!rawStatus ? 'brak Coach_Status' : 'brak Coach_Decision'}.`,
+      });
+    }
     const evidence = Object.entries(DECISION_EVIDENCE_FIELDS).map(([field, definition]) => (
       evidenceForDecision(field, definition, rowsByDay.get(date) || [], timestamp, date, issues)
     )).filter(Boolean);
