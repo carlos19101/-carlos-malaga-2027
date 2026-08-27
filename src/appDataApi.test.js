@@ -72,6 +72,12 @@ describe('prywatny transport danych', () => {
     await expect(fetchPrivateApplicationData(undefined, fetchImpl)).rejects.toMatchObject({ status: 401 });
   });
 
+  it('zachowuje DATA ERROR z odpowiedzi 200 zamiast oznaczać aplikację jako offline', async () => {
+    const broken = { ...tables, plan: [['Data', 'Rano'], ['2026-08-25', 'Easy']] };
+    const fetchImpl = vi.fn().mockResolvedValue(response(200, { ok: true, tables: broken }));
+    await expect(fetchPrivateApplicationData(undefined, fetchImpl)).rejects.toThrow('DATA ERROR — Plan');
+  });
+
   it('nie miesza prywatnego snapshotu z publicznym ani legacy', () => {
     const legacy = JSON.stringify({ data: { feed: [{ Date: '2026-08-25' }] }, at: 1 });
     const privateSnapshot = JSON.stringify({ data: { feed: [] }, at: 2, mode: 'private' });

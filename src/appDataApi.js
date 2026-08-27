@@ -40,23 +40,24 @@ export function applicationDataFromTables(tables = {}) {
 }
 
 export async function fetchPrivateApplicationData(signal, fetchImpl = fetch) {
+  let response;
   try {
-    const response = await fetchImpl('/api/data', {
+    response = await fetchImpl('/api/data', {
       method: 'GET', credentials: 'same-origin', cache: 'no-store', signal,
       headers: { Accept: 'application/json' },
     });
-    let body = {};
-    try { body = await response.json(); } catch { body = {}; }
-    if (!response.ok || body.ok === false) {
-      const error = new Error(body.error || `private-data-${response.status}`);
-      error.status = response.status;
-      throw error;
-    }
-    return applicationDataFromTables(body.tables);
   } catch (error) {
-    if (error?.name === 'AbortError' || error?.status) throw error;
+    if (error?.name === 'AbortError') throw error;
     const offline = new Error('private-data-offline');
     offline.status = 0;
     throw offline;
   }
+  let body = {};
+  try { body = await response.json(); } catch { body = {}; }
+  if (!response.ok || body.ok === false) {
+    const error = new Error(body.error || `private-data-${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return applicationDataFromTables(body.tables);
 }
