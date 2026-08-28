@@ -94,12 +94,13 @@ describe('Strava dane aktywności', () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, [{
       id: 123, name: 'Poranny bieg', type: 'Run', sport_type: 'Run', start_date: '2026-08-28T06:00:00Z',
       start_date_local: '2026-08-28T08:00:00Z', distance: 6800.5, moving_time: 2500, elapsed_time: 2700,
-      average_speed: 2.72, average_heartrate: 151.4, max_heartrate: 161, total_elevation_gain: 41,
+      average_speed: 2.72, has_heartrate: true, average_heartrate: 151.4, max_heartrate: 161, total_elevation_gain: 41,
       map: { polyline: 'nie-zwracaj' }, description: 'nie-zwracaj',
     }]));
-    const result = await listStravaActivities(valid, env, fetchImpl, { now, limit: 10 });
-    expect(result).toMatchObject({ refreshed: false, activities: [expect.objectContaining({ id: '123', distanceMeters: 6800.5, averageHeartRate: 151.4 })] });
+    const result = await listStravaActivities(valid, env, fetchImpl, { now, limit: 200 });
+    expect(result).toMatchObject({ refreshed: false, activities: [expect.objectContaining({ id: '123', distanceMeters: 6800.5, hasHeartRate: true, averageHeartRate: 151.4 })] });
     expect(result.activities[0]).not.toHaveProperty('map');
+    expect(new URL(fetchImpl.mock.calls[0][0]).searchParams.get('per_page')).toBe('200');
     expect(normalizeStravaActivity({})).toBeNull();
   });
 

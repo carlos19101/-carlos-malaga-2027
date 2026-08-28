@@ -224,6 +224,7 @@ export function normalizeStravaActivity(activity = {}) {
     movingSeconds: finite(activity.moving_time),
     elapsedSeconds: finite(activity.elapsed_time),
     averageSpeedMps: finite(activity.average_speed),
+    hasHeartRate: Boolean(activity.has_heartrate),
     averageHeartRate: finite(activity.average_heartrate),
     maxHeartRate: finite(activity.max_heartrate),
     elevationGainMeters: finite(activity.total_elevation_gain),
@@ -234,7 +235,7 @@ export async function listStravaActivities(credentials, env = process.env, fetch
   const active = await activeStravaCredentials(credentials, env, fetchImpl, options);
   try {
     const url = new URL('https://www.strava.com/api/v3/athlete/activities');
-    url.search = new URLSearchParams({ per_page: String(Math.min(Math.max(Number(options.limit) || 10, 1), 30)) }).toString();
+    url.search = new URLSearchParams({ per_page: String(Math.min(Math.max(Number(options.limit) || 10, 1), 200)) }).toString();
     const response = await fetchImpl(url, {
       headers: { Authorization: `Bearer ${active.credentials.accessToken}` },
     });

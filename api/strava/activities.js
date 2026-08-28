@@ -1,6 +1,6 @@
 import { authenticated } from '../_lib/session.js';
 import { methodNotAllowed, sendJson } from '../_lib/http.js';
-import { listStravaActivities, readStravaCredentials, stravaConfiguration, stravaTokenCookie } from '../_lib/strava.js';
+import { listStravaActivities, queryValue, readStravaCredentials, stravaConfiguration, stravaTokenCookie } from '../_lib/strava.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'GET') {
@@ -21,7 +21,7 @@ export default async function handler(request, response) {
     return;
   }
   try {
-    const result = await listStravaActivities(credentials);
+    const result = await listStravaActivities(credentials, process.env, fetch, { limit: queryValue(request, 'limit') || 10 });
     sendJson(response, 200, { ok: true, activities: result.activities }, result.refreshed
       ? { 'Set-Cookie': stravaTokenCookie(result.credentials, process.env.STRAVA_TOKEN_SECRET) }
       : {});
