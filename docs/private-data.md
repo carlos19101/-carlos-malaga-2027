@@ -20,6 +20,12 @@ Odpowiedź ma `Cache-Control: no-store`. Service worker zawsze kieruje `/api/` d
 
 Snapshot `localStorage` ma wyłącznie oznaczenie `private`; starsze i publiczne kopie są odrzucane. Wylogowanie usuwa snapshot oraz dane z pamięci widoku. Niewysłana kolejka feedbacku pozostaje na urządzeniu, aby nie utracić wpisu offline, ale nie jest pokazywana bez ponownego zalogowania.
 
+## Ochrona logowania
+
+Warstwa aplikacji prowadzi trwały limiter prób niezależnie od WAF: pięć nieudanych prób z jednego klienta w ciągu 15 minut blokuje kolejne logowanie na 15 minut i zwraca `429` z `Retry-After`. Stan trafia do ukrytej zakładki `Auth_Limits` w tym samym prywatnym arkuszu, ale zawiera wyłącznie klucz HMAC adresu klienta, liczniki i znaczniki czasu — nigdy plaintext hasła ani adres IP. Poprawne logowanie zeruje wpis.
+
+WAF Vercela pozostaje zewnętrzną, współdzieloną pierwszą linią ochrony. Nie zastępuje limitera aplikacyjnego i odwrotnie.
+
 ## Aktywacja produkcyjna
 
 1. Uruchom `npm run passcode:generate`, zapisz pokazany `PASSCODE` wyłącznie w menedżerze haseł, a do Vercela skopiuj tylko `APP_PASSCODE_SCRYPT`.
@@ -32,7 +38,7 @@ Snapshot `localStorage` ma wyłącznie oznaczenie `private`; starsze i publiczne
 8. Dopiero po pozytywnym smoke-checku zmień Google Sheet z publicznego na `Restricted`.
 9. Sprawdź dashboard, odświeżenie, północ, kolejkę offline, wylogowanie oraz ponowne logowanie.
 
-`APP_PASSCODE_SCRYPT` ma format `scrypt-v1$salt$key`. Plaintextowy passcode nie jest zmienną środowiskową i nie może trafić do repozytorium ani logów wdrożenia. Reguła WAF jest współdzielona przez instancje serverless; nie zastępuj jej licznikiem w pamięci funkcji ani zapisem prób w arkuszu treningowym.
+`APP_PASSCODE_SCRYPT` ma format `scrypt-v1$salt$key`. Plaintextowy passcode nie jest zmienną środowiskową i nie może trafić do repozytorium ani logów wdrożenia. Reguła WAF jest współdzielona przez instancje serverless; nie zastępuj jej licznikiem w pamięci funkcji. Nie zapisuj prób w `Training Log`, `Raw_Data` ani innych zakładkach treningowych.
 
 Odebranie publicznego dostępu jest zmianą zewnętrzną i wymaga uprawnień właściciela arkusza. Samo wdrożenie kodu nie wykonuje tego kroku.
 
