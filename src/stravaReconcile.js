@@ -58,7 +58,8 @@ function comparison(activity, session) {
   return { distance, duration, withinTolerance: primary.comparable && primary.withinTolerance };
 }
 
-export function reconcileStravaActivities(activities = [], sessions = []) {
+export function reconcileStravaActivities(activities = [], sessions = [], options = {}) {
+  const coverageStartDate = localDate(options.coverageStartDate);
   const normalizedSessions = (sessions || []).map((session) => ({
     ...session,
     date: localDate(session.date),
@@ -72,7 +73,14 @@ export function reconcileStravaActivities(activities = [], sessions = []) {
       return { activity, state: 'outside-contract', session: null, comparison: null };
     }
     const candidates = normalizedSessions.filter((session) => session.date === date && session.category === activityCategory);
-    if (!candidates.length) return { activity, state: 'unmatched', session: null, comparison: null };
+    if (!candidates.length) {
+      return {
+        activity,
+        state: coverageStartDate && date < coverageStartDate ? 'historical' : 'unmatched',
+        session: null,
+        comparison: null,
+      };
+    }
 
     const scored = candidates.map((session) => ({ session, comparison: comparison(activity, session) }));
     const compatible = scored.filter((candidate) => candidate.comparison.withinTolerance);
@@ -89,6 +97,7 @@ export function reconcileStravaActivities(activities = [], sessions = []) {
       matched: entries.filter((entry) => entry.state === 'matched').length,
       review: entries.filter((entry) => entry.state === 'review').length,
       unmatched: entries.filter((entry) => entry.state === 'unmatched').length,
+      historical: entries.filter((entry) => entry.state === 'historical').length,
       ambiguous: entries.filter((entry) => entry.state === 'ambiguous').length,
       outsideContract: entries.filter((entry) => entry.state === 'outside-contract').length,
     },

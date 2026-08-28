@@ -37,4 +37,13 @@ describe('reconcileStravaActivities', () => {
     expect(reconcileStravaActivities([activity({ type: 'Ride', sportType: 'Ride' })], [session()]).entries[0].state).toBe('outside-contract');
     expect(STRAVA_RECONCILIATION_CONTRACT.runDistanceToleranceMeters).toBe(100);
   });
+
+  it('oddziela aktywności sprzed początku Training Log od bieżących braków', () => {
+    const result = reconcileStravaActivities([
+      activity({ startLocal: '2026-08-13T19:00:00Z' }),
+      activity({ id: 'strava-2', startLocal: '2026-08-25T19:00:00Z' }),
+    ], [session()], { coverageStartDate: '2026-08-18' });
+    expect(result.entries.map((entry) => entry.state)).toEqual(['historical', 'unmatched']);
+    expect(result.summary).toMatchObject({ historical: 1, unmatched: 1 });
+  });
 });

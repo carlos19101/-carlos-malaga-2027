@@ -1585,6 +1585,7 @@ function stravaMatchLabel(entry) {
   if (entry.state === 'review') return `SPRAWDŹ · ${entry.session?.name || entry.session?.id || 'sesja'}${differenceLabel}`;
   if (entry.state === 'ambiguous') return 'SPRAWDŹ · więcej niż jedna sesja tego typu tego dnia';
   if (entry.state === 'unmatched') return 'BRAK PARY · brak odpowiedniej sesji w Training Log';
+  if (entry.state === 'historical') return 'HISTORIA · przed rozpoczęciem Training Log';
   return 'POZA KONTRAKTEM · typ aktywności nie jest jeszcze porównywany';
 }
 
@@ -1647,17 +1648,20 @@ function StravaPanel({ access, rows }) {
     setState({ checked: true, busy: false, status: { configured: true, connected: false }, activities: [], message: 'Strava odłączona od tej przeglądarki.' });
   };
 
-  if (!access.authenticated) return null;
-  const configured = Boolean(state.status?.configured);
-  const connected = Boolean(state.status?.connected);
-  const reconciliation = useMemo(() => reconcileStravaActivities(state.activities, (rows || []).map((row) => ({
+  const reconciliationSessions = useMemo(() => (rows || []).map((row) => ({
     id: v(row, 'logSessionId', ''),
     name: v(row, 'logName', resolveLogSession(row, A.logType) || 'Sesja'),
     type: resolveLogSession(row, A.logType),
     date: localDateKey(rowDate(row)),
     distanceMeters: (parseMetric(v(row, 'logDistance', '')) || 0) * 1000,
     durationSeconds: (parseSessionMinutes(v(row, 'logDuration', '')) || 0) * 60,
-  }))), [rows, state.activities]);
+  })), [rows]);
+  const coverageStartDate = useMemo(() => reconciliationSessions.map((session) => session.date).filter(Boolean).sort()[0] || '', [reconciliationSessions]);
+  const reconciliation = useMemo(() => reconcileStravaActivities(state.activities, reconciliationSessions, { coverageStartDate }), [coverageStartDate, reconciliationSessions, state.activities]);
+  const currentReviewCount = reconciliation.summary.review + reconciliation.summary.ambiguous + reconciliation.summary.unmatched;
+  if (!access.authenticated) return null;
+  const configured = Boolean(state.status?.configured);
+  const connected = Boolean(state.status?.connected);
   return (
     <section className="section-block strava-section">
       <div className="section-heading">
@@ -1673,7 +1677,7 @@ function StravaPanel({ access, rows }) {
           <div className="strava-actions"><p>Połączono z kontem Strava. Odczyt służy teraz do porównania aktywności; import do Training Log będzie zawsze osobno zatwierdzany.</p><div><button type="button" onClick={loadActivities} disabled={state.busy}>{state.busy ? 'Odczytuję…' : 'Pobierz ostatnie aktywności'}</button><button type="button" className="feedback-secondary" onClick={disconnect} disabled={state.busy}>Odłącz</button></div></div>
         )}
         {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
-        {state.activities.length ? <><p className="strava-reconciliation">Porównanie: <b>{reconciliation.summary.matched} zgodne</b> · <b>{reconciliation.summary.review + reconciliation.summary.ambiguous} do sprawdzenia</b> · <b>{reconciliation.summary.unmatched} bez pary</b>. Czas ruchu Stravy nie zastępuje czasu całej aktywności z TCX.</p><div className="strava-activity-list">{reconciliation.entries.map((entry) => {
+        {state.activities.length ? <><p className="strava-reconciliation">Bieżący okres od {coverageStartDate || 'braku daty'}: <b>{reconciliation.summary.matched} zgodne</b> · <b>{currentReviewCount} do weryfikacji</b> · <b>{reconciliation.summary.historical} wpisów historycznych</b>. Czas ruchu Stravy nie zastępuje czasu całej aktywności z TCX.</p><div className="strava-activity-list">{reconciliation.entries.map((entry) => {
           const { activity } = entry;
           return <article key={activity.id} className="strava-activity"><div><strong>{activity.name || 'Aktywność'}</strong><small>{activity.startLocal ? formatDate(activity.startLocal, true) : 'brak czasu lokalnego'} · {activity.type || '—'}</small><em className={`strava-match strava-match-${entry.state}`}>{stravaMatchLabel(entry)}</em></div><div><b>{activity.distanceMeters === null ? '—' : `${formatMetricNumber(activity.distanceMeters / 1000, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`}</b><small>{stravaActivityDuration(activity.movingSeconds)} · HR {formatMetricNumber(activity.averageHeartRate, { maximumFractionDigits: 0, fallback: '—' })} / {formatMetricNumber(activity.maxHeartRate, { maximumFractionDigits: 0, fallback: '—' })}</small></div></article>;
         })}</div></> : null}
@@ -1717,7 +1721,7 @@ function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogi
         />
       ) : null}
       <TcxImportPanel rows={sorted} access={feedbackAccess} onSubmit={onTcxImport} />
-      <StravaPanel access={feedbackAccess} rows={sorted} />
+      <StravaPanel access={feedbackAccess} rows={rows} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
       </section>
