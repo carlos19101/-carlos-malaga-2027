@@ -60,8 +60,9 @@ describe('prywatny transport danych', () => {
 
   it('pobiera dane z same-origin cookie i bez cache', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(response(200, { ok: true, tables }));
-    const data = await fetchPrivateApplicationData(undefined, fetchImpl);
-    expect(data.raw).toHaveLength(1);
+    const result = await fetchPrivateApplicationData(undefined, fetchImpl);
+    expect(result.data.raw).toHaveLength(1);
+    expect(result.meta).toMatchObject({ transport: 'private-endpoint', serverDurationMs: null });
     expect(fetchImpl).toHaveBeenCalledWith('/api/data', expect.objectContaining({
       method: 'GET', credentials: 'same-origin', cache: 'no-store',
     }));

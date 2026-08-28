@@ -185,8 +185,10 @@ describe('/api/data', () => {
     await dataHandler({ method: 'GET', headers: { cookie: `${SESSION_COOKIE}=${token}` } }, response);
     expect(response.statusCode).toBe(200);
     expect(response.body).toMatchObject({ ok: true, transport: 'google-sheets-api' });
+    expect(response.body.meta.serverDurationMs).toBeTypeOf('number');
     expect(Object.keys(response.body.tables)).toEqual(['feed', 'log', 'plan', 'raw']);
     expect(response.headers['Cache-Control']).toBe('no-store');
+    expect(response.headers['Server-Timing']).toMatch(/^app;dur=\d+$/);
   });
 });
 

@@ -27,6 +27,7 @@ import { computeLoadMap, parseSessionMinutes } from './loadMap';
 import { computeWeeklySnapshot } from './weeklySnapshot';
 import { computePerformanceResponse } from './performanceResponse';
 import { computeDailyMetrics } from './dailyMetrics';
+import { computeDataCompleteness } from './dataCompleteness';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
 import { buildStaffPanel } from './staffPanel';
@@ -827,7 +828,7 @@ function StaffDrawer({ open, onClose, panel, decision }) {
   );
 }
 
-function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierReady, now }) {
+function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierReady, transportMeta, now }) {
   const [staffOpen, setStaffOpen] = useState(false);
   const [decisionOpen, setDecisionOpen] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
@@ -867,6 +868,30 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     ? [...crossValidate(computedMetrics, verifierFeedMetrics(row)), ...decisionStatusVerification.mismatches]
     : [], [computedMetrics, row, verifierReady, decisionStatusVerification]);
   const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
+  const dataCompleteness = useMemo(() => {
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - 27);
+    const recentRuns = log.filter((logRow) => {
+      const date = parseDate(v(logRow, 'date', ''));
+      return isRunLogRow(logRow) && date && date >= cutoff && date <= now;
+    }).map((logRow) => {
+      const feedback = feedbackStatusForRow(logRow);
+      const targetMin = parseMetric(v(logRow, 'logHrTargetMin', ''));
+      const targetMax = parseMetric(v(logRow, 'logHrTargetMax', ''));
+      return {
+        feedbackComplete: feedback.complete,
+        meaningfulRpe: parseMetric(v(logRow, 'logRpe', '')) > 0,
+        tcxRequired: targetMin !== null && targetMax !== null && targetMin < targetMax,
+        tcxComplete: tcxStatusForRow(logRow).complete,
+      };
+    });
+    return computeDataCompleteness({
+      dailyState: daily.state,
+      calibrationDays: daily.calibrationDays,
+      runs: recentRuns,
+      sourceOk: validation.ok && freshnessState === 'fresh',
+    });
+  }, [daily, freshnessState, log, now, validation.ok]);
   const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
   const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
   const weeklySnapshot = useMemo(() => computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now), [log, plan, now]);
@@ -1091,6 +1116,15 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           <span className="section-aside">otwieraj tylko to, czego potrzebujesz</span>
         </div>
         <div className="dashboard-disclosure-stack">
+          <DashboardDisclosure eyebrow="INTEGRALNOŚĆ" title="Kompletność danych" summary={`RPE ${dataCompleteness.feedback.complete}/${dataCompleteness.feedback.total} · TCX ${dataCompleteness.tcx.complete}/${dataCompleteness.tcx.total}`}>
+            <div className="stats-grid compact-stats">
+              <StatCard label="BASELINE" value={dataCompleteness.calibration.progress} note={dataCompleteness.calibration.state === 'ready' ? '28 dni i wystarczająca próbka metryk' : 'nie pokazujemy z-score przed kalibracją'} />
+              <StatCard label="RPE · 28D" value={`${dataCompleteness.feedback.complete}/${dataCompleteness.feedback.total}`} note={dataCompleteness.feedback.missing ? `do uzupełnienia: ${dataCompleteness.feedback.missing}` : 'wszystkie ukończone biegi mają RPE 1–10'} tone={dataCompleteness.feedback.missing ? 'mid' : 'good'} />
+              <StatCard label="TCX Z CELEM HR · 28D" value={`${dataCompleteness.tcx.complete}/${dataCompleteness.tcx.total}`} note={dataCompleteness.tcx.total ? dataCompleteness.tcx.missing ? `do analizy: ${dataCompleteness.tcx.missing}` : 'wszystkie wymagane sesje mają dane atomowe' : 'brak sesji z celem HR'} tone={dataCompleteness.tcx.missing ? 'mid' : ''} />
+              <StatCard label="ODCZYT ŹRÓDŁA" value={dataCompleteness.source === 'complete' ? 'OK' : 'UWAGA'} note={transportMeta?.serverDurationMs === null || !transportMeta ? 'brak pomiaru czasu endpointu' : `endpoint ${transportMeta.serverDurationMs} ms · przeglądarka ${transportMeta.clientDurationMs} ms`} tone={dataCompleteness.source === 'complete' ? 'good' : 'mid'} />
+            </div>
+          </DashboardDisclosure>
+
           <DashboardDisclosure eyebrow="DANE" title="Organizm i kalibracja" summary={`HRV ${formatMetricNumber(v(row, 'hrv', ''), { maximumFractionDigits: 0 })} ms · waga ${formatMetricNumber(weightReading?.value, { maximumFractionDigits: 1 })} kg`}>
             <p className="method-note detail-method"><strong>DAILY METRICS · {daily?.state === 'ready' ? 'GOTOWE' : `KALIBRACJA ${daily?.calibrationDays || '0/28'}`}</strong> · baseline wyklucza oceniany dzień.</p>
             <div className="readiness-grid">
@@ -1837,6 +1871,7 @@ function App() {
   const [networkSyncedAt, setNetworkSyncedAt] = useState(null);
   const [errors, setErrors] = useState({});
   const [fromCache, setFromCache] = useState(false);
+  const [transportMeta, setTransportMeta] = useState(null);
   const [calendarNow, setCalendarNow] = useState(() => new Date());
   const [feedbackAccess, setFeedbackAccess] = useState({ checked: false, configured: null, authenticated: false, error: '' });
   const [feedbackQueueCount, setFeedbackQueueCount] = useState(0);
@@ -1884,9 +1919,12 @@ function App() {
 
     const merged = { ...dataRef.current };
     const nextErrors = {};
+    let nextTransportMeta = null;
     let anyOk = false;
     try {
-      Object.assign(merged, await fetchPrivateApplicationData(controller.signal));
+      const privateData = await fetchPrivateApplicationData(controller.signal);
+      Object.assign(merged, privateData.data);
+      nextTransportMeta = privateData.meta;
       anyOk = true;
     } catch (error) {
       nextErrors.private = error?.name === 'AbortError'
@@ -1904,6 +1942,7 @@ function App() {
 
     const now = Date.now();
     setData(merged);
+    if (nextTransportMeta) setTransportMeta(nextTransportMeta);
     setErrors(nextErrors);
     setCheckedAt(now);
     if (anyOk) {
@@ -1960,6 +1999,7 @@ function App() {
     setCheckedAt(null);
     setNetworkSyncedAt(null);
     setFromCache(false);
+    setTransportMeta(null);
     setLoading(false);
     commitAccess({ checked: true, configured: true, authenticated: false, error: '' });
   }, [commitAccess]);
@@ -2130,7 +2170,7 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} now={calendarNow} />}
+        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
         {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}

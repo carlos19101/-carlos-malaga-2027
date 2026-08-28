@@ -39,6 +39,7 @@ export function applicationDataFromTables(tables = {}) {
 }
 
 export async function fetchPrivateApplicationData(signal, fetchImpl = fetch) {
+  const startedAt = Date.now();
   let response;
   try {
     response = await fetchImpl('/api/data', {
@@ -58,5 +59,12 @@ export async function fetchPrivateApplicationData(signal, fetchImpl = fetch) {
     error.status = response.status;
     throw error;
   }
-  return applicationDataFromTables(body.tables);
+  return {
+    data: applicationDataFromTables(body.tables),
+    meta: {
+      transport: body.transport || 'private-endpoint',
+      serverDurationMs: Number.isFinite(Number(body.meta?.serverDurationMs)) ? Number(body.meta.serverDurationMs) : null,
+      clientDurationMs: Date.now() - startedAt,
+    },
+  };
 }
