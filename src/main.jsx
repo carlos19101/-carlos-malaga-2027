@@ -36,6 +36,7 @@ import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogT
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
+import { connectStrava, disconnectStrava, stravaActivities, stravaStatus } from './stravaApi';
 import {
   createTrainingFeedback,
   enqueueTrainingFeedback,
@@ -1561,6 +1562,96 @@ function TcxImportPanel({ rows, access, onSubmit }) {
   );
 }
 
+function stravaActivityDuration(seconds) {
+  const value = parseMetric(seconds);
+  if (value === null || value < 0) return '—';
+  const total = Math.round(value);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function StravaPanel({ access }) {
+  const [state, setState] = useState({ checked: false, busy: false, status: null, activities: [], message: '' });
+
+  const checkStatus = useCallback(async () => {
+    const result = await stravaStatus();
+    setState((current) => ({
+      ...current,
+      checked: true,
+      status: result.ok ? result : null,
+      message: result.ok ? current.message : result.status === 401 ? 'Sesja zapisu wygasła.' : 'Nie udało się sprawdzić połączenia ze Stravą.',
+    }));
+    return result;
+  }, []);
+
+  useEffect(() => {
+    if (!access.authenticated) return undefined;
+    let active = true;
+    stravaStatus().then((result) => {
+      if (!active) return;
+      const flow = new URLSearchParams(window.location.search).get('strava');
+      const messages = {
+        connected: 'Strava połączona. Możesz teraz odczytać ostatnie aktywności.',
+        cancelled: 'Połączenie ze Stravą zostało anulowane.',
+        'scope-required': 'Strava nie przyznała wymaganego zakresu activity:read_all.',
+        'state-invalid': 'Weryfikacja połączenia Stravy wygasła — spróbuj ponownie.',
+        'connection-failed': 'Nie udało się zakończyć połączenia ze Stravą.',
+      };
+      if (flow) window.history.replaceState({}, '', window.location.pathname);
+      setState((current) => ({
+        ...current,
+        checked: true,
+        status: result.ok ? result : null,
+        message: messages[flow] || (result.ok ? current.message : 'Nie udało się sprawdzić połączenia ze Stravą.'),
+      }));
+    });
+    return () => { active = false; };
+  }, [access.authenticated]);
+
+  const loadActivities = async () => {
+    setState((current) => ({ ...current, busy: true, message: '' }));
+    const result = await stravaActivities();
+    setState((current) => ({
+      ...current,
+      busy: false,
+      activities: result.ok ? result.activities || [] : current.activities,
+      message: result.ok ? `Odczytano ${result.activities?.length || 0} ostatnich aktywności. Nic nie zapisano w Training Log.` : result.status === 409 ? 'Najpierw połącz Stravę.' : 'Strava chwilowo nie zwróciła aktywności.',
+    }));
+  };
+
+  const disconnect = async () => {
+    setState((current) => ({ ...current, busy: true, message: '' }));
+    const result = await disconnectStrava();
+    if (!result.ok) {
+      setState((current) => ({ ...current, busy: false, message: 'Nie udało się odłączyć Stravy.' }));
+      return;
+    }
+    setState({ checked: true, busy: false, status: { configured: true, connected: false }, activities: [], message: 'Strava odłączona od tej przeglądarki.' });
+  };
+
+  if (!access.authenticated) return null;
+  const configured = Boolean(state.status?.configured);
+  const connected = Boolean(state.status?.connected);
+  return (
+    <section className="section-block strava-section">
+      <div className="section-heading">
+        <div><span className="eyebrow">STRAVA · ŹRÓDŁO REFERENCYJNE</span><h2>Aktywności ze Stravy</h2></div>
+        <span className="section-aside">bez automatycznego zapisu</span>
+      </div>
+      <div className="feedback-card strava-card">
+        {!state.checked ? <p className="feedback-message">Sprawdzam konfigurację Stravy…</p> : !configured ? (
+          <p className="feedback-message">Integracja jest gotowa w aplikacji, ale na produkcji brakuje sekretów Stravy. Nie ma jeszcze połączenia ani odczytu danych.</p>
+        ) : !connected ? (
+          <div className="strava-actions"><p>Połączysz tylko swoje konto i przyznasz odczyt prywatnych aktywności. Dane nie zostaną automatycznie dopisane do Training Log.</p><button type="button" onClick={connectStrava}>Połącz Stravę</button></div>
+        ) : (
+          <div className="strava-actions"><p>Połączono z kontem Strava. Odczyt służy teraz do porównania aktywności; import do Training Log będzie zawsze osobno zatwierdzany.</p><div><button type="button" onClick={loadActivities} disabled={state.busy}>{state.busy ? 'Odczytuję…' : 'Pobierz ostatnie aktywności'}</button><button type="button" className="feedback-secondary" onClick={disconnect} disabled={state.busy}>Odłącz</button></div></div>
+        )}
+        {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
+        {state.activities.length ? <div className="strava-activity-list">{state.activities.map((activity) => <article key={activity.id} className="strava-activity"><div><strong>{activity.name || 'Aktywność'}</strong><small>{activity.startLocal ? formatDate(activity.startLocal, true) : 'brak czasu lokalnego'} · {activity.type || '—'}</small></div><div><b>{activity.distanceMeters === null ? '—' : `${formatMetricNumber(activity.distanceMeters / 1000, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`}</b><small>{stravaActivityDuration(activity.movingSeconds)} · HR {formatMetricNumber(activity.averageHeartRate, { maximumFractionDigits: 0, fallback: '—' })} / {formatMetricNumber(activity.maxHeartRate, { maximumFractionDigits: 0, fallback: '—' })}</small></div></article>)}</div> : null}
+      </div>
+    </section>
+  );
+}
+
 function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport }) {
   const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
   const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
@@ -1596,6 +1687,7 @@ function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogi
         />
       ) : null}
       <TcxImportPanel rows={sorted} access={feedbackAccess} onSubmit={onTcxImport} />
+      <StravaPanel access={feedbackAccess} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
       </section>

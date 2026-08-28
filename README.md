@@ -43,6 +43,10 @@ Dashboard pokazuje chronologię werdyktów Head Coacha wraz z dowodami, które f
 
 Ścieżka zapisu aktualizuje istniejącą sesję po `Session_ID`, przelicza sRPE, ma idempotencję, kolejkę offline oraz siedmiodniową sesję HttpOnly. Kontrakt, zachowanie błędów i konfiguracja endpointu: [`docs/training-feedback.md`](docs/training-feedback.md).
 
+## Strava
+
+Opcjonalne połączenie OAuth odczytuje prywatne podsumowania ostatnich aktywności wyłącznie po zatwierdzeniu przez użytkownika. Odświeżalny token pozostaje zaszyfrowany w cookie `HttpOnly`; aktywności nie są automatycznie zapisywane ani łączone z `Training Log`. Konfiguracja wymaga `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` i `STRAVA_TOKEN_SECRET`, a w panelu Stravy callback domain `carlos-malaga-2027.vercel.app`. Pełna instrukcja: [`docs/strava.md`](docs/strava.md).
+
 ## Panel Sztabu
 
 Dashboard rozdziela dowody, interpretację i rekomendację czterech ról CORE. Specjaliści warunkowi pojawiają się tylko po spełnieniu jawnego warunku, a `SPÓR` tylko przy rzeczywiście różnych kierunkach domeny i Head Coacha. Metodologia i granice: [`docs/staff-panel.md`](docs/staff-panel.md).
