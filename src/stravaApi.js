@@ -18,9 +18,10 @@ export function stravaStatus(fetchImpl) {
   return jsonRequest('/api/strava/status', { method: 'GET' }, fetchImpl);
 }
 
-export function stravaActivities(limit, fetchImpl) {
+export function stravaActivities(limit, page = 1, fetchImpl) {
   const bounded = Math.min(Math.max(Number(limit) || 10, 1), 200);
-  return jsonRequest(`/api/strava/activities?limit=${bounded}`, { method: 'GET' }, fetchImpl);
+  const boundedPage = Math.min(Math.max(Number(page) || 1, 1), 1000);
+  return jsonRequest(`/api/strava/activities?limit=${bounded}&page=${boundedPage}`, { method: 'GET' }, fetchImpl);
 }
 
 export function disconnectStrava(fetchImpl) {

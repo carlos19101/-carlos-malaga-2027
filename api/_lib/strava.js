@@ -234,17 +234,23 @@ export function normalizeStravaActivity(activity = {}) {
 export async function listStravaActivities(credentials, env = process.env, fetchImpl = fetch, options = {}) {
   const active = await activeStravaCredentials(credentials, env, fetchImpl, options);
   try {
+    const limit = Math.min(Math.max(Number(options.limit) || 10, 1), 200);
+    const page = Math.min(Math.max(Number(options.page) || 1, 1), 1000);
     const url = new URL('https://www.strava.com/api/v3/athlete/activities');
-    url.search = new URLSearchParams({ per_page: String(Math.min(Math.max(Number(options.limit) || 10, 1), 200)) }).toString();
+    url.search = new URLSearchParams({ per_page: String(limit), page: String(page) }).toString();
     const response = await fetchImpl(url, {
       headers: { Authorization: `Bearer ${active.credentials.accessToken}` },
     });
     if (!response.ok) throw new Error(`strava-activities-${response.status}`);
     const body = await response.json();
+    const activities = Array.isArray(body) ? body.map(normalizeStravaActivity).filter(Boolean) : [];
     return {
       credentials: active.credentials,
       refreshed: active.refreshed,
-      activities: Array.isArray(body) ? body.map(normalizeStravaActivity).filter(Boolean) : [],
+      activities,
+      page,
+      limit,
+      hasMore: activities.length === limit,
     };
   } catch (error) {
     error.credentials = active.refreshed ? active.credentials : null;

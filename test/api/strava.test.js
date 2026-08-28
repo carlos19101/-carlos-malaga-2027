@@ -100,7 +100,9 @@ describe('Strava dane aktywności', () => {
     const result = await listStravaActivities(valid, env, fetchImpl, { now, limit: 200 });
     expect(result).toMatchObject({ refreshed: false, activities: [expect.objectContaining({ id: '123', distanceMeters: 6800.5, hasHeartRate: true, averageHeartRate: 151.4 })] });
     expect(result.activities[0]).not.toHaveProperty('map');
-    expect(new URL(fetchImpl.mock.calls[0][0]).searchParams.get('per_page')).toBe('200');
+    const activityUrl = new URL(fetchImpl.mock.calls[0][0]);
+    expect(activityUrl.searchParams.get('per_page')).toBe('200');
+    expect(activityUrl.searchParams.get('page')).toBe('1');
     expect(normalizeStravaActivity({})).toBeNull();
   });
 

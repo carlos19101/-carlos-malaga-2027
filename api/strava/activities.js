@@ -21,8 +21,13 @@ export default async function handler(request, response) {
     return;
   }
   try {
-    const result = await listStravaActivities(credentials, process.env, fetch, { limit: queryValue(request, 'limit') || 10 });
-    sendJson(response, 200, { ok: true, activities: result.activities }, result.refreshed
+    const result = await listStravaActivities(credentials, process.env, fetch, {
+      limit: queryValue(request, 'limit') || 10,
+      page: queryValue(request, 'page') || 1,
+    });
+    sendJson(response, 200, {
+      ok: true, activities: result.activities, page: result.page, limit: result.limit, hasMore: result.hasMore,
+    }, result.refreshed
       ? { 'Set-Cookie': stravaTokenCookie(result.credentials, process.env.STRAVA_TOKEN_SECRET) }
       : {});
   } catch (error) {
