@@ -14,6 +14,9 @@ export const APPLICATION_SHEET_RANGES = {
 
 const TRAINING_LOG_TABLE_RANGE = "'Training Log'!A1:AQ2000";
 const TRAINING_LOG_APPEND_RANGE = "'Training Log'!A:A";
+const LOGIN_LIMIT_SHEET = 'Auth_Limits';
+const LOGIN_LIMIT_RANGE = "'Auth_Limits'!A1:E2000";
+const LOGIN_LIMIT_HEADER = ['Client_Key_HMAC', 'Window_Started_At', 'Failures', 'Blocked_Until', 'Updated_At'];
 
 function base64urlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -74,6 +77,63 @@ function batchValuesUrl(sheetId, ranges) {
   });
   ranges.forEach((range) => params.append('ranges', range));
   return `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values:batchGet?${params}`;
+}
+
+function spreadsheetUrl(sheetId) {
+  return `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}`;
+}
+
+async function ensureLoginLimitSheet(env, fetchImpl, token) {
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const metadataResponse = await fetchImpl(`${spreadsheetUrl(env.GOOGLE_SHEET_ID)}?fields=sheets.properties`, { headers });
+  if (!metadataResponse.ok) throw new Error(`google-rate-limit-metadata-${metadataResponse.status}`);
+  const metadata = await metadataResponse.json();
+  const exists = (metadata.sheets || []).some((sheet) => sheet?.properties?.title === LOGIN_LIMIT_SHEET);
+  if (exists) return;
+  const createResponse = await fetchImpl(`${spreadsheetUrl(env.GOOGLE_SHEET_ID)}:batchUpdate`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: LOGIN_LIMIT_SHEET, hidden: true } } }] }),
+  });
+  if (!createResponse.ok && createResponse.status !== 409) throw new Error(`google-rate-limit-create-${createResponse.status}`);
+  const headerResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, "'Auth_Limits'!A1:E1")}?valueInputOption=RAW`, {
+    method: 'PUT', headers, body: JSON.stringify({ majorDimension: 'ROWS', values: [LOGIN_LIMIT_HEADER] }),
+  });
+  if (!headerResponse.ok) throw new Error(`google-rate-limit-header-${headerResponse.status}`);
+}
+
+export async function readLoginLimitRows(options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const token = await accessToken(env, fetchImpl);
+  await ensureLoginLimitSheet(env, fetchImpl, token);
+  const response = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, LOGIN_LIMIT_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`google-rate-limit-read-${response.status}`);
+  const values = (await response.json()).values || [];
+  return values.slice(1);
+}
+
+export async function upsertLoginLimitRecord(record, options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const token = await accessToken(env, fetchImpl);
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const values = [[
+    record.key,
+    record.windowStartedAt ? new Date(record.windowStartedAt).toISOString() : '',
+    record.failures,
+    record.blockedUntil ? new Date(record.blockedUntil).toISOString() : '',
+    new Date(record.updatedAt).toISOString(),
+  ]];
+  const range = record.rowNumber ? `'Auth_Limits'!A${record.rowNumber}:E${record.rowNumber}` : "'Auth_Limits'!A:E";
+  const suffix = record.rowNumber ? '' : ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS';
+  const response = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, range)}${suffix}`, {
+    method: record.rowNumber ? 'PUT' : 'POST', headers,
+    body: JSON.stringify({ majorDimension: 'ROWS', values }),
+  });
+  if (!response.ok) throw new Error(`google-rate-limit-write-${response.status}`);
 }
 
 export async function readApplicationTables(options = {}) {

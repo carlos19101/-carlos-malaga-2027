@@ -8,6 +8,7 @@ import {
   serviceConfiguration,
   sessionCookie,
 } from './_lib/session.js';
+import { checkLoginRateLimit, clearLoginRateLimit, recordLoginFailure } from './_lib/loginRateLimit.js';
 
 export default async function handler(request, response) {
   const configuration = serviceConfiguration();
@@ -33,14 +34,26 @@ export default async function handler(request, response) {
   }
   try {
     const body = await readJson(request, 1024);
+    const rateLimit = await checkLoginRateLimit(request);
+    if (!rateLimit.allowed) {
+      sendJson(response, 429, { ok: false, error: 'too-many-login-attempts' }, { 'Retry-After': String(rateLimit.retryAfterSeconds) });
+      return;
+    }
     if (!(await passcodeMatches(body.passcode, process.env.APP_PASSCODE_SCRYPT))) {
+      const failure = await recordLoginFailure(request);
       await new Promise((resolve) => setTimeout(resolve, 350));
+      if (!failure.allowed) {
+        sendJson(response, 429, { ok: false, error: 'too-many-login-attempts' }, { 'Retry-After': String(failure.retryAfterSeconds) });
+        return;
+      }
       sendJson(response, 401, { ok: false, error: 'invalid-passcode' });
       return;
     }
+    await clearLoginRateLimit(request);
     const token = createSessionToken(process.env.SESSION_SECRET);
     sendJson(response, 200, { ok: true, configured: true, authenticated: true }, { 'Set-Cookie': sessionCookie(token) });
   } catch (error) {
-    sendJson(response, error.message === 'payload-too-large' ? 413 : 400, { ok: false, error: 'invalid-request' });
+    const status = error.message === 'payload-too-large' ? 413 : error.message?.startsWith('google-rate-limit-') ? 503 : 400;
+    sendJson(response, status, { ok: false, error: status === 503 ? 'login-protection-unavailable' : 'invalid-request' });
   }
 }

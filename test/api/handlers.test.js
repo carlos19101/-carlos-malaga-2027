@@ -7,9 +7,11 @@ import tcxImportHandler from '../../api/tcx-import.js';
 import { createPasscodeVerifier, createSessionToken, SESSION_COOKIE } from '../../api/_lib/session.js';
 
 let passcodeVerifier;
+let serviceAccountPrivateKey;
 
 beforeAll(async () => {
   passcodeVerifier = await createPasscodeVerifier('Carlos-2027-passcode!', { salt: Buffer.alloc(16, 8) });
+  serviceAccountPrivateKey = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
 });
 
 function responseMock() {
@@ -28,9 +30,22 @@ function configuredEnvironment() {
   vi.stubEnv('APP_PASSCODE_SCRYPT', passcodeVerifier);
   vi.stubEnv('SESSION_SECRET', 'session-secret-long-enough');
   vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', 'service@example.test');
-  vi.stubEnv('GOOGLE_PRIVATE_KEY', 'key');
+  vi.stubEnv('GOOGLE_PRIVATE_KEY', serviceAccountPrivateKey);
   vi.stubEnv('GOOGLE_SHEET_ID', 'sheet');
   vi.stubEnv('APP_ORIGIN', 'https://carlos-malaga-2027.vercel.app');
+}
+
+function loginProtectionFetch(rows = []) {
+  return vi.fn(async (url, options = {}) => {
+    const href = String(url);
+    if (href === 'https://oauth2.googleapis.com/token') return jsonResponse(200, { access_token: 'login-token', expires_in: 3600 });
+    if (href.includes('fields=sheets.properties')) return jsonResponse(200, { sheets: [{ properties: { title: 'Auth_Limits' } }] });
+    if (href.includes('Auth_Limits') && (!options.method || options.method === 'GET')) {
+      return jsonResponse(200, { values: [['Client_Key_HMAC', 'Window_Started_At', 'Failures', 'Blocked_Until', 'Updated_At'], ...rows] });
+    }
+    if (href.includes('Auth_Limits')) return jsonResponse(200, { updates: {} });
+    throw new Error(`unexpected fetch ${href}`);
+  });
 }
 
 afterEach(() => {
@@ -53,6 +68,7 @@ describe('/api/session', () => {
 
   it('POST z poprawnym passcode ustawia sesję HttpOnly', async () => {
     configuredEnvironment();
+    vi.stubGlobal('fetch', loginProtectionFetch());
     const response = responseMock();
     await sessionHandler({
       method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' },
@@ -66,6 +82,7 @@ describe('/api/session', () => {
 
   it('POST z błędnym passcode nie ustawia sesji', async () => {
     configuredEnvironment();
+    vi.stubGlobal('fetch', loginProtectionFetch());
     const response = responseMock();
     await sessionHandler({
       method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' },
