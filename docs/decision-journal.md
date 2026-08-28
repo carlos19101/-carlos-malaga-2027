@@ -25,5 +25,7 @@ Dashboard raportuje też brakującą lub nieczytelną godzinę `Time` dla sesji 
 ## Audyt
 
 ```bash
-npm run journal:audit -- --sheet-id <SPREADSHEET_ID> --limit 4
+npm run journal:audit -- --limit 4
 ```
+
+Narzędzie czyta prywatny arkusz przez konto serwisowe. Wymaga lokalnie `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` i `GOOGLE_SHEET_ID`.

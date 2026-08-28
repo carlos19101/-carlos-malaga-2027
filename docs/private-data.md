@@ -13,12 +13,12 @@ Odpowiedź ma `Cache-Control: no-store`. Service worker zawsze kieruje `/api/` d
 
 ## Bezpieczne przełączenie
 
-- `configured:false` — wersja przejściowa zachowuje publiczny odczyt `gviz`, aby wdrożenie kodu nie odcięło działającej aplikacji przed dodaniem sekretów;
+- `configured:false` — aplikacja pozostaje zamknięta i nie pokazuje danych, dopóki prywatny endpoint nie zostanie skonfigurowany;
 - `configured:true` i brak sesji — cały dashboard jest zastąpiony bramką passcode;
 - `configured:true` i ważna sesja — jedynym transportem danych jest `/api/data`;
 - nieznany stan `/api/session` — aplikacja nie wraca automatycznie do publicznego `gviz`.
 
-Snapshot `localStorage` ma oznaczenie `public` albo `private`. Prywatna sesja nie wczyta starszego publicznego snapshotu. Wylogowanie usuwa snapshot oraz dane z pamięci widoku. Niewysłana kolejka feedbacku pozostaje na urządzeniu, aby nie utracić wpisu offline, ale nie jest pokazywana bez ponownego zalogowania.
+Snapshot `localStorage` ma wyłącznie oznaczenie `private`; starsze i publiczne kopie są odrzucane. Wylogowanie usuwa snapshot oraz dane z pamięci widoku. Niewysłana kolejka feedbacku pozostaje na urządzeniu, aby nie utracić wpisu offline, ale nie jest pokazywana bez ponownego zalogowania.
 
 ## Aktywacja produkcyjna
 

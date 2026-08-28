@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildSheetCsvUrl,
   datedRowsError,
   exactValue,
   findRecentMeasurement,
@@ -51,19 +50,6 @@ describe('formatMetricNumber', () => {
     ['', null, '#N/A', '#DIV/0!'].forEach((value) => {
       expect(formatMetricNumber(value)).toBe('—');
     });
-  });
-});
-
-describe('buildSheetCsvUrl', () => {
-  it('wymusza dokładnie jeden wiersz nagłówka GViz', () => {
-    expect(buildSheetCsvUrl('sheet-id', 'Training Log', 123)).toBe(
-      'https://docs.google.com/spreadsheets/d/sheet-id/gviz/tq?tqx=out:csv&sheet=Training%20Log&headers=1&_t=123',
-    );
-  });
-  it('ogranicza Raw_Data do potrzebnych kolumn', () => {
-    expect(buildSheetCsvUrl('sheet-id', 'Raw_Data', 123, 'select A,C')).toBe(
-      'https://docs.google.com/spreadsheets/d/sheet-id/gviz/tq?tqx=out:csv&sheet=Raw_Data&headers=1&tq=select%20A%2CC&_t=123',
-    );
   });
 });
 

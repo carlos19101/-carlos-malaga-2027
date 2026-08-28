@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applicationDataFromTables,
   fetchPrivateApplicationData,
-  parseApplicationSnapshot,
+  parsePrivateApplicationSnapshot,
   rowsFromValuesTable,
 } from './appDataApi.js';
 
@@ -78,12 +78,12 @@ describe('prywatny transport danych', () => {
     await expect(fetchPrivateApplicationData(undefined, fetchImpl)).rejects.toThrow('DATA ERROR — Plan');
   });
 
-  it('nie miesza prywatnego snapshotu z publicznym ani legacy', () => {
+  it('akceptuje wyłącznie prywatny snapshot', () => {
     const legacy = JSON.stringify({ data: { feed: [{ Date: '2026-08-25' }] }, at: 1 });
     const privateSnapshot = JSON.stringify({ data: { feed: [] }, at: 2, mode: 'private' });
-    expect(parseApplicationSnapshot(legacy, 'public')).not.toBeNull();
-    expect(parseApplicationSnapshot(legacy, 'private')).toBeNull();
-    expect(parseApplicationSnapshot(privateSnapshot, 'private')).not.toBeNull();
-    expect(parseApplicationSnapshot(privateSnapshot, 'public')).toBeNull();
+    const publicSnapshot = JSON.stringify({ data: { feed: [] }, at: 3, mode: 'public' });
+    expect(parsePrivateApplicationSnapshot(legacy)).toBeNull();
+    expect(parsePrivateApplicationSnapshot(publicSnapshot)).toBeNull();
+    expect(parsePrivateApplicationSnapshot(privateSnapshot)).not.toBeNull();
   });
 });

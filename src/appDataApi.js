@@ -8,11 +8,10 @@ export const APPLICATION_SHEET_NAMES = {
   raw: 'Raw_Data',
 };
 
-export function parseApplicationSnapshot(raw, mode) {
+export function parsePrivateApplicationSnapshot(raw) {
   try {
     const snapshot = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    const snapshotMode = snapshot?.mode || 'public';
-    return snapshot?.data && snapshotMode === mode ? snapshot : null;
+    return snapshot?.data && snapshot.mode === 'private' ? snapshot : null;
   } catch {
     return null;
   }

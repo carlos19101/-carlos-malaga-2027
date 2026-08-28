@@ -26,7 +26,9 @@ Jawnie raportowane są: wiersze bez daty, nieczytelny czas, rozjazd `Date`/`Time
 ## Audyt z danymi na żywo
 
 ```bash
-npm run metrics:daily -- --sheet-id <SPREADSHEET_ID> --date 2026-08-25
+npm run metrics:daily -- --date 2026-08-25
 ```
+
+Narzędzie używa tego samego prywatnego dostępu Google Sheets API co produkcja. Przed uruchomieniem ustaw lokalnie `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY` i `GOOGLE_SHEET_ID`; nie otwieraj arkusza ponownie przez publiczny `gviz`.
 
 Raport nie publikuje niedojrzałej średniej ani odchylenia. Przed zakończeniem kalibracji pokazuje wyłącznie stan, liczebność próby i coverage.

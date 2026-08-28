@@ -53,8 +53,8 @@ Dashboard rozdziela dowody, interpretację i rekomendację czterech ról CORE. S
 
 ## Prywatny odczyt
 
-Po konfiguracji service account i sekretów globalna sesja HttpOnly zastępuje publiczny `gviz` jednym uwierzytelnionym endpointem Vercela dla czterech arkuszy. Zasady bezpiecznego przełączenia, snapshotu i aktywacji produkcyjnej: [`docs/private-data.md`](docs/private-data.md).
+Globalna sesja HttpOnly udostępnia cztery tabele wyłącznie przez uwierzytelniony endpoint Vercela i Google Sheets API. Aplikacja nie ma publicznego fallbacku `gviz`. Zasady snapshotu oraz konfiguracji: [`docs/private-data.md`](docs/private-data.md).
 
 ## Ważne
 
-Produkcja raportuje `configured:true`, a publiczny dostęp do arkusza jest wyłączony. Tryb `configured:false` pozostaje wyłącznie bezpiecznym mechanizmem wdrożeniowym dla nowego środowiska; nie jest bieżącym transportem produkcyjnym.
+Produkcja raportuje `configured:true`, a publiczny dostęp do arkusza jest wyłączony. Jeśli prywatny endpoint nie jest skonfigurowany, aplikacja nie wyświetla danych.

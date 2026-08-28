@@ -1,5 +1,5 @@
 import { computeDailyMetrics } from '../src/dailyMetrics.js';
-import { buildSheetCsvUrl, parseCSV } from '../src/parse.js';
+import { readApplicationTables } from '../api/_lib/googleSheets.js';
 
 function option(name) {
   const index = process.argv.indexOf(name);
@@ -7,7 +7,7 @@ function option(name) {
 }
 
 function usage() {
-  return 'Użycie: npm run metrics:daily -- --sheet-id <SPREADSHEET_ID> [--date YYYY-MM-DD]';
+  return 'Użycie: npm run metrics:daily -- [--date YYYY-MM-DD] (wymaga GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY i GOOGLE_SHEET_ID)';
 }
 
 function report(result) {
@@ -34,13 +34,11 @@ function report(result) {
 }
 
 async function main() {
-  const sheetId = option('--sheet-id');
   const date = option('--date') || new Date();
-  if (!sheetId) throw new Error(usage());
-  const url = buildSheetCsvUrl(sheetId, 'Raw_Data', Date.now(), 'select A,B,C,D,E,G,H,T');
-  const response = await fetch(url, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Nie udało się pobrać Raw_Data: HTTP ${response.status}`);
-  const rows = parseCSV(await response.text());
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) throw new Error(usage());
+  const tables = await readApplicationTables();
+  const [headers = [], ...values] = tables.raw || [];
+  const rows = values.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
   console.log(JSON.stringify(report(computeDailyMetrics(rows, date)), null, 2));
 }
 

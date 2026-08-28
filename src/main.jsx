@@ -1,16 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  buildSheetCsvUrl,
-  datedRowsError,
-  exactKey,
   exactValue,
   findRecentMeasurement,
   formatMetricNumber,
   isRecoveryActivity,
   normalize,
   normalizeActivityStatus,
-  parseCSV,
   parseDate,
   parseMetric,
   resolveLogSession,
@@ -34,7 +30,7 @@ import { computeDailyMetrics } from './dailyMetrics';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
 import { buildStaffPanel } from './staffPanel';
-import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
+import { fetchPrivateApplicationData, parsePrivateApplicationSnapshot } from './appDataApi';
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendStravaImport, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
 import { connectStrava, disconnectStrava, stravaActivities, stravaStatus } from './stravaApi';
 import { reconcileStravaActivities } from './stravaReconcile';
@@ -47,12 +43,10 @@ import {
 } from './trainingFeedback';
 import { MAX_TCX_FILE_BYTES, prepareTcxImport, tcxImportPreview } from './tcxImportClient';
 import { tcxDataStatus, trainingFeedbackStatus } from './postRunStatus';
-import { A, sheetContractError } from './schema';
+import { A } from './schema';
 import './styles.css';
 
-const SHEET_ID = '1FoExswYMSy5Ou2HwyzPd3bWgnplWgfPGCd5scC0lCXM';
-const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_Data' };
-const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
+const APPLICATION_TABLE_COUNT = 4;
 const APP_VERSION = 'FINAL 6.0';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 // Google Sheets przez prywatny endpoint może przy pierwszym, chłodnym odczycie przekroczyć 8 s.
@@ -76,26 +70,6 @@ const ZONES = [
   { key: 'z4', id: 'Z4', name: 'Threshold', note: 'próg', color: '#f07822' },
   { key: 'z5', id: 'Z5', name: 'Peak', note: 'wysoka intensywność', color: '#ef4867' },
 ];
-
-function sheetUrl(sheetName, query = '') {
-  return buildSheetCsvUrl(SHEET_ID, sheetName, Date.now(), query);
-}
-
-async function fetchSheet(sheetName, signal, query = '') {
-  const response = await fetch(sheetUrl(sheetName, query), {
-    cache: 'no-store', signal, headers: { Accept: 'text/csv,text/plain;q=0.9,*/*;q=0.8' },
-  });
-  if (!response.ok) throw new Error(`${sheetName}: HTTP ${response.status}`);
-  const text = await response.text();
-  if (!text.trim()) return [];
-  if (/^\s*</.test(text) && /<html/i.test(text)) throw new Error(`${sheetName}: HTML zamiast CSV`);
-  const rows = parseCSV(text);
-  const contractError = sheetContractError(rows, sheetName);
-  if (contractError) throw new Error(`DATA ERROR — ${contractError}`);
-  const dateError = datedRowsError(rows, A.date, sheetName);
-  if (dateError) throw new Error(`DATA ERROR — ${dateError}`);
-  return rows;
-}
 
 function v(row, field, fallback = '') {
   return exactValue(row, A[field] || [], fallback);
@@ -1828,16 +1802,19 @@ function AccessGate({ access, onLogin, onRetry }) {
 
   const checking = !access.checked;
   const unavailable = access.checked && access.configured === null;
+  const unconfigured = access.checked && access.configured === false;
   return (
     <div className="auth-shell">
       <section className="auth-card">
         <span className="brand-mark">C</span>
-        <div><span className="eyebrow">CARLOS · MÁLAGA 2027</span><h1>{checking ? 'Sprawdzam dostęp' : unavailable ? 'Nie można sprawdzić sesji' : 'Prywatny dostęp'}</h1></div>
+        <div><span className="eyebrow">CARLOS · MÁLAGA 2027</span><h1>{checking ? 'Sprawdzam dostęp' : unavailable ? 'Nie można sprawdzić sesji' : unconfigured ? 'Prywatny endpoint nie jest skonfigurowany' : 'Prywatny dostęp'}</h1></div>
         {checking ? <p>Łączę aplikację z bezpiecznym endpointem danych.</p> : unavailable ? (
           <>
             <p>Nie przełączam się awaryjnie na publiczny odczyt, dopóki stan prywatnego endpointu jest nieznany.</p>
             <button type="button" onClick={onRetry}>Spróbuj ponownie</button>
           </>
+        ) : unconfigured ? (
+          <p>Ta aplikacja nie ma publicznego fallbacku. Skonfiguruj prywatny endpoint oraz sekrety środowiska, aby otworzyć dashboard.</p>
         ) : (
           <form onSubmit={submit}>
             <p>Passcode tworzy siedmiodniową sesję HttpOnly. Nie trafia do bundla ani pamięci aplikacji.</p>
@@ -1876,10 +1853,10 @@ function App() {
     setFeedbackAccess(next);
   }, []);
 
-  const restoreSnapshot = useCallback((mode) => {
+  const restoreSnapshot = useCallback(() => {
     try {
       const raw = localStorage.getItem(SNAPSHOT_KEY);
-      const snapshot = parseApplicationSnapshot(raw, mode);
+      const snapshot = parsePrivateApplicationSnapshot(raw);
       if (snapshot) {
         setData(snapshot.data);
         dataRef.current = snapshot.data;
@@ -1893,7 +1870,7 @@ function App() {
 
   const refresh = useCallback(async ({ force = false } = {}) => {
     const access = accessRef.current;
-    if (!access.checked || access.configured === null || (access.configured && !access.authenticated)) {
+    if (!access.checked || access.configured === null || !access.configured || !access.authenticated) {
       setLoading(false);
       return;
     }
@@ -1908,28 +1885,18 @@ function App() {
     const merged = { ...dataRef.current };
     const nextErrors = {};
     let anyOk = false;
-    if (access.configured) {
-      try {
-        Object.assign(merged, await fetchPrivateApplicationData(controller.signal));
-        anyOk = true;
-      } catch (error) {
-        nextErrors.private = error?.name === 'AbortError'
-          ? 'Prywatny endpoint: timeout'
-          : error?.status === 401 || error?.status === 403
-            ? 'Sesja wygasła — zaloguj się ponownie.'
-            : error?.message || 'Prywatny endpoint: błąd';
-        if (error?.status === 401 || error?.status === 403) {
-          commitAccess({ ...accessRef.current, checked: true, configured: true, authenticated: false, error: 'session-expired' });
-        }
+    try {
+      Object.assign(merged, await fetchPrivateApplicationData(controller.signal));
+      anyOk = true;
+    } catch (error) {
+      nextErrors.private = error?.name === 'AbortError'
+        ? 'Prywatny endpoint: timeout'
+        : error?.status === 401 || error?.status === 403
+          ? 'Sesja wygasła — zaloguj się ponownie.'
+          : error?.message || 'Prywatny endpoint: błąd';
+      if (error?.status === 401 || error?.status === 403) {
+        commitAccess({ ...accessRef.current, checked: true, configured: true, authenticated: false, error: 'session-expired' });
       }
-    } else {
-      const entries = Object.entries(SHEETS);
-      const results = await Promise.allSettled(entries.map(([key, sheet]) => fetchSheet(sheet, controller.signal, SHEET_QUERIES[key] || '')));
-      results.forEach((result, index) => {
-        const [key, sheet] = entries[index];
-        if (result.status === 'fulfilled') { merged[key] = result.value; anyOk = true; }
-        else nextErrors[key] = result.reason?.name === 'AbortError' ? `${sheet}: timeout` : result.reason?.message || `${sheet}: błąd`;
-      });
     }
     clearTimeout(timer);
     if (inFlight.current !== controller) return;
@@ -1944,7 +1911,7 @@ function App() {
       setFromCache(false);
       try {
         localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
-          data: merged, at: now, mode: access.configured ? 'private' : 'public',
+          data: merged, at: now, mode: 'private',
         }));
       } catch { /* optional */ }
     }
@@ -1976,7 +1943,7 @@ function App() {
     const result = await feedbackLogin(passcode);
     if (result.ok && result.authenticated) {
       commitAccess({ checked: true, configured: true, authenticated: true, error: '' });
-      restoreSnapshot('private');
+      restoreSnapshot();
       const syncResult = await syncFeedback();
       if (!syncResult.synced.length) await refresh({ force: true });
     }
@@ -2033,11 +2000,8 @@ function App() {
         setLoading(false);
         return;
       }
-      if (!result.configured) {
-        restoreSnapshot('public');
-        refresh({ force: true });
-      } else if (result.authenticated) {
-        restoreSnapshot('private');
+      if (result.configured && result.authenticated) {
+        restoreSnapshot();
         refresh({ force: true });
         syncFeedback();
       } else {
@@ -2117,18 +2081,15 @@ function App() {
       setLoading(false);
       return;
     }
-    if (!result.configured) {
-      restoreSnapshot('public');
-      refresh({ force: true });
-    } else if (result.authenticated) {
-      restoreSnapshot('private');
+    if (result.configured && result.authenticated) {
+      restoreSnapshot();
       refresh({ force: true });
     } else {
       setLoading(false);
     }
   };
 
-  if (!feedbackAccess.checked || feedbackAccess.configured === null
+  if (!feedbackAccess.checked || feedbackAccess.configured === null || !feedbackAccess.configured
     || (feedbackAccess.configured && !feedbackAccess.authenticated)) {
     return <AccessGate access={feedbackAccess} onLogin={loginFeedback} onRetry={retryAccess} />;
   }
@@ -2137,7 +2098,7 @@ function App() {
   const sourceAt = sourceTime(feedRow);
   const freshness = sourceFreshness(sourceAt, calendarNow, STALE_AFTER_HOURS);
   const errorCount = Object.keys(errors).length;
-  const offline = Boolean(errors.private) || errorCount === Object.keys(SHEETS).length;
+  const offline = Boolean(errors.private) || errorCount === APPLICATION_TABLE_COUNT;
   const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
   const statusLabel = {
     live: 'Dane aktualne', partial: 'Dane częściowe', stale: 'Dane źródłowe są stare', offline: 'Offline — lokalna kopia',

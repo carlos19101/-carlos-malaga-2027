@@ -1,5 +1,5 @@
 import { buildDecisionJournal } from '../src/decisionJournal.js';
-import { buildSheetCsvUrl, parseCSV } from '../src/parse.js';
+import { readApplicationTables } from '../api/_lib/googleSheets.js';
 import { sheetContractError } from '../src/schema.js';
 
 function option(name) {
@@ -8,14 +8,12 @@ function option(name) {
 }
 
 async function main() {
-  const sheetId = option('--sheet-id');
   const limit = Number(option('--limit') || 4);
-  if (!sheetId) throw new Error('Użycie: npm run journal:audit -- --sheet-id <SPREADSHEET_ID> [--limit 4]');
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SHEET_ID) throw new Error('Użycie: npm run journal:audit -- [--limit 4] (wymaga GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY i GOOGLE_SHEET_ID)');
   if (!Number.isInteger(limit) || limit <= 0) throw new Error('--limit musi być dodatnią liczbą całkowitą.');
-  const query = 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL';
-  const response = await fetch(buildSheetCsvUrl(sheetId, 'Raw_Data', Date.now(), query), { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Nie udało się pobrać Raw_Data: HTTP ${response.status}`);
-  const rows = parseCSV(await response.text());
+  const tables = await readApplicationTables();
+  const [headers = [], ...values] = tables.raw || [];
+  const rows = values.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
   const contractError = sheetContractError(rows, 'Raw_Data');
   if (contractError) throw new Error(contractError);
   console.log(JSON.stringify(buildDecisionJournal(rows, { limit }), null, 2));

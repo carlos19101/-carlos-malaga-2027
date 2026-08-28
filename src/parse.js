@@ -55,11 +55,6 @@ export function parseCSV(text) {
   });
 }
 
-export function buildSheetCsvUrl(sheetId, sheetName, cacheBuster = Date.now(), query = '') {
-  const queryParam = query ? `&tq=${encodeURIComponent(query)}` : '';
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&headers=1${queryParam}&_t=${cacheBuster}`;
-}
-
 export const CLOCK_RE = /^\d{1,3}:[0-5]\d(:[0-5]\d)?$/;
 export const NULLISH = /^(?:—|–|-|#N\/A|#DIV\/0!|N\/A|null|undefined)$/i;
 
