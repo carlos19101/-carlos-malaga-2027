@@ -49,7 +49,7 @@ import { A } from './schema';
 import './styles.css';
 
 const APPLICATION_TABLE_COUNT = 4;
-const APP_VERSION = 'FINAL 6.1';
+const APP_VERSION = 'FINAL 6.2';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 // Google Sheets przez prywatny endpoint może przy pierwszym, chłodnym odczycie przekroczyć 8 s.
 // Dajemy jedną sensowną próbę zamiast błędnie przełączać dashboard na lokalną kopię.
@@ -1745,7 +1745,7 @@ function PlanCard({ row, now }) {
 }
 
 function Plan({ rows, loading, now }) {
-  const dated = useMemo(() => sortedRows(rows.filter((r) => rowDate(r)), 'asc'), [rows]);
+  const dated = useMemo(() => sortedRows(rows.filter((r) => rowDate(r)), 'desc'), [rows]);
   const undated = useMemo(() => rows.filter((r) => !rowDate(r)), [rows]);
   return (
     <>
