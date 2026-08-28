@@ -55,7 +55,9 @@ const SHEETS = { feed: 'APP_FEED', log: 'Training Log', plan: 'Plan', raw: 'Raw_
 const SHEET_QUERIES = { raw: 'select A,B,C,D,E,G,H,I,J,O,P,Q,R,S,T,AL' };
 const APP_VERSION = 'FINAL 6.0';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
-const FETCH_TIMEOUT_MS = 8000;
+// Google Sheets przez prywatny endpoint może przy pierwszym, chłodnym odczycie przekroczyć 8 s.
+// Dajemy jedną sensowną próbę zamiast błędnie przełączać dashboard na lokalną kopię.
+const FETCH_TIMEOUT_MS = 15000;
 const MIN_REFRESH_MS = 15000;
 const STALE_AFTER_HOURS = 36;
 const EMPTY_DATA = { feed: [], log: [], plan: [], raw: [] };
