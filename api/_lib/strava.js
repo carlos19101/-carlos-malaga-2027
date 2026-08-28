@@ -258,6 +258,24 @@ export async function listStravaActivities(credentials, env = process.env, fetch
   }
 }
 
+export async function getStravaActivity(credentials, activityId, env = process.env, fetchImpl = fetch, options = {}) {
+  const id = String(activityId ?? '').trim();
+  if (!/^[1-9]\d{0,63}$/.test(id)) throw new Error('invalid-strava-activity-id');
+  const active = await activeStravaCredentials(credentials, env, fetchImpl, options);
+  try {
+    const response = await fetchImpl(`https://www.strava.com/api/v3/activities/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${active.credentials.accessToken}` },
+    });
+    if (!response.ok) throw new Error(`strava-activity-${response.status}`);
+    const activity = normalizeStravaActivity(await response.json());
+    if (!activity || activity.id !== id) throw new Error('invalid-strava-activity');
+    return { credentials: active.credentials, refreshed: active.refreshed, activity };
+  } catch (error) {
+    error.credentials = active.refreshed ? active.credentials : null;
+    throw error;
+  }
+}
+
 export function queryValue(request, name) {
   if (request?.query && request.query[name] !== undefined) return String(request.query[name]);
   try {

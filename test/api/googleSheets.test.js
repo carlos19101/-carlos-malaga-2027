@@ -1,6 +1,7 @@
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { createGoogleAssertion, readApplicationTables, updateTcxImport, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { appendStravaActivity, createGoogleAssertion, readApplicationTables, updateTcxImport, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { createStravaImportRecord } from '../../src/stravaImport.js';
 import { createTcxImport } from '../../src/tcxImport.js';
 
 function jsonResponse(status, body) {
@@ -133,5 +134,26 @@ describe('Google Sheets service account', () => {
       valueInputOption: 'RAW',
       data: [{ range: "'Training Log'!AJ2:AO2", values: [[145, 158, 1, 0, 0, 1]] }],
     });
+  });
+
+  it('import Stravy dopisuje nowy pełny wiersz wyłącznie, gdy Session_ID nie istnieje', async () => {
+    const { privateKey } = keyPair();
+    const headers = ['Date', 'Time', 'Type', 'Name', 'Distance_km', 'Duration_min', 'Duration_text', 'RPE', 'sRPE', 'Notes', 'Source', 'Status', 'Session_ID'];
+    const record = createStravaImportRecord({
+      id: '123456789', name: 'Lekka mobilizacja', startLocal: '2026-08-25T16:00:18Z', elapsedSeconds: 3750, distanceMeters: 0,
+    }, { activityId: '123456789', category: 'Mobilizacja', rpe: 1 }).record;
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'strava-import-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, { values: [headers] }))
+      .mockResolvedValueOnce(jsonResponse(200, { updates: { updatedRange: "'Training Log'!A2:L2" } }));
+    const result = await appendStravaActivity(record, {
+      env: { GOOGLE_SERVICE_ACCOUNT_EMAIL: 'strava-import@example.test', GOOGLE_PRIVATE_KEY: privateKey, GOOGLE_SHEET_ID: 'private-sheet' },
+      fetchImpl,
+    });
+    expect(result).toMatchObject({ action: 'append', sessionId: 'strava-123456789', rowNumber: 2 });
+    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
+    expect(fetchImpl.mock.calls[2][0]).toContain(':append?');
+    const body = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(body).toMatchObject({ majorDimension: 'ROWS', values: [expect.arrayContaining(['Mobilizacja', 'Strava', 'strava-123456789'])] });
   });
 });

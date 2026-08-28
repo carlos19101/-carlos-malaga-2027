@@ -64,7 +64,7 @@ export function reconcileStravaActivities(activities = [], sessions = [], option
     ...session,
     date: localDate(session.date),
     category: category(session.type),
-  })).filter((session) => session.date && session.category !== 'other');
+  })).filter((session) => session.date);
 
   const entries = (activities || []).map((activity) => {
     const activityCategory = category(activity.sportType || activity.type);
@@ -72,6 +72,9 @@ export function reconcileStravaActivities(activities = [], sessions = [], option
     if (!date || activityCategory === 'other') {
       return { activity, state: 'outside-contract', session: null, comparison: null };
     }
+    const direct = normalizedSessions.filter((session) => String(session.id || '').trim() === `strava-${activity.id}`);
+    if (direct.length === 1) return { activity, state: 'matched', session: direct[0], comparison: null, match: 'source-id' };
+    if (direct.length > 1) return { activity, state: 'ambiguous', session: null, comparison: null };
     const candidates = normalizedSessions.filter((session) => session.date === date && session.category === activityCategory);
     if (!candidates.length) {
       return {

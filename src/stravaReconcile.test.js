@@ -46,4 +46,11 @@ describe('reconcileStravaActivities', () => {
     expect(result.entries.map((entry) => entry.state)).toEqual(['historical', 'unmatched']);
     expect(result.summary).toMatchObject({ historical: 1, unmatched: 1 });
   });
+
+  it('łączy świadomie zaimportowaną mobilizację po trwałym ID źródła', () => {
+    const result = reconcileStravaActivities([
+      activity({ id: '123456789', type: 'WeightTraining', sportType: 'WeightTraining', startLocal: '2026-08-25T16:00:18Z' }),
+    ], [session({ id: 'strava-123456789', type: 'Mobilizacja', date: '2026-08-25', distanceMeters: 0, durationSeconds: 3750 })]);
+    expect(result.entries[0]).toMatchObject({ state: 'matched', match: 'source-id', session: { type: 'Mobilizacja' } });
+  });
 });

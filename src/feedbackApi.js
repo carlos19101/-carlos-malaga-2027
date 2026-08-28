@@ -33,3 +33,7 @@ export function sendTrainingFeedback(feedback, fetchImpl) {
 export function sendTcxImport(envelope, fetchImpl) {
   return jsonRequest('/api/tcx-import', { method: 'POST', body: JSON.stringify(envelope) }, fetchImpl);
 }
+
+export function sendStravaImport(input, fetchImpl) {
+  return jsonRequest('/api/strava/import', { method: 'POST', body: JSON.stringify(input) }, fetchImpl);
+}

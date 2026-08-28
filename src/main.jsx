@@ -35,9 +35,10 @@ import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } fr
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parseApplicationSnapshot } from './appDataApi';
-import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendStravaImport, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
 import { connectStrava, disconnectStrava, stravaActivities, stravaStatus } from './stravaApi';
 import { reconcileStravaActivities } from './stravaReconcile';
+import { STRAVA_IMPORT_CATEGORIES } from './stravaImport';
 import {
   createTrainingFeedback,
   enqueueTrainingFeedback,
@@ -1589,8 +1590,9 @@ function stravaMatchLabel(entry) {
   return 'POZA KONTRAKTEM · typ aktywności nie jest jeszcze porównywany';
 }
 
-function StravaPanel({ access, rows }) {
-  const [state, setState] = useState({ checked: false, busy: false, status: null, activities: [], message: '' });
+function StravaPanel({ access, rows, onImport }) {
+  const [state, setState] = useState({ checked: false, busy: false, importingId: '', status: null, activities: [], message: '' });
+  const [importValues, setImportValues] = useState({});
 
   const checkStatus = useCallback(async () => {
     const result = await stravaStatus();
@@ -1645,7 +1647,29 @@ function StravaPanel({ access, rows }) {
       setState((current) => ({ ...current, busy: false, message: 'Nie udało się odłączyć Stravy.' }));
       return;
     }
-    setState({ checked: true, busy: false, status: { configured: true, connected: false }, activities: [], message: 'Strava odłączona od tej przeglądarki.' });
+    setState({ checked: true, busy: false, importingId: '', status: { configured: true, connected: false }, activities: [], message: 'Strava odłączona od tej przeglądarki.' });
+  };
+
+  const importFields = (activityId) => importValues[activityId] || { category: 'Mobilizacja', rpe: '1' };
+  const updateImportField = (activityId, field, value) => {
+    setImportValues((current) => ({ ...current, [activityId]: { ...importFields(activityId), [field]: value } }));
+  };
+  const importActivity = async (activity) => {
+    const fields = importFields(activity.id);
+    const rpe = Number(fields.rpe);
+    const summary = `${fields.category}, RPE ${fields.rpe}`;
+    if (!window.confirm(`Zapisać w Training Log aktywność „${activity.name || activity.id}” jako ${summary}? Zapis jest jednorazowy i chroniony ID Stravy.`)) return;
+    setState((current) => ({ ...current, importingId: activity.id, message: '' }));
+    const result = await onImport({ activityId: activity.id, category: fields.category, rpe });
+    setState((current) => ({
+      ...current,
+      importingId: '',
+      message: result.ok
+        ? result.action === 'noop' ? 'Ten wpis Stravy jest już zapisany w Training Log.' : 'Aktywność została zapisana w Training Log.'
+        : result.status === 401 || result.status === 403 ? 'Sesja zapisu wygasła.'
+          : result.error === 'strava-not-connected' ? 'Najpierw połącz Stravę.'
+            : 'Nie udało się zapisać aktywności. Nic nie zostało zmienione.',
+    }));
   };
 
   const reconciliationSessions = useMemo(() => (rows || []).map((row) => ({
@@ -1659,6 +1683,7 @@ function StravaPanel({ access, rows }) {
   const coverageStartDate = useMemo(() => reconciliationSessions.map((session) => session.date).filter(Boolean).sort()[0] || '', [reconciliationSessions]);
   const reconciliation = useMemo(() => reconcileStravaActivities(state.activities, reconciliationSessions, { coverageStartDate }), [coverageStartDate, reconciliationSessions, state.activities]);
   const currentReviewCount = reconciliation.summary.review + reconciliation.summary.ambiguous + reconciliation.summary.unmatched;
+  const importable = (entry) => entry.state === 'unmatched' && /weighttraining/.test(normalize(`${entry.activity.sportType} ${entry.activity.type}`).replace(/\s+/g, ''));
   if (!access.authenticated) return null;
   const configured = Boolean(state.status?.configured);
   const connected = Boolean(state.status?.connected);
@@ -1679,14 +1704,15 @@ function StravaPanel({ access, rows }) {
         {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
         {state.activities.length ? <><p className="strava-reconciliation">Bieżący okres od {coverageStartDate || 'braku daty'}: <b>{reconciliation.summary.matched} zgodne</b> · <b>{currentReviewCount} do weryfikacji</b> · <b>{reconciliation.summary.historical} wpisów historycznych</b>. Czas ruchu Stravy nie zastępuje czasu całej aktywności z TCX.</p><div className="strava-activity-list">{reconciliation.entries.map((entry) => {
           const { activity } = entry;
-          return <article key={activity.id} className="strava-activity"><div><strong>{activity.name || 'Aktywność'}</strong><small>{activity.startLocal ? formatDate(activity.startLocal, true) : 'brak czasu lokalnego'} · {activity.type || '—'}</small><em className={`strava-match strava-match-${entry.state}`}>{stravaMatchLabel(entry)}</em></div><div><b>{activity.distanceMeters === null ? '—' : `${formatMetricNumber(activity.distanceMeters / 1000, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`}</b><small>{stravaActivityDuration(activity.movingSeconds)} · HR {formatMetricNumber(activity.averageHeartRate, { maximumFractionDigits: 0, fallback: '—' })} / {formatMetricNumber(activity.maxHeartRate, { maximumFractionDigits: 0, fallback: '—' })}</small></div></article>;
+          const fields = importFields(activity.id);
+          return <article key={activity.id} className="strava-activity"><div><strong>{activity.name || 'Aktywność'}</strong><small>{activity.startLocal ? formatDate(activity.startLocal, true) : 'brak czasu lokalnego'} · {activity.type || '—'}</small><em className={`strava-match strava-match-${entry.state}`}>{stravaMatchLabel(entry)}</em>{importable(entry) ? <div className="strava-import-controls"><label>Kategoria<select value={fields.category} onChange={(event) => updateImportField(activity.id, 'category', event.target.value)}>{STRAVA_IMPORT_CATEGORIES.map((category) => <option value={category} key={category}>{category}</option>)}</select></label><label>RPE<input type="number" min="1" max="10" step="1" value={fields.rpe} onChange={(event) => updateImportField(activity.id, 'rpe', event.target.value)} /></label><button type="button" onClick={() => importActivity(activity)} disabled={state.busy || state.importingId === activity.id}>{state.importingId === activity.id ? 'Zapisuję…' : 'Dodaj do Training Log'}</button></div> : null}</div><div><b>{activity.distanceMeters === null ? '—' : `${formatMetricNumber(activity.distanceMeters / 1000, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`}</b><small>{stravaActivityDuration(activity.movingSeconds)} · HR {formatMetricNumber(activity.averageHeartRate, { maximumFractionDigits: 0, fallback: '—' })} / {formatMetricNumber(activity.maxHeartRate, { maximumFractionDigits: 0, fallback: '—' })}</small></div></article>;
         })}</div></> : null}
       </div>
     </section>
   );
 }
 
-function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport }) {
+function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport, onStravaImport }) {
   const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
   const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
   const [editingFeedback, setEditingFeedback] = useState(false);
@@ -1700,7 +1726,7 @@ function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogi
 
   return (
     <>
-      <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, recovery i później boks są liczone jako realne obciążenie systemu.</p></section>
+      <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, mobilizacja, recovery i boks są liczone osobno jako realne obciążenie systemu.</p></section>
       <PostRunCompletionPanel
         target={feedbackTarget}
         feedbackStatus={feedbackStatus}
@@ -1721,7 +1747,7 @@ function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogi
         />
       ) : null}
       <TcxImportPanel rows={sorted} access={feedbackAccess} onSubmit={onTcxImport} />
-      <StravaPanel access={feedbackAccess} rows={rows} />
+      <StravaPanel access={feedbackAccess} rows={rows} onImport={onStravaImport} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
       </section>
@@ -1986,6 +2012,16 @@ function App() {
     return result;
   }, [commitAccess, refresh]);
 
+  const submitStravaImport = useCallback(async (input) => {
+    const result = await sendStravaImport(input);
+    if (result.status === 401 || result.status === 403) {
+      commitAccess({ ...accessRef.current, authenticated: false, error: 'session-expired' });
+      return result;
+    }
+    if (result.ok) await refresh({ force: true });
+    return result;
+  }, [commitAccess, refresh]);
+
   useEffect(() => {
     setFeedbackQueueCount(readFeedbackQueue(localStorage).length);
     let active = true;
@@ -2133,7 +2169,7 @@ function App() {
       <main>
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} now={calendarNow} />}
         {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
-        {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} />}
+        {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>
 

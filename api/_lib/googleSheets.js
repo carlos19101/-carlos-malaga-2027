@@ -1,6 +1,7 @@
 import { createHash, createSign } from 'node:crypto';
 import { feedbackBatchData, planTrainingFeedbackUpdate } from '../../src/trainingFeedbackServer.js';
 import { reconcileTcxImport } from '../../src/tcxImport.js';
+import { planStravaActivityAppend } from '../../src/stravaImport.js';
 
 let tokenCache = null;
 
@@ -12,6 +13,7 @@ export const APPLICATION_SHEET_RANGES = {
 };
 
 const TRAINING_LOG_TABLE_RANGE = "'Training Log'!A1:AQ2000";
+const TRAINING_LOG_APPEND_RANGE = "'Training Log'!A:A";
 
 function base64urlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -152,5 +154,32 @@ export async function updateTcxImport(envelope, options = {}) {
   return {
     ...reconciliation,
     updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [],
+  };
+}
+
+export async function appendStravaActivity(record, options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const token = await accessToken(env, fetchImpl);
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, TRAINING_LOG_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
+  const table = (await tableResponse.json()).values || [];
+  const plan = planStravaActivityAppend(table, record);
+  if (plan.action !== 'append') return plan;
+
+  const appendResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, TRAINING_LOG_APPEND_RANGE)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS&includeValuesInResponse=true`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ majorDimension: 'ROWS', values: [plan.rowValues] }),
+  });
+  if (!appendResponse.ok) throw new Error(`google-write-${appendResponse.status}`);
+  const response = await appendResponse.json();
+  return {
+    ...plan,
+    updatedRange: response.updates?.updatedRange || null,
+    rowNumber: response.updates?.updatedRange?.match(/!(?:[A-Z]+)(\d+)(?::[A-Z]+\d+)?$/)?.[1]
+      ? Number(response.updates.updatedRange.match(/!(?:[A-Z]+)(\d+)(?::[A-Z]+\d+)?$/)[1]) : null,
   };
 }

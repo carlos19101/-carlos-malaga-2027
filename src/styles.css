@@ -718,6 +718,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .strava-match-review, .strava-match-ambiguous { color: #f6d47d; }
 .strava-match-unmatched { color: #aab2c2; }
 .strava-match-historical { color: #737b8a; }
+.strava-import-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 7px; margin-top: 8px; }
+.strava-import-controls label { display: grid; gap: 3px; color: var(--muted); font-size: .61rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.strava-import-controls select, .strava-import-controls input { min-height: 31px; width: auto; padding: 5px 8px; border-radius: 8px; font-size: .72rem; }
+.strava-import-controls input { width: 52px; }
+.strava-import-controls button { min-height: 31px; padding: 6px 9px; border-radius: 8px; font-size: .66rem; }
 .tcx-import-fields { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); gap: 12px; }
 .tcx-import-card input[type="file"] { padding: 9px; }
 .tcx-import-card input[type="file"]::file-selector-button { margin-right: 10px; padding: 7px 10px; border: 0; border-radius: 9px; background: rgba(88,197,232,.18); color: #d7f5fb; font-weight: 800; }

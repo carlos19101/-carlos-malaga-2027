@@ -7,6 +7,7 @@ import {
   clearStravaTokenCookie,
   createStravaState,
   exchangeStravaCode,
+  getStravaActivity,
   listStravaActivities,
   normalizeStravaActivity,
   openStravaCredentials,
@@ -116,5 +117,16 @@ describe('Strava dane aktywności', () => {
       .mockResolvedValueOnce(jsonResponse(503, {}));
     await expect(listStravaActivities(expired, env, fetchImpl, { now: new Date('2026-08-28T10:00:00Z') }))
       .rejects.toMatchObject({ message: 'strava-activities-503', credentials: expect.objectContaining({ refreshToken: 'rotated-refresh' }) });
+  });
+
+  it('pobiera pojedynczą aktywność wyłącznie po numerycznym ID do kontrolowanego importu', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, {
+      id: 123, name: 'Mobilizacja', type: 'WeightTraining', sport_type: 'WeightTraining',
+      start_date_local: '2026-08-25T16:00:18Z', elapsed_time: 3750, moving_time: 3749, distance: 0,
+    }));
+    const result = await getStravaActivity(credentials, '123', env, fetchImpl, { now: new Date('2026-08-28T10:00:00Z') });
+    expect(result.activity).toMatchObject({ id: '123', elapsedSeconds: 3750, startLocal: '2026-08-25T16:00:18Z' });
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://www.strava.com/api/v3/activities/123');
+    await expect(getStravaActivity(credentials, 'not-an-id', env, fetchImpl)).rejects.toThrow('invalid-strava-activity-id');
   });
 });
