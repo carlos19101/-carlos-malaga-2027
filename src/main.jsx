@@ -46,10 +46,11 @@ import {
 import { MAX_TCX_FILE_BYTES, prepareTcxImport, tcxImportPreview } from './tcxImportClient';
 import { tcxDataStatus, trainingFeedbackStatus } from './postRunStatus';
 import { A } from './schema';
+import { EpaPanel } from './EpaPanel';
 import './styles.css';
 
 const APPLICATION_TABLE_COUNT = 4;
-const APP_VERSION = 'FINAL 6.2';
+const APP_VERSION = 'FINAL 6.3';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 // Google Sheets przez prywatny endpoint może przy pierwszym, chłodnym odczycie przekroczyć 8 s.
 // Dajemy jedną sensowną próbę zamiast błędnie przełączać dashboard na lokalną kopię.
@@ -60,17 +61,9 @@ const EMPTY_DATA = { feed: [], log: [], plan: [], raw: [] };
 
 const TABS = [
   { id: 'dashboard', label: 'Dziś', icon: '●' },
-  { id: 'zones', label: 'Strefy', icon: '◒' },
+  { id: 'epa', label: 'EPA', icon: '◆' },
   { id: 'log', label: 'Log', icon: '≡' },
   { id: 'plan', label: 'Plan', icon: '◇' },
-];
-
-const ZONES = [
-  { key: 'z1', id: 'Z1', name: 'Recovery', note: 'bardzo lekko', color: '#58c5e8' },
-  { key: 'z2', id: 'Z2', name: 'Aerobic', note: 'baza tlenowa', color: '#64d8a2' },
-  { key: 'z3', id: 'Z3', name: 'Tempo', note: 'kontrolowana praca', color: '#f3c846' },
-  { key: 'z4', id: 'Z4', name: 'Threshold', note: 'próg', color: '#f07822' },
-  { key: 'z5', id: 'Z5', name: 'Peak', note: 'wysoka intensywność', color: '#ef4867' },
 ];
 
 function v(row, field, fallback = '') {
@@ -1187,34 +1180,6 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   );
 }
 
-function Zones({ feed, loading }) {
-  const row = latestRow(feed);
-  const anchors = [
-    ['HRmax', formatMetricNumber(v(row, 'hrmax', ''), { maximumFractionDigits: 0 }), 'bpm'],
-    ['LT1', formatMetricNumber(v(row, 'lt1', ''), { maximumFractionDigits: 0 }), 'bpm'],
-    ['LT2 / LTHR', formatMetricNumber(v(row, 'lt2', ''), { maximumFractionDigits: 0 }), 'bpm'],
-    ['Threshold Power', formatMetricNumber(v(row, 'thresholdPower', ''), { maximumFractionDigits: 0 }), 'W'],
-  ];
-  return (
-    <>
-      <section className="section-hero"><span className="eyebrow">INTENSYWNOŚĆ</span><h1>Strefy i kotwice</h1><p>Wartości robocze z APP_FEED. Treningowe zakresy celowe mogą być węższe niż pełne strefy zegarka.</p></section>
-      <section className="section-block anchor-grid">
-        {anchors.map(([label, value, unit]) => <StatCard key={label} label={label} value={value} unit={unit} note="kotwica fizjologiczna" />)}
-      </section>
-      <section className="section-block zone-list">
-        {loading && !feed.length ? <div className="skeleton-grid"><i /></div> : ZONES.map((zone) => (
-          <article className="zone-card" key={zone.id}>
-            <div className="zone-badge" style={{ background: zone.color }}>{zone.id}</div>
-            <div><strong>{zone.name}</strong><small>{zone.note}</small><i style={{ background: zone.color }} /></div>
-            <b>{v(row, zone.key, '—')}</b>
-          </article>
-        ))}
-      </section>
-      <section className="info-card"><strong>Praktyka #carlos</strong><p>Recovery ~135–150 bpm · easy zwykle 150–166 bpm · steady 169–180 bpm · próg roboczo 188–193 bpm. Pełne strefy zegarka pozostają szersze.</p></section>
-    </>
-  );
-}
-
 function LogCard({ row }) {
   const type = resolveLogSession(row, A.logType);
   const name = v(row, 'logName', type || 'Sesja');
@@ -2066,7 +2031,7 @@ function App() {
 
       <main>
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />}
-        {tab === 'zones' && <Zones feed={data.feed} loading={loading} />}
+        {tab === 'epa' && <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} />}
         {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>

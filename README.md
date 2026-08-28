@@ -51,6 +51,10 @@ Opcjonalne połączenie OAuth odczytuje prywatne podsumowania ostatnich aktywno�
 
 Dashboard rozdziela dowody, interpretację i rekomendację czterech ról CORE. Specjaliści warunkowi pojawiają się tylko po spełnieniu jawnego warunku, a `SPÓR` tylko przy rzeczywiście różnych kierunkach domeny i Head Coacha. Metodologia i granice: [`docs/staff-panel.md`](docs/staff-panel.md).
 
+## Elite Performance Academy
+
+Zakładka EPA łączy dopasowaną aktywność Stravy, `Training Log`, atomowe dane TCX/Execution i odczucia zawodnika. Pokazuje pełny katalog 10 trenerów oraz 8 case studies zawodników, ale bez zweryfikowanej karty źródłowej jawnie zwraca `BRAK PODSTAW` zamiast tworzyć przypisaną nazwisku opinię. EPA nie nadpisuje Głównego Trenera, a strefy CARLOS pozostają dostępne w rozwijanym panelu. Kontrakt i granice: [`docs/epa.md`](docs/epa.md).
+
 ## Prywatny odczyt
 
 Globalna sesja HttpOnly udostępnia cztery tabele wyłącznie przez uwierzytelniony endpoint Vercela i Google Sheets API. Aplikacja nie ma publicznego fallbacku `gviz`. Zasady snapshotu oraz konfiguracji: [`docs/private-data.md`](docs/private-data.md).
