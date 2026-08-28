@@ -35,6 +35,21 @@ describe('computeWeeklySnapshot', () => {
     });
   });
 
+  it('opisuje mobilizację oddzielnie od siły i biegania', () => {
+    const result = computeWeeklySnapshot([
+      { date: '2026-08-25', type: 'Mobilizacja', name: 'Lekki trening mobilizacyjny', duration: '45:00', rpe: 1, srpe: 45 },
+      { date: '2026-08-26', type: 'Siła', name: 'Nogi', duration: '45:00', rpe: 4, srpe: 180 },
+      { date: '2026-08-27', type: 'Bieg', km: 7, duration: '52:00', rpe: 2, srpe: 104 },
+    ], '2026-08-27');
+
+    expect(result.activity).toMatchObject({
+      sessions: 3,
+      runningSessions: 1,
+      strengthSessions: 1,
+      mobilitySessions: 1,
+    });
+  });
+
   it('nie zamienia RPE 0 ukończonej sesji w wiarygodne zero', () => {
     const result = computeWeeklySnapshot([
       { date: '2026-08-27', type: 'Bieg', km: 6.8, duration: '51:39', rpe: 0, srpe: 0 },

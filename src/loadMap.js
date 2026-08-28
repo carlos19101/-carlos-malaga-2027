@@ -57,6 +57,10 @@ function includesAny(value, labels) {
   return labels.some((label) => text.includes(label));
 }
 
+function isMobility({ type, name }) {
+  return includesAny(`${type} ${name}`, ['mobilizacja', 'mobility']);
+}
+
 export function parseSessionMinutes(value) {
   if (value === null || value === undefined || value === '') return null;
   const raw = String(value).trim();
@@ -172,6 +176,7 @@ export function computeLoadMap(inputRows = [], today = new Date()) {
   const latestMechanical = [...sessions].reverse().find(({ pain, legFatigue }) => pain !== null || legFatigue !== null) || null;
   const boxing7 = sessions7.filter(({ type, name }) => includesAny(`${type} ${name}`, ['boks', 'boxing'])).length;
   const strength7 = sessions7.filter(({ type, name }) => includesAny(`${type} ${name}`, ['sila', 'siła', 'strength'])).length;
+  const mobility7 = sessions7.filter(isMobility).length;
 
   return {
     state: sessions.length ? (runningHistoryDays >= 30 ? 'ready' : 'calibrating') : 'missing',
@@ -222,6 +227,7 @@ export function computeLoadMap(inputRows = [], today = new Date()) {
     systemic: {
       boxing7,
       strength7,
+      mobility7,
       state: sessions7.length ? 'observed' : 'missing',
     },
     mechanical: {

@@ -30,6 +30,10 @@ function includesAny(value, labels) {
   return labels.some((label) => text.includes(label));
 }
 
+function isMobility({ type, name }) {
+  return includesAny(`${type} ${name}`, ['mobilizacja', 'mobility']);
+}
+
 function activeSession(session) {
   return (session.km !== null && session.km > 0)
     || (session.minutes !== null && session.minutes > 0)
@@ -119,6 +123,7 @@ export function computeWeeklySnapshot(records = [], today = new Date()) {
         : runs.length ? 'partial' : 'missing',
       boxingSessions: active.filter(({ type, name }) => includesAny(`${type} ${name}`, ['boks', 'boxing'])).length,
       strengthSessions: active.filter(({ type, name }) => includesAny(`${type} ${name}`, ['sila', 'siła', 'strength'])).length,
+      mobilitySessions: active.filter(isMobility).length,
     },
     execution: {
       eligibleRuns: runs.length,
