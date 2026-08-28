@@ -708,6 +708,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .strava-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .strava-reconciliation { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.5; }
 .strava-activity-list { display: grid; gap: 8px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 14px; }
+.strava-current-empty { margin: 0; padding: 12px 13px; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; color: var(--muted); font-size: .75rem; }
+.strava-history { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+.strava-history summary { cursor: pointer; padding: 13px 0; color: #8f98aa; font-size: .72rem; font-weight: 800; letter-spacing: .04em; }
+.strava-history > p { margin: 0 0 12px; color: var(--muted); font-size: .72rem; line-height: 1.5; }
 .strava-activity { display: flex; justify-content: space-between; gap: 16px; padding: 12px 13px; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.025); }
 .strava-activity > div { min-width: 0; display: grid; gap: 4px; }
 .strava-activity > div:last-child { text-align: right; }
