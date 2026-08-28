@@ -21,3 +21,5 @@ Połączenie jest celowo przypisane do przeglądarki, w której autoryzowano Str
 ## Granice MVP
 
 Panel pokazuje jedynie ostatnie podsumowania: nazwę, lokalny czas startu, typ, dystans, czas ruchu i HR średnie/maksymalne. Jest to widok porównawczy. Dopiero kolejny etap może zaproponować import konkretnej aktywności po dopasowaniu jej do `Session_ID` i po Twoim zatwierdzeniu.
+
+Panel zestawia aktywność Stravy z `Training Log` wyłącznie po lokalnym dniu, typie i bezpiecznej tolerancji dystansu (maksymalnie 100 m lub 2%). Czas ruchu Stravy jest wyświetlany, ale nie zastępuje czasu całej aktywności z TCX. Wiele sesji tego samego typu jednego dnia, inny dystans albo brak pary oznaczane są jawnie jako wymagające przeglądu.
