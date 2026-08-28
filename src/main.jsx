@@ -1628,12 +1628,12 @@ function StravaPanel({ access, rows }) {
 
   const loadActivities = async () => {
     setState((current) => ({ ...current, busy: true, message: '' }));
-    const result = await stravaActivities(200);
+    const result = await stravaActivities(30);
     setState((current) => ({
       ...current,
       busy: false,
       activities: result.ok ? result.activities || [] : current.activities,
-      message: result.ok ? `Odczytano ${result.activities?.length || 0} aktywności (maks. 200). Nic nie zapisano w Training Log.` : result.status === 409 ? 'Najpierw połącz Stravę.' : 'Strava chwilowo nie zwróciła aktywności.',
+      message: result.ok ? `Odczytano ${result.activities?.length || 0} ostatnich aktywności. Nic nie zapisano w Training Log.` : result.status === 409 ? 'Najpierw połącz Stravę.' : 'Strava chwilowo nie zwróciła aktywności.',
     }));
   };
 
@@ -1670,7 +1670,7 @@ function StravaPanel({ access, rows }) {
         ) : !connected ? (
           <div className="strava-actions"><p>Połączysz tylko swoje konto i przyznasz odczyt prywatnych aktywności. Dane nie zostaną automatycznie dopisane do Training Log.</p><button type="button" onClick={connectStrava}>Połącz Stravę</button></div>
         ) : (
-          <div className="strava-actions"><p>Połączono z kontem Strava. Odczyt służy teraz do porównania aktywności; import do Training Log będzie zawsze osobno zatwierdzany.</p><div><button type="button" onClick={loadActivities} disabled={state.busy}>{state.busy ? 'Odczytuję…' : 'Pobierz aktywności (maks. 200)'}</button><button type="button" className="feedback-secondary" onClick={disconnect} disabled={state.busy}>Odłącz</button></div></div>
+          <div className="strava-actions"><p>Połączono z kontem Strava. Odczyt służy teraz do porównania aktywności; import do Training Log będzie zawsze osobno zatwierdzany.</p><div><button type="button" onClick={loadActivities} disabled={state.busy}>{state.busy ? 'Odczytuję…' : 'Pobierz ostatnie aktywności'}</button><button type="button" className="feedback-secondary" onClick={disconnect} disabled={state.busy}>Odłącz</button></div></div>
         )}
         {state.message ? <p className="feedback-message" role="status">{state.message}</p> : null}
         {state.activities.length ? <><p className="strava-reconciliation">Porównanie: <b>{reconciliation.summary.matched} zgodne</b> · <b>{reconciliation.summary.review + reconciliation.summary.ambiguous} do sprawdzenia</b> · <b>{reconciliation.summary.unmatched} bez pary</b>. Czas ruchu Stravy nie zastępuje czasu całej aktywności z TCX.</p><div className="strava-activity-list">{reconciliation.entries.map((entry) => {
