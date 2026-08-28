@@ -1,3 +1,11 @@
+export function retryAfterSeconds(headers) {
+  const raw = typeof headers?.get === 'function'
+    ? headers.get('Retry-After')
+    : headers?.['retry-after'] ?? headers?.['Retry-After'];
+  const seconds = Number(raw);
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : null;
+}
+
 async function jsonRequest(url, options = {}, fetchImpl = fetch) {
   try {
     const response = await fetchImpl(url, {
@@ -8,7 +16,12 @@ async function jsonRequest(url, options = {}, fetchImpl = fetch) {
     });
     let body = {};
     try { body = await response.json(); } catch { body = {}; }
-    return { ...body, ok: response.ok && body.ok !== false, status: response.status };
+    return {
+      ...body,
+      ok: response.ok && body.ok !== false,
+      status: response.status,
+      retryAfterSeconds: retryAfterSeconds(response.headers),
+    };
   } catch {
     return { ok: false, status: 0, error: 'offline' };
   }

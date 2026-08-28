@@ -130,6 +130,26 @@ button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   display: grid;
   place-items: center;
 }
+.app-recovery-shell {
+  min-height: 100dvh;
+  padding: max(24px, var(--safe-top)) max(20px, var(--safe-right)) max(24px, var(--safe-bottom)) max(20px, var(--safe-left));
+  display: grid;
+  place-items: center;
+}
+.app-recovery-card {
+  width: min(480px, 100%);
+  padding: 34px;
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(255,197,49,.25);
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(255,197,49,.08), transparent 42%), var(--panel);
+  box-shadow: 0 30px 90px rgba(0,0,0,.34);
+}
+.app-recovery-card .eyebrow { margin: 0; }
+.app-recovery-card h1 { margin: 0; font-size: clamp(1.8rem, 7vw, 3rem); line-height: 1; letter-spacing: -.045em; }
+.app-recovery-card p { margin: 0; color: var(--muted-2); line-height: 1.55; }
+.app-recovery-card button { min-height: 48px; padding: 0 18px; border: 0; border-radius: 14px; background: var(--yellow); color: #1d1604; cursor: pointer; font-weight: 900; }
 .auth-card {
   width: min(480px, 100%);
   padding: 34px;

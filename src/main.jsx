@@ -28,7 +28,7 @@ import { computeWeeklySnapshot } from './weeklySnapshot';
 import { computePerformanceResponse } from './performanceResponse';
 import { computeDailyMetrics } from './dailyMetrics';
 import { computeDataCompleteness } from './dataCompleteness';
-import { AccessGate, DashboardDisclosure, DashboardDrawer, DashboardSignal, DetailMetric } from './dashboardUi';
+import { AccessGate, AppErrorBoundary, DashboardDisclosure, DashboardDrawer, DashboardSignal, DetailMetric } from './dashboardUi';
 import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } from './decisionJournal';
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
 import { buildStaffPanel } from './staffPanel';
@@ -49,7 +49,7 @@ import { A } from './schema';
 import './styles.css';
 
 const APPLICATION_TABLE_COUNT = 4;
-const APP_VERSION = 'FINAL 6.0';
+const APP_VERSION = 'FINAL 6.1';
 const SNAPSHOT_KEY = 'carlos:snapshot:final-v4';
 // Google Sheets przez prywatny endpoint może przy pierwszym, chłodnym odczycie przekroczyć 8 s.
 // Dajemy jedną sensowną próbę zamiast błędnie przełączać dashboard na lokalną kopię.
@@ -2084,4 +2084,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')).render(<React.StrictMode><AppErrorBoundary><App /></AppErrorBoundary></React.StrictMode>);

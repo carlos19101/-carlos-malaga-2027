@@ -1,4 +1,42 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
+
+export function loginFailureMessage(result = {}) {
+  if (result.status === 401) return 'Nieprawidłowy passcode.';
+  if (result.status === 429) {
+    const seconds = Number(result.retryAfterSeconds);
+    const minutes = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : null;
+    return minutes ? `Zbyt wiele prób. Spróbuj ponownie za około ${minutes} min.` : 'Zbyt wiele prób. Spróbuj ponownie później.';
+  }
+  if (result.status === 0) return 'Brak połączenia z serwerem.';
+  if (result.status === 503) return 'Ochrona logowania jest chwilowo niedostępna. Spróbuj ponownie później.';
+  return 'Nie udało się rozpocząć sesji.';
+}
+
+export class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="app-recovery-shell" role="alert">
+        <section className="app-recovery-card">
+          <span className="brand-mark">C</span>
+          <span className="eyebrow">CARLOS · MÁLAGA 2027</span>
+          <h1>Widok wymaga ponowienia</h1>
+          <p>Nie udało się bezpiecznie wyświetlić części aplikacji. Dane źródłowe nie zostały zmienione.</p>
+          <button type="button" onClick={() => this.setState({ failed: false })}>Spróbuj ponownie</button>
+        </section>
+      </div>
+    );
+  }
+}
 
 export function DashboardDisclosure({ eyebrow, title, summary, children, defaultOpen = false }) {
   return (
@@ -71,9 +109,7 @@ export function AccessGate({ access, onLogin, onRetry, appVersion }) {
     setMessage('');
     const result = await onLogin(passcode);
     if (!result.ok) {
-      setMessage(result.status === 401
-        ? 'Nieprawidłowy passcode.'
-        : result.status === 0 ? 'Brak połączenia z serwerem.' : 'Nie udało się rozpocząć sesji.');
+      setMessage(loginFailureMessage(result));
     } else {
       setPasscode('');
     }

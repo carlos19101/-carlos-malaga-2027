@@ -22,7 +22,7 @@ Snapshot `localStorage` ma wyłącznie oznaczenie `private`; starsze i publiczne
 
 ## Ochrona logowania
 
-Warstwa aplikacji prowadzi trwały limiter prób niezależnie od WAF: pięć nieudanych prób z jednego klienta w ciągu 15 minut blokuje kolejne logowanie na 15 minut i zwraca `429` z `Retry-After`. Stan trafia do ukrytej zakładki `Auth_Limits` w tym samym prywatnym arkuszu, ale zawiera wyłącznie klucz HMAC adresu klienta, liczniki i znaczniki czasu — nigdy plaintext hasła ani adres IP. Poprawne logowanie zeruje wpis.
+Warstwa aplikacji prowadzi trwały limiter prób niezależnie od WAF: pięć nieudanych prób z jednego klienta w ciągu 15 minut blokuje kolejne logowanie na 15 minut i zwraca `429` z `Retry-After`. Bramka przekazuje użytkownikowi przybliżony czas następnej próby, bez ujawniania szczegółów serwera. Stan trafia do ukrytej zakładki `Auth_Limits` w tym samym prywatnym arkuszu, ale zawiera wyłącznie klucz HMAC adresu klienta, liczniki i znaczniki czasu — nigdy plaintext hasła ani adres IP. Poprawne logowanie zeruje wpis. Równoległe pierwsze żądania bezpiecznie ponawiają odczyt metadanych arkusza, jeżeli inna instancja właśnie utworzyła zakładkę.
 
 WAF Vercela pozostaje zewnętrzną, współdzieloną pierwszą linią ochrony. Nie zastępuje limitera aplikacyjnego i odwrotnie.
 

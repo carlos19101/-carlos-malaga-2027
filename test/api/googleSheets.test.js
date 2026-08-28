@@ -1,6 +1,6 @@
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { appendStravaActivity, createGoogleAssertion, readApplicationTables, updateTcxImport, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { appendStravaActivity, createGoogleAssertion, readApplicationTables, readLoginLimitRows, updateTcxImport, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
 import { createStravaImportRecord } from '../../src/stravaImport.js';
 import { createTcxImport } from '../../src/tcxImport.js';
 
@@ -92,6 +92,25 @@ describe('Google Sheets service account', () => {
       "'APP_FEED'", "'Training Log'", "'Plan'", "'Raw_Data'",
     ]);
     expect(options.headers.Authorization).toBe('Bearer private-read-token');
+  });
+
+  it('przetrwa równoległe utworzenie trwałej zakładki ochrony logowania', async () => {
+    const { privateKey } = keyPair();
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'limit-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, { sheets: [] }))
+      .mockResolvedValueOnce(jsonResponse(400, { error: { message: 'A sheet with the name Auth_Limits already exists.' } }))
+      .mockResolvedValueOnce(jsonResponse(200, { sheets: [{ properties: { title: 'Auth_Limits' } }] }))
+      .mockResolvedValueOnce(jsonResponse(200, { updatedRange: "'Auth_Limits'!A1:E1" }))
+      .mockResolvedValueOnce(jsonResponse(200, { values: [['Client_Key_HMAC', 'Window_Started_At', 'Failures', 'Blocked_Until', 'Updated_At']] }));
+    await expect(readLoginLimitRows({
+      env: {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: 'limit@example.test', GOOGLE_PRIVATE_KEY: privateKey, GOOGLE_SHEET_ID: 'private-sheet',
+      },
+      fetchImpl,
+    })).resolves.toEqual([]);
+    expect(fetchImpl.mock.calls[3][0]).toContain('fields=sheets.properties');
+    expect(fetchImpl.mock.calls[4][0]).toContain('Auth_Limits');
   });
 
   it('import TCX zapisuje tylko ciągły blok atomowy dopasowanej sesji', async () => {

@@ -83,19 +83,31 @@ function spreadsheetUrl(sheetId) {
   return `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}`;
 }
 
+function hasLoginLimitSheet(metadata = {}) {
+  return (metadata.sheets || []).some((sheet) => sheet?.properties?.title === LOGIN_LIMIT_SHEET);
+}
+
+async function loginLimitMetadata(env, fetchImpl, headers) {
+  const response = await fetchImpl(`${spreadsheetUrl(env.GOOGLE_SHEET_ID)}?fields=sheets.properties`, { headers });
+  if (!response.ok) throw new Error(`google-rate-limit-metadata-${response.status}`);
+  return response.json();
+}
+
 async function ensureLoginLimitSheet(env, fetchImpl, token) {
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const metadataResponse = await fetchImpl(`${spreadsheetUrl(env.GOOGLE_SHEET_ID)}?fields=sheets.properties`, { headers });
-  if (!metadataResponse.ok) throw new Error(`google-rate-limit-metadata-${metadataResponse.status}`);
-  const metadata = await metadataResponse.json();
-  const exists = (metadata.sheets || []).some((sheet) => sheet?.properties?.title === LOGIN_LIMIT_SHEET);
-  if (exists) return;
+  const metadata = await loginLimitMetadata(env, fetchImpl, headers);
+  if (hasLoginLimitSheet(metadata)) return;
   const createResponse = await fetchImpl(`${spreadsheetUrl(env.GOOGLE_SHEET_ID)}:batchUpdate`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ requests: [{ addSheet: { properties: { title: LOGIN_LIMIT_SHEET, hidden: true } } }] }),
   });
-  if (!createResponse.ok && createResponse.status !== 409) throw new Error(`google-rate-limit-create-${createResponse.status}`);
+  if (!createResponse.ok) {
+    // Dwie równoległe pierwsze próby mogą obie zobaczyć brak zakładki. Google zwraca
+    // wtedy konflikt albo 400; ponowny odczyt rozstrzyga, czy druga instancja już ją utworzyła.
+    const afterRace = await loginLimitMetadata(env, fetchImpl, headers);
+    if (!hasLoginLimitSheet(afterRace)) throw new Error(`google-rate-limit-create-${createResponse.status}`);
+  }
   const headerResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, "'Auth_Limits'!A1:E1")}?valueInputOption=RAW`, {
     method: 'PUT', headers, body: JSON.stringify({ majorDimension: 'ROWS', values: [LOGIN_LIMIT_HEADER] }),
   });

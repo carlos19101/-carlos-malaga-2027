@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendTcxImport, sendTrainingFeedback } from './feedbackApi.js';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, retryAfterSeconds, sendTcxImport, sendTrainingFeedback } from './feedbackApi.js';
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
@@ -38,6 +38,18 @@ describe('feedbackApi', () => {
   it('zamienia błąd sieci na kontrolowany status offline', async () => {
     expect(await sendTrainingFeedback({}, vi.fn().mockRejectedValue(new Error('offline'))))
       .toEqual({ ok: false, status: 0, error: 'offline' });
+  });
+
+  it('przekazuje jawny czas ponownej próby po blokadzie logowania', async () => {
+    const headers = new Headers({ 'Retry-After': '900' });
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ...response(429, { ok: false, error: 'too-many-login-attempts' }),
+      headers,
+    });
+    expect(await feedbackLogin('niepoprawne-haslo', fetchImpl)).toMatchObject({
+      ok: false, status: 429, retryAfterSeconds: 900,
+    });
+    expect(retryAfterSeconds(new Headers({ 'Retry-After': 'nie-liczba' }))).toBeNull();
   });
 
   it('wylogowuje sesję żądaniem DELETE bez body', async () => {
