@@ -5,6 +5,7 @@ import {
   createTcxImport,
   parseTrainingLogCsv,
   reconcileTcxImport,
+  resolvePlanStagedTarget,
   resolveTcxTarget,
   TCX_IMPORT_HEADERS,
   TCX_STAGE_HEADER,
@@ -50,6 +51,13 @@ function liveTable(atomicValues = ['', '', '', '', '', ''], rowNumber = 7) {
 function stagedTable(atomicValues = ['', '', '', ''], stageValue = progressiveStages) {
   const headers = ['Date', 'Session_ID', TCX_STAGE_HEADER, ...TCX_STAGED_ATOMIC_HEADERS];
   return { headers, rows: [{ rowNumber: 4, values: ['2026-08-29', '2026-08-29-run-01', stageValue, ...atomicValues] }] };
+}
+
+function stagedPlanTable(stageValue = progressiveStages) {
+  return {
+    headers: ['Data', TCX_STAGE_HEADER],
+    rows: [{ rowNumber: 12, values: ['2026-08-29', stageValue] }],
+  };
 }
 
 const envelope = createTcxImport(fixture, {
@@ -203,6 +211,31 @@ describe('reconcileTcxImport', () => {
     });
     expect(reconcileTcxImport(stagedTable([], JSON.stringify({ schema: 'carlos.hr-target-stages.v1', stages: [{ name: 'Inny', durationSeconds: 300, min: 150, max: 160 }] })), stagedEnvelope))
       .toMatchObject({ action: 'conflict', conflicts: [expect.objectContaining({ header: TCX_STAGE_HEADER })] });
+  });
+
+  it('może jednorazowo przenieść etapowy cel z Planu do pustej sesji', () => {
+    const withoutStages = stagedTable([], '');
+    const result = reconcileTcxImport(withoutStages, stagedEnvelope, { allowStageBootstrap: true });
+    expect(result).toMatchObject({ action: 'update', range: 'D4:G4' });
+    expect(result.updates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'target-stage', range: 'C4', values: [stagedEnvelope.targetStages] }),
+    ]));
+  });
+});
+
+describe('resolvePlanStagedTarget', () => {
+  it('pobiera jeden etapowy cel ze zgodnego dnia Planu', () => {
+    expect(resolvePlanStagedTarget(stagedTable([], ''), stagedPlanTable(), '2026-08-29-run-01'))
+      .toMatchObject({ action: 'resolved', logRowNumber: 4, planRowNumber: 12, targetStages: stagedEnvelope.targetStages });
+  });
+
+  it('blokuje brak i wieloznaczność etapu w Planie', () => {
+    expect(resolvePlanStagedTarget(stagedTable([], ''), { headers: ['Data', TCX_STAGE_HEADER], rows: [] }, '2026-08-29-run-01'))
+      .toMatchObject({ action: 'contract-error', reason: expect.stringContaining('nie zawiera wpisu') });
+    const ambiguous = stagedPlanTable();
+    ambiguous.rows.push({ rowNumber: 13, values: ['2026-08-29', progressiveStages] });
+    expect(resolvePlanStagedTarget(stagedTable([], ''), ambiguous, '2026-08-29-run-01'))
+      .toMatchObject({ action: 'contract-error', reason: expect.stringContaining('więcej niż jeden') });
   });
 });
 

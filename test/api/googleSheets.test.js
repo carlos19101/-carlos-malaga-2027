@@ -155,6 +155,47 @@ describe('Google Sheets service account', () => {
     });
   });
 
+  it('import progresywny weryfikuje etap z Planu i zapisuje go razem z atomami', async () => {
+    const { privateKey } = keyPair();
+    const headers = Array.from({ length: 44 }, (_, index) => `Column_${index + 1}`);
+    headers[0] = 'Date';
+    headers[23] = 'Session_ID';
+    headers.splice(35, 4, 'Time_In_Target_s', 'Time_Above_Target_s', 'Time_Below_Target_s', 'HR_Analyzed_Duration_s');
+    headers[43] = 'HR_Target_Stages_JSON';
+    const row = Array(44).fill('');
+    row[0] = '2026-08-29';
+    row[23] = '2026-08-29-run-01';
+    const targetStages = JSON.stringify({ schema: 'carlos.hr-target-stages.v1', stages: [
+      { name: 'WU', durationSeconds: 1, min: 135, max: 145 },
+      { name: 'CD', durationSeconds: 1, max: 150 },
+    ] });
+    const envelope = createTcxImport(`
+      <Lap><Track>
+        <Trackpoint><Time>2026-08-29T18:00:00Z</Time><HeartRateBpm><Value>140</Value></HeartRateBpm></Trackpoint>
+        <Trackpoint><Time>2026-08-29T18:00:01Z</Time><HeartRateBpm><Value>149</Value></HeartRateBpm></Trackpoint>
+        <Trackpoint><Time>2026-08-29T18:00:02Z</Time><HeartRateBpm><Value>145</Value></HeartRateBpm></Trackpoint>
+      </Track></Lap>`, {
+      sessionId: '2026-08-29-run-01', targetStages, sourceSha256: 'B'.repeat(64),
+    });
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'staged-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, { values: [headers, row] }))
+      .mockResolvedValueOnce(jsonResponse(200, { values: [['Data', 'HR_Target_Stages_JSON'], ['2026-08-29', targetStages]] }))
+      .mockResolvedValueOnce(jsonResponse(200, { responses: [{ updatedRange: "'Training Log'!AJ2:AM2" }, { updatedRange: "'Training Log'!AR2" }] }));
+
+    const result = await updateTcxImport(envelope, {
+      env: { GOOGLE_SERVICE_ACCOUNT_EMAIL: 'staged@example.test', GOOGLE_PRIVATE_KEY: privateKey, GOOGLE_SHEET_ID: 'private-sheet' },
+      fetchImpl,
+    });
+    expect(result).toMatchObject({ action: 'update', rowNumber: 2, range: 'AJ2:AM2' });
+    expect(decodeURIComponent(fetchImpl.mock.calls[2][0])).toContain("'Plan'!A1:O2000");
+    const writeBody = JSON.parse(fetchImpl.mock.calls[3][1].body);
+    expect(writeBody.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ range: "'Training Log'!AJ2:AM2" }),
+      expect.objectContaining({ range: "'Training Log'!AR2", values: [[envelope.targetStages]] }),
+    ]));
+  });
+
   it('import Stravy dopisuje nowy pełny wiersz wyłącznie, gdy Session_ID nie istnieje', async () => {
     const { privateKey } = keyPair();
     const headers = ['Date', 'Time', 'Type', 'Name', 'Distance_km', 'Duration_min', 'Duration_text', 'RPE', 'sRPE', 'Notes', 'Source', 'Status', 'Session_ID'];

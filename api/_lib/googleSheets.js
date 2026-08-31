@@ -1,6 +1,7 @@
 import { createHash, createSign } from 'node:crypto';
 import { feedbackBatchData, planTrainingFeedbackUpdate } from '../../src/trainingFeedbackServer.js';
-import { reconcileTcxImport } from '../../src/tcxImport.js';
+import { reconcileTcxImport, resolvePlanStagedTarget, TCX_STAGED_IMPORT_SCHEMA } from '../../src/tcxImport.js';
+import { stringifyHrTargetStages } from '../../src/hrTargetStages.js';
 import { planStravaActivityAppend } from '../../src/stravaImport.js';
 
 let tokenCache = null;
@@ -13,6 +14,7 @@ export const APPLICATION_SHEET_RANGES = {
 };
 
 const TRAINING_LOG_TABLE_RANGE = "'Training Log'!A1:AR2000";
+const PLAN_TABLE_RANGE = "'Plan'!A1:O2000";
 const TRAINING_LOG_APPEND_RANGE = "'Training Log'!A:A";
 const LOGIN_LIMIT_SHEET = 'Auth_Limits';
 const LOGIN_LIMIT_RANGE = "'Auth_Limits'!A1:E2000";
@@ -206,7 +208,32 @@ export async function updateTcxImport(envelope, options = {}) {
     headers: Array.isArray(values[0]) ? values[0].map((value) => String(value ?? '')) : [],
     rows: values.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row })),
   };
-  const reconciliation = reconcileTcxImport(table, envelope);
+  const staged = envelope.schema === TCX_STAGED_IMPORT_SCHEMA;
+  let reconciliation;
+  if (staged) {
+    const planResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, PLAN_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!planResponse.ok) throw new Error(`google-plan-read-${planResponse.status}`);
+    const planValues = (await planResponse.json()).values || [];
+    const planTable = {
+      headers: Array.isArray(planValues[0]) ? planValues[0].map((value) => String(value ?? '')) : [],
+      rows: planValues.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row })),
+    };
+    const planTarget = resolvePlanStagedTarget(table, planTable, envelope.sessionId);
+    if (planTarget.action !== 'resolved') return planTarget;
+    const proposedStages = stringifyHrTargetStages(envelope.targetStages);
+    if (planTarget.targetStages !== proposedStages) {
+      return {
+        action: 'conflict', sessionId: envelope.sessionId,
+        reason: 'Cel etapowy z TCX nie odpowiada celowi zapisanym w Planie.',
+        conflicts: [{ header: 'HR_Target_Stages_JSON', current: planTarget.targetStages, proposed: proposedStages }],
+      };
+    }
+    reconciliation = reconcileTcxImport(table, envelope, { allowStageBootstrap: true });
+  } else {
+    reconciliation = reconcileTcxImport(table, envelope);
+  }
   if (reconciliation.action !== 'update') return reconciliation;
 
   const updateResponse = await fetchImpl(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.GOOGLE_SHEET_ID)}/values:batchUpdate`, {

@@ -1239,6 +1239,15 @@ function tcxStatusForRow(row) {
   });
 }
 
+function withPlanStageTargets(logRows, planRows) {
+  return (logRows || []).map((logRow) => {
+    if (v(logRow, 'logHrTargetStages', '')) return logRow;
+    const planRow = planForLogRow(planRows, logRow);
+    const stages = planRow ? v(planRow, 'planHrTargetStages', '') : '';
+    return stages ? { ...logRow, HR_Target_Stages_JSON: stages } : logRow;
+  });
+}
+
 function PostRunCompletionPanel({ target, feedbackStatus, tcxStatus, tcxRequired, editingFeedback, onEditFeedback }) {
   if (!target) return null;
   const complete = feedbackStatus.complete && (!tcxRequired || tcxStatus.complete);
@@ -1644,8 +1653,9 @@ function StravaPanel({ access, rows, onImport }) {
   );
 }
 
-function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport, onStravaImport }) {
+function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport, onStravaImport }) {
   const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
+  const tcxRows = useMemo(() => withPlanStageTargets(rows, planRows), [rows, planRows]);
   const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
   const [editingFeedback, setEditingFeedback] = useState(false);
   const feedbackStatus = useMemo(() => feedbackStatusForRow(feedbackTarget), [feedbackTarget]);
@@ -1676,7 +1686,7 @@ function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogi
           onSaved={() => setEditingFeedback(false)}
         />
       ) : null}
-      <TcxImportPanel rows={sorted} access={feedbackAccess} onSubmit={onTcxImport} />
+      <TcxImportPanel rows={tcxRows} access={feedbackAccess} onSubmit={onTcxImport} />
       <StravaPanel access={feedbackAccess} rows={rows} onImport={onStravaImport} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
@@ -2043,7 +2053,7 @@ function App() {
       <main>
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />}
         {tab === 'epa' && <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} />}
-        {tab === 'log' && <Log rows={data.log} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
+        {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>
 
