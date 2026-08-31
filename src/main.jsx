@@ -939,6 +939,9 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     'no-data': 'brak danych atomowych',
     'data-error': 'błąd danych Execution',
   }[execution.status] || 'brak oceny';
+  const executionDisplaySummary = execution.status === 'no-target' && v(latestRunPlan, 'planHr', '')
+    ? 'cel wieloetapowy — brak automatycznej oceny'
+    : executionSummary;
   const staffMembers = staffPanel.core.length + staffPanel.specialists.length;
   const allStaff = [...staffPanel.core, ...staffPanel.specialists];
   const staffAlerts = allStaff
@@ -1023,7 +1026,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
               <span>{v(latestRunRow, 'logDuration', '—')} · {v(latestRunRow, 'logPace', '—')}</span>
             </div>
             <p>cel {execution.targetLo ?? '—'}–{execution.targetHi ?? '—'} bpm · HR {formatMetricNumber(v(latestRunRow, 'logHrAvg', ''), { maximumFractionDigits: 0 })} / {formatMetricNumber(v(latestRunRow, 'logHrMax', ''), { maximumFractionDigits: 0 })}</p>
-            {executionReady ? <div className={`session-execution-label execution-label-${executionTone}`}><strong>{formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% czasu w zaleconym zakresie</strong><span>{executionSummary}</span></div> : <div className="session-execution-label"><strong>{executionSummary}</strong></div>}
+            {executionReady ? <div className={`session-execution-label execution-label-${executionTone}`}><strong>{formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% czasu w zaleconym zakresie</strong><span>{executionDisplaySummary}</span></div> : <div className="session-execution-label"><strong>{executionDisplaySummary}</strong></div>}
             <ExecutionSplit execution={execution} />
             <div className="last-session-more"><span>Pełne dane biegu</span><b>Otwórz ›</b></div>
           </button>
@@ -1050,10 +1053,10 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
           <span className="section-aside">otwieraj tylko to, czego potrzebujesz</span>
         </div>
         <div className="dashboard-disclosure-stack">
-          <DashboardDisclosure eyebrow="INTEGRALNOŚĆ" title="Kompletność danych" summary={`RPE ${dataCompleteness.feedback.complete}/${dataCompleteness.feedback.total} · TCX ${dataCompleteness.tcx.complete}/${dataCompleteness.tcx.total}`}>
+          <DashboardDisclosure eyebrow="INTEGRALNOŚĆ" title="Kompletność danych" summary={`FORMULARZ ${dataCompleteness.feedback.complete}/${dataCompleteness.feedback.total} · TCX ${dataCompleteness.tcx.complete}/${dataCompleteness.tcx.total}`}>
             <div className="stats-grid compact-stats">
               <StatCard label="BASELINE" value={dataCompleteness.calibration.progress} note={dataCompleteness.calibration.state === 'ready' ? '28 dni i wystarczająca próbka metryk' : 'nie pokazujemy z-score przed kalibracją'} />
-              <StatCard label="RPE · 28D" value={`${dataCompleteness.feedback.complete}/${dataCompleteness.feedback.total}`} note={dataCompleteness.feedback.missing ? `do uzupełnienia: ${dataCompleteness.feedback.missing}` : 'wszystkie ukończone biegi mają RPE 1–10'} tone={dataCompleteness.feedback.missing ? 'mid' : 'good'} />
+              <StatCard label="OCENY Z FORMULARZA · 28D" value={`${dataCompleteness.feedback.complete}/${dataCompleteness.feedback.total}`} note={dataCompleteness.feedback.missing ? `do uzupełnienia formularzem: ${dataCompleteness.feedback.missing}` : 'wszystkie ukończone biegi mają zsynchronizowaną ocenę'} tone={dataCompleteness.feedback.missing ? 'mid' : 'good'} />
               <StatCard label="TCX Z CELEM HR · 28D" value={`${dataCompleteness.tcx.complete}/${dataCompleteness.tcx.total}`} note={dataCompleteness.tcx.total ? dataCompleteness.tcx.missing ? `do analizy: ${dataCompleteness.tcx.missing}` : 'wszystkie wymagane sesje mają dane atomowe' : 'brak sesji z celem HR'} tone={dataCompleteness.tcx.missing ? 'mid' : ''} />
               <StatCard label="ODCZYT ŹRÓDŁA" value={dataCompleteness.source === 'complete' ? 'OK' : 'UWAGA'} note={transportMeta?.serverDurationMs === null || !transportMeta ? 'brak pomiaru czasu endpointu' : `endpoint ${transportMeta.serverDurationMs} ms · przeglądarka ${transportMeta.clientDurationMs} ms`} tone={dataCompleteness.source === 'complete' ? 'good' : 'mid'} />
             </div>
@@ -1098,7 +1101,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
             <p className="method-note">Zmiana dystansu jest obserwacją względem wcześniejszego najdłuższego biegu, bez progu „10% = alarm”. Nie zmienia samodzielnie decyzji treningowej.</p>
           </DashboardDisclosure>
 
-          <DashboardDisclosure eyebrow="OSTATNI BIEG" title="Wykonanie i Execution" summary={executionSummary}>
+          <DashboardDisclosure eyebrow="OSTATNI BIEG" title="Wykonanie i Execution" summary={executionDisplaySummary}>
             <article className="last-run-card">
               <div><span>DYSTANS</span><strong>{v(row, 'lastRunDistance', '') ? `${formatMetricNumber(v(row, 'lastRunDistance'), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km` : '—'}</strong></div>
               <div><span>TEMPO</span><strong>{v(row, 'lastRunPace', '—')}</strong></div>
@@ -1156,8 +1159,8 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         {latestRunRow ? (
           <>
             <article className={`dashboard-detail-hero execution-hero-${executionTone}`}>
-              <strong>{executionReady ? `${formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% w celu ${execution.targetLo}–${execution.targetHi} bpm` : executionSummary}</strong>
-              <span>Execution: {executionSummary}</span>
+              <strong>{executionReady ? `${formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% w celu ${execution.targetLo}–${execution.targetHi} bpm` : executionDisplaySummary}</strong>
+              <span>Execution: {executionDisplaySummary}</span>
             </article>
             <div className="dashboard-detail-grid">
               <DetailMetric label="DYSTANS" value={`${formatMetricNumber(v(latestRunRow, 'logDistance', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`} />
