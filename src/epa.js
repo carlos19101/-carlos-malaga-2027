@@ -77,6 +77,7 @@ function sessionBrief({ activity, session, execution }) {
   const pain = number(session?.pain);
   const targetPct = number(execution?.hrTargetPct);
   const abovePct = number(execution?.aboveTargetPct);
+  const volumePct = number(execution?.volumePct);
   const status = execution?.status;
   let title = 'Za mało danych do oceny wykonania';
   let copy = 'EPA nie tworzy wniosku, dopóki nie ma atomowych danych wykonania i odczuć zawodnika.';
@@ -84,10 +85,16 @@ function sessionBrief({ activity, session, execution }) {
 
   if (['ok', 'over', 'under'].includes(status) && targetPct !== null) {
     tone = status === 'ok' ? 'ok' : 'attention';
+    const intensityOver = abovePct !== null && abovePct > 40;
+    const volumeOver = volumePct !== null && volumePct > 100;
     title = status === 'ok'
       ? 'Wykonanie mieści się w zapisanym kontrakcie sesji'
-      : status === 'over' ? 'Wykonanie przekroczyło kontrakt sesji' : 'Wykonanie było poniżej kontraktu sesji';
+      : status === 'over' && volumeOver && !intensityOver ? 'Objętość przekroczyła zapisany kontrakt sesji'
+        : status === 'over' && volumeOver ? 'Objętość i intensywność przekroczyły kontrakt sesji'
+          : status === 'over' ? 'Intensywność przekroczyła zapisany kontrakt sesji'
+            : 'Wykonanie było poniżej kontraktu sesji';
     copy = `${targetPct.toFixed(1).replace('.', ',')}% analizowanego czasu było w celu HR${abovePct === null ? '' : `, ${abovePct.toFixed(1).replace('.', ',')}% ponad celem`}.`;
+    if (volumeOver) copy += ` Objętość: ${volumePct.toFixed(1).replace('.', ',')}% górnego celu.`;
     if (rpe !== null) copy += ` RPE: ${rpe}/10.`;
     if (pain !== null) copy += ` Ból: ${pain}/10.`;
   }

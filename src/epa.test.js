@@ -30,6 +30,15 @@ describe('EPA', () => {
     expect(result.brief.copy).toContain('90,1%');
   });
 
+  it('nazywa przekroczenie objętości, gdy intensywność pozostaje w limicie', () => {
+    const result = buildEpaAnalysis({
+      session: { rpe: 3, pain: 0 },
+      execution: { status: 'over', hrTargetPct: 76.7, aboveTargetPct: 16.95, volumePct: 132.67 },
+    });
+    expect(result.brief.title).toBe('Objętość przekroczyła zapisany kontrakt sesji');
+    expect(result.brief.copy).toContain('132,7% górnego celu');
+  });
+
   it('does not turn athletes into evaluators', () => {
     const result = buildEpaAnalysis({ activity: { distanceMeters: 5000 } });
     expect(result.athletes.every(({ state }) => state === 'CASE STUDY · BRAK PARY')).toBe(true);
