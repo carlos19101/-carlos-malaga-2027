@@ -1654,8 +1654,8 @@ function StravaPanel({ access, rows, onImport }) {
 }
 
 function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport, onStravaImport }) {
-  const sorted = useMemo(() => sortedRows(rows, 'desc').slice(0, 30), [rows]);
-  const tcxRows = useMemo(() => withPlanStageTargets(rows, planRows), [rows, planRows]);
+  const rowsWithPlanStageTargets = useMemo(() => withPlanStageTargets(rows, planRows), [rows, planRows]);
+  const sorted = useMemo(() => sortedRows(rowsWithPlanStageTargets, 'desc').slice(0, 30), [rowsWithPlanStageTargets]);
   const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
   const [editingFeedback, setEditingFeedback] = useState(false);
   const feedbackStatus = useMemo(() => feedbackStatusForRow(feedbackTarget), [feedbackTarget]);
@@ -1686,7 +1686,7 @@ function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFe
           onSaved={() => setEditingFeedback(false)}
         />
       ) : null}
-      <TcxImportPanel rows={tcxRows} access={feedbackAccess} onSubmit={onTcxImport} />
+      <TcxImportPanel rows={rowsWithPlanStageTargets} access={feedbackAccess} onSubmit={onTcxImport} />
       <StravaPanel access={feedbackAccess} rows={rows} onImport={onStravaImport} />
       <section className="section-block log-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : sorted.length ? sorted.map((row, i) => <LogCard row={row} key={`${v(row, 'date', '')}-${i}`} />) : <p className="muted-copy">Brak wpisów w Training Log.</p>}
