@@ -1368,8 +1368,7 @@ function TcxImportPanel({ rows, access, onSubmit }) {
   const eligible = useMemo(() => sortedRows(rows, 'desc').filter((row) => (
     isRunLogRow(row)
     && v(row, 'logSessionId', '')
-    && parseMetric(v(row, 'logHrTargetMin', '')) !== null
-    && parseMetric(v(row, 'logHrTargetMax', '')) !== null
+    && tcxStatusForRow(row).validTarget
     && (!tcxStatusForRow(row).complete || !v(row, 'logTime', ''))
   )).slice(0, 12), [rows]);
   const [sessionId, setSessionId] = useState('');
@@ -1416,6 +1415,7 @@ function TcxImportPanel({ rows, access, onSubmit }) {
         sessionId: v(target, 'logSessionId', ''),
         targetMin: parseMetric(v(target, 'logHrTargetMin', '')),
         targetMax: parseMetric(v(target, 'logHrTargetMax', '')),
+        targetStages: v(target, 'logHrTargetStages', ''),
       });
       setEnvelope(prepared);
       setState({ busy: false, message: 'Analiza gotowa. Sprawdź podgląd przed zapisem.', tone: 'ok' });
@@ -1459,7 +1459,11 @@ function TcxImportPanel({ rows, access, onSubmit }) {
             <select value={sessionId} onChange={chooseSession}>
               {eligible.map((row) => {
                 const id = v(row, 'logSessionId', '');
-                return <option value={id} key={id}>{formatDate(v(row, 'date', ''))} · {v(row, 'logName', 'Bieg')} · HR {v(row, 'logHrTargetMin', '')}–{v(row, 'logHrTargetMax', '')}</option>;
+                const status = tcxStatusForRow(row);
+                const targetLabel = status.targetMode === 'staged'
+                  ? `${status.targetStages.length} etapów HR`
+                  : `HR ${v(row, 'logHrTargetMin', '')}–${v(row, 'logHrTargetMax', '')}`;
+                return <option value={id} key={id}>{formatDate(v(row, 'date', ''))} · {v(row, 'logName', 'Bieg')} · {targetLabel}</option>;
               })}
             </select>
           </label>
@@ -1471,7 +1475,7 @@ function TcxImportPanel({ rows, access, onSubmit }) {
         </div>
         {preview ? (
           <div className="tcx-preview" aria-label="Podgląd analizy TCX">
-            <p><b>CEL HR</b><strong>{preview.targetMin}–{preview.targetMax}</strong><small>bpm</small></p>
+            <p><b>CEL HR</b><strong>{preview.targetMode === 'staged' ? `${preview.stageCount} etapów` : `${preview.targetMin}–${preview.targetMax}`}</strong><small>{preview.targetMode === 'staged' ? 'HR' : 'bpm'}</small></p>
             <p><b>ANALIZA</b><strong>{executionDuration(preview.analyzedDuration)}</strong><small>{preview.diagnostics.trackpointCount || 0} próbek</small></p>
             <p><b>W OKNIE</b><strong>{formatMetricNumber(preview.pctInTarget, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(preview.timeInTarget)}</small></p>
             <p><b>PONAD</b><strong>{formatMetricNumber(preview.pctAboveTarget, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(preview.timeAboveTarget)}</small></p>

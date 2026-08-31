@@ -1,4 +1,5 @@
 import { createTcxImport } from './tcxImport.js';
+import { tryParseHrTargetStages } from './hrTargetStages.js';
 
 export const MAX_TCX_FILE_BYTES = 12 * 1024 * 1024;
 
@@ -17,10 +18,13 @@ export async function prepareTcxImport(tcxText, options = {}, cryptoImpl = globa
 
 export function tcxImportPreview(envelope = {}) {
   const atomic = envelope.atomic || {};
+  const stages = tryParseHrTargetStages(envelope.targetStages);
   const analyzed = Number(atomic.HR_Analyzed_Duration_s);
   const percent = (value) => analyzed > 0 ? (Number(value) / analyzed) * 100 : null;
   return {
     sessionId: envelope.sessionId,
+    targetMode: stages ? 'staged' : 'single',
+    stageCount: stages?.stages.length || 0,
     targetMin: atomic.HR_Target_Min_bpm,
     targetMax: atomic.HR_Target_Max_bpm,
     analyzedDuration: analyzed,

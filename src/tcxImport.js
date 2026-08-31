@@ -1,7 +1,9 @@
 import { isNullish, normalize, parseDate, parseNumber } from './parse.js';
-import { analyzeTcx, formatTcxActivityTiming } from './tcx.js';
+import { stringifyHrTargetStages, tryParseHrTargetStages } from './hrTargetStages.js';
+import { analyzeTcx, analyzeTcxStages, formatTcxActivityTiming } from './tcx.js';
 
 export const TCX_IMPORT_SCHEMA = 'carlos.tcx-import.v1';
+export const TCX_STAGED_IMPORT_SCHEMA = 'carlos.tcx-import.v2';
 export const TCX_IMPORT_HEADERS = [
   'HR_Target_Min_bpm',
   'HR_Target_Max_bpm',
@@ -12,8 +14,10 @@ export const TCX_IMPORT_HEADERS = [
 ];
 export const SESSION_ID_HEADER = 'Session_ID';
 export const TCX_TIMING_HEADER = 'Time';
+export const TCX_STAGE_HEADER = 'HR_Target_Stages_JSON';
+export const TCX_STAGED_ATOMIC_HEADERS = TCX_IMPORT_HEADERS.slice(2);
 
-const TCX_IMPORT_ID_PATTERN = /^tcx-v1-[0-9a-f]{8}$/;
+const TCX_IMPORT_ID_PATTERN = /^tcx-v[12]-[0-9a-f]{8}$/;
 const SESSION_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{5,119}$/i;
 const SHA256_PATTERN = /^[A-F0-9]{64}$/;
 
@@ -56,24 +60,33 @@ function validateTiming(timing) {
 export function createTcxImport(tcxText, options = {}) {
   const sessionId = requiredText(options.sessionId, 'sessionId');
   const sourceSha256 = String(options.sourceSha256 ?? '').trim().toUpperCase();
-  const analysis = analyzeTcx(tcxText, {
-    targetMin: options.targetMin,
-    targetMax: options.targetMax,
-    ...(options.maxGapSeconds === undefined ? {} : { maxGapSeconds: options.maxGapSeconds }),
-  });
+  const stagedTarget = tryParseHrTargetStages(options.targetStages);
+  const analysis = stagedTarget
+    ? analyzeTcxStages(tcxText, stagedTarget, {
+      ...(options.maxGapSeconds === undefined ? {} : { maxGapSeconds: options.maxGapSeconds }),
+    })
+    : analyzeTcx(tcxText, {
+      targetMin: options.targetMin,
+      targetMax: options.targetMax,
+      ...(options.maxGapSeconds === undefined ? {} : { maxGapSeconds: options.maxGapSeconds }),
+    });
   const timing = formatTcxActivityTiming(analysis.startedAt, options.timeZone);
+  const atomicHeaders = stagedTarget ? TCX_STAGED_ATOMIC_HEADERS : TCX_IMPORT_HEADERS;
   const values = [
-    analysis.targetMin,
-    analysis.targetMax,
+    ...(stagedTarget ? [] : [analysis.targetMin, analysis.targetMax]),
     analysis.timeInTarget,
     analysis.timeAboveTarget,
     analysis.timeBelowTarget,
     analysis.analyzedDuration,
   ];
-  const idempotencyKey = `tcx-v1-${valueFingerprint([sessionId, sourceSha256 || 'NO_SHA256', timing.localDate, timing.localTime, ...values])}`;
+  const schema = stagedTarget ? TCX_STAGED_IMPORT_SCHEMA : TCX_IMPORT_SCHEMA;
+  const idempotencyKey = `tcx-v${stagedTarget ? 2 : 1}-${valueFingerprint([
+    sessionId, sourceSha256 || 'NO_SHA256', timing.localDate, timing.localTime,
+    ...(stagedTarget ? [stringifyHrTargetStages(stagedTarget)] : []), ...values,
+  ])}`;
 
   return {
-    schema: TCX_IMPORT_SCHEMA,
+    schema,
     sessionId,
     sourceSha256: sourceSha256 || null,
     idempotencyKey,
@@ -83,8 +96,10 @@ export function createTcxImport(tcxText, options = {}) {
       inclusiveTarget: true,
       maxGapSeconds: analysis.maxGapSeconds,
       lastTrackpointGetsDuration: false,
+      ...(stagedTarget ? { targetMode: 'staged', stageClock: 'elapsed-from-first-trackpoint' } : {}),
     },
-    atomic: Object.fromEntries(TCX_IMPORT_HEADERS.map((header, index) => [header, values[index]])),
+    ...(stagedTarget ? { targetStages: stringifyHrTargetStages(stagedTarget) } : {}),
+    atomic: Object.fromEntries(atomicHeaders.map((header, index) => [header, values[index]])),
     diagnostics: {
       lapCount: analysis.lapCount,
       trackpointCount: analysis.trackpointCount,
@@ -92,12 +107,14 @@ export function createTcxImport(tcxText, options = {}) {
       excludedGaps: analysis.excludedGaps,
       excludedDuration: analysis.excludedDuration,
       nonPositiveIntervals: analysis.nonPositiveIntervals,
+      ...(stagedTarget ? { unmappedDuration: analysis.unmappedDuration, plannedDuration: analysis.plannedDuration } : {}),
     },
   };
 }
 
 export function validateTcxImportEnvelope(envelope = {}) {
-  if (envelope.schema !== TCX_IMPORT_SCHEMA) {
+  const staged = envelope.schema === TCX_STAGED_IMPORT_SCHEMA;
+  if (envelope.schema !== TCX_IMPORT_SCHEMA && !staged) {
     return result('contract-error', { reason: `Nieobsługiwany schemat importu: ${envelope.schema ?? 'brak'}` });
   }
   if (!SESSION_ID_PATTERN.test(String(envelope.sessionId ?? '').trim())) {
@@ -112,14 +129,17 @@ export function validateTcxImportEnvelope(envelope = {}) {
   const timing = validateTiming(envelope.timing);
   if (!timing.valid) return result('contract-error', { reason: 'Nieprawidłowy czas rozpoczęcia TCX.' });
 
-  const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic?.[header]);
-  const invalidAtomicHeaders = TCX_IMPORT_HEADERS.filter((_, index) => (
+  const atomicHeaders = staged ? TCX_STAGED_ATOMIC_HEADERS : TCX_IMPORT_HEADERS;
+  const proposed = atomicHeaders.map((header) => envelope.atomic?.[header]);
+  const invalidAtomicHeaders = atomicHeaders.filter((_, index) => (
     !Number.isFinite(proposed[index]) || proposed[index] < 0
   ));
   if (invalidAtomicHeaders.length) return result('contract-error', { invalidAtomicHeaders });
 
-  const [targetMin, targetMax, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration] = proposed;
-  if (targetMin < 20 || targetMax > 250 || targetMin >= targetMax) {
+  const [targetMin, targetMax, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration] = staged
+    ? [null, null, ...proposed]
+    : proposed;
+  if (!staged && (targetMin < 20 || targetMax > 250 || targetMin >= targetMax)) {
     return result('contract-error', { reason: 'Nieprawidłowy zakres docelowego HR.' });
   }
   if (Math.abs(timeInTarget + timeAboveTarget + timeBelowTarget - analyzedDuration) > 1e-6) {
@@ -133,6 +153,11 @@ export function validateTcxImportEnvelope(envelope = {}) {
     || !Number.isFinite(methodology.maxGapSeconds)
     || methodology.maxGapSeconds <= 0) {
     return result('contract-error', { reason: 'Nieprawidłowa metodologia analizy TCX.' });
+  }
+  if (staged && (!tryParseHrTargetStages(envelope.targetStages)
+    || methodology.targetMode !== 'staged'
+    || methodology.stageClock !== 'elapsed-from-first-trackpoint')) {
+    return result('contract-error', { reason: 'Nieprawidłowy etapowy cel HR TCX.' });
   }
   return result('valid', { envelope: timing.value ? { ...envelope, timing: timing.value } : envelope });
 }
@@ -264,14 +289,18 @@ export function resolveTcxTarget(table = {}, sessionIdValue = '') {
 export function reconcileTcxImport(table = {}, envelope = {}) {
   const validation = validateTcxImportEnvelope(envelope);
   if (validation.action !== 'valid') return validation;
+  const staged = validation.envelope.schema === TCX_STAGED_IMPORT_SCHEMA;
+  const atomicHeaders = staged ? TCX_STAGED_ATOMIC_HEADERS : TCX_IMPORT_HEADERS;
 
   const headers = Array.isArray(table.headers) ? table.headers : [];
   const rows = Array.isArray(table.rows) ? table.rows : [];
   const sessionIndex = headerIndex(headers, SESSION_ID_HEADER);
-  const atomicIndexes = TCX_IMPORT_HEADERS.map((header) => headerIndex(headers, header));
+  const atomicIndexes = atomicHeaders.map((header) => headerIndex(headers, header));
+  const stageIndex = headerIndex(headers, TCX_STAGE_HEADER);
   const missingHeaders = [
     ...(sessionIndex === -1 ? [SESSION_ID_HEADER] : []),
-    ...TCX_IMPORT_HEADERS.filter((_, index) => atomicIndexes[index] === -1),
+    ...atomicHeaders.filter((_, index) => atomicIndexes[index] === -1),
+    ...(staged && stageIndex === -1 ? [TCX_STAGE_HEADER] : []),
   ];
   if (missingHeaders.length) return result('contract-error', { missingHeaders });
 
@@ -290,7 +319,7 @@ export function reconcileTcxImport(table = {}, envelope = {}) {
   }
 
   const row = matches[0];
-  const proposed = TCX_IMPORT_HEADERS.map((header) => envelope.atomic[header]);
+  const proposed = atomicHeaders.map((header) => envelope.atomic[header]);
   const currentRaw = atomicIndexes.map((index) => row.values?.[index] ?? '');
   const conflicts = [];
   let blanks = 0;
@@ -303,12 +332,25 @@ export function reconcileTcxImport(table = {}, envelope = {}) {
     const parsed = parseNumber(raw);
     if (parsed === null || Math.abs(parsed - proposed[index]) > 1e-9) {
       conflicts.push({
-        header: TCX_IMPORT_HEADERS[index],
+        header: atomicHeaders[index],
         current: raw,
         proposed: proposed[index],
       });
     }
   });
+
+  if (staged) {
+    const currentStages = tryParseHrTargetStages(row.values?.[stageIndex]);
+    const proposedStages = stringifyHrTargetStages(validation.envelope.targetStages);
+    const currentStageText = currentStages ? stringifyHrTargetStages(currentStages) : null;
+    if (currentStageText !== proposedStages) {
+      conflicts.push({
+        header: TCX_STAGE_HEADER,
+        current: row.values?.[stageIndex] ?? '',
+        proposed: proposedStages,
+      });
+    }
+  }
 
   const timing = resolveTimingUpdate(headers, row, validation.envelope.timing);
   const atomicUpdate = blanks > 0;
@@ -328,7 +370,7 @@ export function reconcileTcxImport(table = {}, envelope = {}) {
     range: updates[0]?.range || atomicRange,
     startColumnIndex: expectedAtomicStart,
     values: proposed,
-    current: Object.fromEntries(TCX_IMPORT_HEADERS.map((header, index) => [header, currentRaw[index]])),
+    current: Object.fromEntries(atomicHeaders.map((header, index) => [header, currentRaw[index]])),
     proposed: envelope.atomic,
     timing,
     updates,

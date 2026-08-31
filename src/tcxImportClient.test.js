@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { prepareTcxImport, sha256Hex, tcxImportPreview } from './tcxImportClient.js';
 
 const fixture = readFileSync(new URL('../test/fixtures/2026-08-23-run-01.sanitized.tcx', import.meta.url), 'utf8');
+const progressiveFixture = readFileSync(new URL('../test/fixtures/2026-08-29-progressive.sanitized.tcx', import.meta.url), 'utf8');
 
 describe('przeglądarkowy import TCX', () => {
   it('liczy SHA-256 i buduje identyczne atomy jak analizator regresyjny', async () => {
@@ -40,5 +41,16 @@ describe('przeglądarkowy import TCX', () => {
     await expect(prepareTcxImport('  ', {
       sessionId: '2026-08-23-run-01', targetMin: 150, targetMax: 162,
     })).rejects.toThrow('Plik TCX jest pusty');
+  });
+
+  it('pokazuje etapy zamiast zmyślonego pojedynczego zakresu HR', async () => {
+    const envelope = await prepareTcxImport(progressiveFixture, {
+      sessionId: '2026-08-29-run-01',
+      targetStages: JSON.stringify({ schema: 'carlos.hr-target-stages.v1', stages: [
+        { name: 'WU', durationSeconds: 600, min: 135, max: 145 },
+        { name: 'CD', durationSeconds: 480, max: 150 },
+      ] }),
+    });
+    expect(tcxImportPreview(envelope)).toMatchObject({ targetMode: 'staged', stageCount: 2 });
   });
 });

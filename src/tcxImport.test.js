@@ -7,11 +7,21 @@ import {
   reconcileTcxImport,
   resolveTcxTarget,
   TCX_IMPORT_HEADERS,
+  TCX_STAGE_HEADER,
+  TCX_STAGED_ATOMIC_HEADERS,
   TCX_TIMING_HEADER,
   validateTcxImportEnvelope,
 } from './tcxImport.js';
 
 const fixture = readFileSync(new URL('../test/fixtures/2026-08-23-run-01.sanitized.tcx', import.meta.url), 'utf8');
+const progressiveFixture = readFileSync(new URL('../test/fixtures/2026-08-29-progressive.sanitized.tcx', import.meta.url), 'utf8');
+const progressiveStages = JSON.stringify({ schema: 'carlos.hr-target-stages.v1', stages: [
+  { name: 'Rozgrzewka', durationSeconds: 600, min: 135, max: 145 },
+  { name: 'Baza', durationSeconds: 1500, min: 150, max: 165 },
+  { name: 'Steady', durationSeconds: 600, min: 166, max: 172 },
+  { name: 'Finisz', durationSeconds: 300, min: 173, max: 175 },
+  { name: 'Schłodzenie', durationSeconds: 480, max: 150 },
+] });
 
 function table(atomicValues = ['', '', '', '', '', ''], options = {}) {
   const headers = ['Date', 'Session_ID', ...TCX_IMPORT_HEADERS];
@@ -37,6 +47,11 @@ function liveTable(atomicValues = ['', '', '', '', '', ''], rowNumber = 7) {
   return { headers, rows: [{ rowNumber, values }] };
 }
 
+function stagedTable(atomicValues = ['', '', '', ''], stageValue = progressiveStages) {
+  const headers = ['Date', 'Session_ID', TCX_STAGE_HEADER, ...TCX_STAGED_ATOMIC_HEADERS];
+  return { headers, rows: [{ rowNumber: 4, values: ['2026-08-29', '2026-08-29-run-01', stageValue, ...atomicValues] }] };
+}
+
 const envelope = createTcxImport(fixture, {
   sessionId: '2026-08-23-run-01',
   targetMin: 150,
@@ -53,6 +68,12 @@ const timedEnvelope = {
     localTime: '18:05:30',
   },
 };
+
+const stagedEnvelope = createTcxImport(progressiveFixture, {
+  sessionId: '2026-08-29-run-01',
+  targetStages: progressiveStages,
+  sourceSha256: 'AB860110AA046542ECC9FABAC31DB380C561F466B55C42FE3F9B9B0C40A148D1',
+});
 
 describe('createTcxImport', () => {
   it('buduje wersjonowaną kopertę z odtwarzalnymi atomami', () => {
@@ -83,6 +104,16 @@ describe('createTcxImport', () => {
       .toMatchObject({ action: 'contract-error', reason: 'Nieprawidłowy SHA-256 pliku TCX.' });
     expect(validateTcxImportEnvelope({ ...envelope, timing: { ...envelope.timing, localTime: '25:00:00' } }))
       .toMatchObject({ action: 'contract-error', reason: 'Nieprawidłowy czas rozpoczęcia TCX.' });
+  });
+
+  it('tworzy osobną, wersjonowaną kopertę dla celu wieloetapowego', () => {
+    expect(stagedEnvelope).toMatchObject({
+      schema: 'carlos.tcx-import.v2',
+      idempotencyKey: expect.stringMatching(/^tcx-v2-[0-9a-f]{8}$/),
+      atomic: { Time_In_Target_s: 2669, Time_Above_Target_s: 590, Time_Below_Target_s: 221, HR_Analyzed_Duration_s: 3480 },
+      diagnostics: { unmappedDuration: 4, plannedDuration: 3480 },
+    });
+    expect(validateTcxImportEnvelope(stagedEnvelope)).toMatchObject({ action: 'valid' });
   });
 });
 
@@ -164,6 +195,14 @@ describe('reconcileTcxImport', () => {
     expect(reconcileTcxImport(table(), broken)).toEqual({
       action: 'contract-error', invalidAtomicHeaders: ['Time_In_Target_s'],
     });
+  });
+
+  it('dla progresji zapisuje wyłącznie czasy i blokuje zmianę etapów', () => {
+    expect(reconcileTcxImport(stagedTable(), stagedEnvelope)).toMatchObject({
+      action: 'update', rowNumber: 4, range: 'D4:G4', values: [2669, 590, 221, 3480],
+    });
+    expect(reconcileTcxImport(stagedTable([], JSON.stringify({ schema: 'carlos.hr-target-stages.v1', stages: [{ name: 'Inny', durationSeconds: 300, min: 150, max: 160 }] })), stagedEnvelope))
+      .toMatchObject({ action: 'conflict', conflicts: [expect.objectContaining({ header: TCX_STAGE_HEADER })] });
   });
 });
 
