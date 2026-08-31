@@ -857,6 +857,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       const sessionExecution = isRunLogRow(logRow) ? computeExecution(executionInput(logRow, planRow)) : null;
       return {
         date: v(logRow, 'date', ''),
+        timestamp: logTimestamp(logRow),
         name: v(logRow, 'logName', '') || v(planRow, 'planMorning', v(planRow, 'planSession', '')),
         type: resolveLogSession(logRow, A.logType),
         rpe: v(logRow, 'logRpe', ''),

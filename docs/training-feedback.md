@@ -16,7 +16,11 @@ Kolumny ścieżki zapisu są dopisane po dotychczasowym kontrakcie Training Log:
 
 ## Idempotencja i kolejka offline
 
-Każda ocena ma `Feedback_ID`. Ponowienie tej samej paczki daje `noop`. Serwer porównuje również `Feedback_Submitted_At`, dlatego starsza paczka nie może nadpisać nowszej oceny. Kolejka przeglądarki zachowuje tylko najnowszą paczkę dla konkretnego `Session_ID`.
+Każda ocena ma `Feedback_ID`. Ponowienie tej samej paczki daje `noop`. Serwer porównuje również `Feedback_Submitted_At` z aktualnie odczytanym wierszem i odrzuca starszą paczkę. Kolejka przeglądarki zachowuje tylko najnowszą paczkę dla konkretnego `Session_ID`.
+
+Podczas wysyłania kolejka jest odczytywana ponownie po każdym żądaniu. Potwierdzenie usuwa wyłącznie dokładnie wysłaną wersję (`Session_ID`, `Feedback_ID`, `Feedback_Submitted_At`), nie nowszą korektę ani ocenę dodaną podczas oczekiwania na odpowiedź. Równoległe wywołania synchronizacji w jednej karcie współdzielą jedno zadanie; przeglądarki z Web Locks dodatkowo szeregują synchronizacje między kartami tej samej domeny.
+
+Granica gwarancji: odczyt–porównanie–zapis w Google Sheets nie jest transakcją. Powyższe zabezpieczenia nie gwarantują atomowości równoległych zapisów z wielu urządzeń lub instancji serwera; Web Locks nie obejmuje też wszystkich operacji dodawania do `localStorage`. Wersja wieloużytkownikowa wymaga transakcyjnego zapisu z kontrolą wersji, a nie licznika lub blokady wyłącznie w pamięci funkcji.
 
 Nowe formularze wysyłają pakiet w wersji 2. Stare, lokalnie zapisane pakiety bez wersji z `RPE = 0` są zachowane wyłącznie dla zgodności i nie są przepisywane ani poprawiane automatycznie.
 

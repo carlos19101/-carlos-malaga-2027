@@ -21,6 +21,10 @@ HR_Analyzed_Duration_s =
   Time_In_Target_s + Time_Above_Target_s + Time_Below_Target_s
 ```
 
+## Cele etapowe
+
+Powyższe zasady dotyczą również celów etapowych. Ich zegar to czas od pierwszej poprawnej próbki HR, nie czas ruchu. Interwał przecinający granicę etapu jest dzielony na tej granicy; obie części nadal używają HR wcześniejszej próbki. Luki nie zatrzymują zegara etapów. Czas poza zapisanymi etapami jest raportowany jako `unmappedDuration` i nie wchodzi do sumy czasów w/powyżej/poniżej celu. Źródłem etapów przy zapisie jest Plan, a nie domyślny zakres pojedynczego HR.
+
 ## Przypadek kontrolny 23.08.2026
 
 Dla celu `150–162 bpm` wersjonowany, oczyszczony fixture zwraca:

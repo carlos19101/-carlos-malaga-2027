@@ -142,7 +142,7 @@ export async function upsertLoginLimitRecord(record, options = {}) {
     new Date(record.updatedAt).toISOString(),
   ]];
   const range = record.rowNumber ? `'Auth_Limits'!A${record.rowNumber}:E${record.rowNumber}` : "'Auth_Limits'!A:E";
-  const suffix = record.rowNumber ? '' : ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS';
+  const suffix = record.rowNumber ? '?valueInputOption=RAW' : ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS';
   const response = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, range)}${suffix}`, {
     method: record.rowNumber ? 'PUT' : 'POST', headers,
     body: JSON.stringify({ majorDimension: 'ROWS', values }),

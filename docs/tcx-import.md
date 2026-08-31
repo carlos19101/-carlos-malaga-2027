@@ -1,6 +1,6 @@
 # Idempotentny import TCX do Training Log
 
-Importer tworzy wersjonowaną kopertę z polami atomowymi, dopasowuje dokładnie jeden wiersz po `Session_ID` i planuje zapis wyłącznie do bloku:
+Importer tworzy wersjonowaną kopertę z polami atomowymi i dopasowuje dokładnie jeden wiersz po `Session_ID`. Wariant `carlos.tcx-import.v1` dla pojedynczego celu HR zapisuje blok:
 
 ```text
 HR_Target_Min_bpm
@@ -11,6 +11,8 @@ Time_Below_Target_s
 HR_Analyzed_Duration_s
 ```
 
+Wariant `carlos.tcx-import.v2` dla celu etapowego zapisuje cztery czasy oraz kanoniczne `HR_Target_Stages_JSON`. Nie zapisuje jednej pary min/max jako substytutu etapów. Serwer odczytuje Plan dla daty sesji i wymaga dokładnie jednego poprawnego celu etapowego zgodnego z kopertą; brak celu, niejednoznaczność lub różnica blokują zapis.
+
 ## Zasady bezpieczeństwa
 
 - brak `Session_ID` nie tworzy nowego wiersza;
@@ -18,20 +20,22 @@ HR_Analyzed_Duration_s
 - identyczne atomy zwracają `noop` i nie generują zapisu;
 - inne istniejące atomy zwracają `conflict` i nie są nadpisywane;
 - częściowo puste, ale niesprzeczne atomy mogą zostać uzupełnione;
-- zapis obejmuje jeden dopasowany wiersz i sześć kolumn atomowych;
+- zapis obejmuje jeden dopasowany wiersz i pola właściwe dla wersji importu;
 - gdy `Time` jest puste, importer uzupełnia je rzeczywistą godziną pierwszej próbki TCX w `Europe/Warsaw`; istniejącej godziny nigdy nie nadpisuje;
-- źródłowy SHA-256 oraz fingerprint importu są zwracane w wyniku.
+- źródłowy SHA-256 oraz fingerprint należą do lokalnej koperty importu; nie są zapisywane w arkuszu ani zwracane przez odpowiedź HTTP jako trwały rejestr pochodzenia.
 
 ## Import w aplikacji
 
 W zakładce **Log → Importuj bieg**:
 
-1. wybierz sesję z istniejącym `Session_ID` i zakresem HR;
+1. wybierz sesję z istniejącym `Session_ID` i pojedynczym lub etapowym celem HR; cel etapowy jest pobierany z Planu;
 2. wybierz plik `.tcx` do 12 MB;
 3. sprawdź podgląd czasu w oknie, ponad i poniżej celu;
 4. potwierdź zapis.
 
-TCX jest analizowany lokalnie w przeglądarce. Do `/api/tcx-import` trafia wersjonowana koperta z SHA-256, metodologią, godziną pierwszej próbki oraz sześcioma wartościami atomowymi, nie surowy plik. Endpoint wymaga sesji HttpOnly i dozwolonego `Origin`. Serwer ponownie waliduje sumę czasów, metodologię, hash oraz kontrakt Training Log.
+TCX jest analizowany lokalnie w przeglądarce. Do `/api/tcx-import` trafia wersjonowana koperta z SHA-256, metodologią, godziną pierwszej poprawnej próbki oraz wartościami właściwymi dla wersji importu, nie surowy plik. Endpoint wymaga sesji HttpOnly i dozwolonego `Origin`. Serwer waliduje sumę czasów, deklarację metodologii, format hasha i kontrakt Training Log; dla etapów dodatkowo sprawdza Plan. Nie analizuje ponownie pliku i nie może potwierdzić jego SHA-256 bez otrzymania oryginału. To walidacja spójności danych, nie niezależny dowód ich pochodzenia.
+
+Import sprawdza konflikty w odczytanym stanie arkusza. Google Sheets nie zapewnia tutaj transakcji obejmującej odczyt i zapis; równoczesne importy na wielu instancjach wymagają osobnej kontroli współbieżności przed rozszerzeniem aplikacji na wielu użytkowników.
 
 ## Analiza bez arkusza
 

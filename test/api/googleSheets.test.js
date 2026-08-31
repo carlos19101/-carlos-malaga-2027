@@ -1,6 +1,6 @@
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { appendStravaActivity, createGoogleAssertion, readApplicationTables, readLoginLimitRows, updateTcxImport, updateTrainingFeedback } from '../../api/_lib/googleSheets.js';
+import { appendStravaActivity, createGoogleAssertion, readApplicationTables, readLoginLimitRows, updateTcxImport, updateTrainingFeedback, upsertLoginLimitRecord } from '../../api/_lib/googleSheets.js';
 import { createStravaImportRecord } from '../../src/stravaImport.js';
 import { createTcxImport } from '../../src/tcxImport.js';
 
@@ -22,6 +22,28 @@ const HEADERS = [
 ];
 
 describe('Google Sheets service account', () => {
+  it.each([1, 0])('aktualizuje istniejący licznik logowania do %s przez PUT z RAW', async (failures) => {
+    const { privateKey } = keyPair();
+    const fetchImpl = vi.fn(async (url, options = {}) => {
+      if (String(url).includes('oauth2.googleapis.com')) return jsonResponse(200, { access_token: 'limit-update-token', expires_in: 3600 });
+      const parsed = new URL(url);
+      expect(options.method).toBe('PUT');
+      expect(decodeURIComponent(parsed.pathname)).toContain("'Auth_Limits'!A2:E2");
+      expect(parsed.searchParams.get('valueInputOption')).toBe('RAW');
+      expect(JSON.parse(options.body).values[0][2]).toBe(failures);
+      return jsonResponse(200, { updatedCells: 5 });
+    });
+    await upsertLoginLimitRecord({
+      key: 'test-client', rowNumber: 2, failures,
+      windowStartedAt: Date.parse('2026-08-31T10:00:00Z'), blockedUntil: 0,
+      updatedAt: Date.parse('2026-08-31T10:01:00Z'),
+    }, {
+      env: { GOOGLE_SERVICE_ACCOUNT_EMAIL: 'limit-update@example.test', GOOGLE_PRIVATE_KEY: privateKey, GOOGLE_SHEET_ID: 'test-sheet' },
+      fetchImpl,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('tworzy prawidłowo podpisany JWT o ograniczonym zakresie', () => {
     const { privateKey, publicKey } = keyPair();
     const assertion = createGoogleAssertion({

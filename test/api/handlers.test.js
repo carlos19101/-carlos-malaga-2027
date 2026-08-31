@@ -43,7 +43,17 @@ function loginProtectionFetch(rows = []) {
     if (href.includes('Auth_Limits') && (!options.method || options.method === 'GET')) {
       return jsonResponse(200, { values: [['Client_Key_HMAC', 'Window_Started_At', 'Failures', 'Blocked_Until', 'Updated_At'], ...rows] });
     }
-    if (href.includes('Auth_Limits')) return jsonResponse(200, { updates: {} });
+    if (href.includes('Auth_Limits')) {
+      if (new URL(href).searchParams.get('valueInputOption') !== 'RAW') return jsonResponse(400, { error: 'valueInputOption-required' });
+      const values = JSON.parse(options.body).values;
+      if (options.method === 'POST') rows.push(...values);
+      else if (options.method === 'PUT') {
+        const match = decodeURIComponent(href).match(/!A(\d+):E\d+/);
+        if (!match) throw new Error('unexpected login limit range');
+        rows[Number(match[1]) - 2] = values[0];
+      }
+      return jsonResponse(200, { updates: {} });
+    }
     throw new Error(`unexpected fetch ${href}`);
   });
 }
@@ -54,6 +64,29 @@ afterEach(() => {
 });
 
 describe('/api/session', () => {
+  it('po dwóch błędnych próbach poprawne hasło zeruje istniejący licznik i loguje', async () => {
+    configuredEnvironment();
+    const rows = [];
+    const fetchImpl = loginProtectionFetch(rows);
+    vi.stubGlobal('fetch', fetchImpl);
+    const request = (passcode) => ({
+      method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app', 'x-forwarded-for': '192.0.2.10' },
+      body: { passcode },
+    });
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const response = responseMock();
+      await sessionHandler(request('Carlos-2027-wrong!'), response);
+      expect(response.statusCode).toBe(401);
+      expect(rows).toHaveLength(1);
+      expect(rows[0][2]).toBe(attempt);
+    }
+    const response = responseMock();
+    await sessionHandler(request('Carlos-2027-passcode!'), response);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['Set-Cookie']).toContain('HttpOnly');
+    expect(rows[0][2]).toBe(0);
+  });
+
   it('GET jawnie raportuje brak konfiguracji', async () => {
     ['APP_PASSCODE_SCRYPT', 'SESSION_SECRET', 'GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_SHEET_ID']
       .forEach((name) => vi.stubEnv(name, ''));

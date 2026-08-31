@@ -20,6 +20,6 @@ Połączenie jest celowo przypisane do przeglądarki, w której autoryzowano Str
 
 ## Granice MVP
 
-Panel pokazuje jedynie ostatnie podsumowania: nazwę, lokalny czas startu, typ, dystans, czas ruchu i HR średnie/maksymalne. Jest to widok porównawczy. Dopiero kolejny etap może zaproponować import konkretnej aktywności po dopasowaniu jej do `Session_ID` i po Twoim zatwierdzeniu.
+Panel pokazuje podsumowania: nazwę, lokalny czas startu, typ, dystans, czas ruchu i HR średnie/maksymalne. Oprócz widoku porównawczego istnieje zatwierdzany przez użytkownika import do `Training Log` przez `/api/strava/import`, ograniczony do kategorii `Mobilizacja` i `Siła` oraz RPE 1–10. Serwer sam pobiera wybraną aktywność po ID i nadaje `Session_ID = strava-<activityId>`. Kolejne żądanie dla istniejącej sesji zwraca `noop`; więcej niż jeden taki wpis oznacza konflikt. Jest to sprawdzenie odczytanego stanu, nie transakcyjna gwarancja unikalności przy równoległych żądaniach. Import nie wytwarza atomowych czasów HR.
 
 Panel zestawia aktywność Stravy z `Training Log` wyłącznie po lokalnym dniu, typie i bezpiecznej tolerancji dystansu (maksymalnie 100 m lub 2%). Czas ruchu Stravy jest wyświetlany, ale nie zastępuje czasu całej aktywności z TCX. Wiele sesji tego samego typu jednego dnia, inny dystans albo brak pary oznaczane są jawnie jako wymagające przeglądu.

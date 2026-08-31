@@ -29,7 +29,7 @@ npm run build
 
 Wersjonowany analizator TCX oblicza atomowe czasy wykonania na podstawie rzeczywistych odstępów między próbkami HR. Metodologia, komenda i oczyszczony przypadek kontrolny są opisane w [`docs/tcx-methodology.md`](docs/tcx-methodology.md).
 
-Idempotentny importer jest dostępny w zakładce Log. Analizuje TCX lokalnie, pokazuje podgląd, dopasowuje sesję po `Session_ID`, blokuje konflikty i zapisuje wyłącznie sześć pól atomowych przez prywatny endpoint. Instrukcja: [`docs/tcx-import.md`](docs/tcx-import.md).
+Importer jest dostępny w zakładce Log. Analizuje TCX lokalnie, pokazuje podgląd, dopasowuje sesję po `Session_ID` i sprawdza konflikty. Obsługuje pojedynczy cel HR (v1) oraz cel etapowy weryfikowany z Planem (v2); może też uzupełnić brakującą godzinę sesji. Zakres zapisu i granice idempotencji: [`docs/tcx-import.md`](docs/tcx-import.md).
 
 ## Daily Metrics
 

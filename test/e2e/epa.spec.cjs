@@ -23,7 +23,7 @@ const tables = {
     'TE_Anaerobic', 'Cadence', 'GCT_ms', 'Notes', 'Source', 'Status', 'Session_ID',
     'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Time_In_Target_s', 'Time_Above_Target_s',
     'Time_Below_Target_s', 'HR_Analyzed_Duration_s', 'Leg_Fatigue_0_10', 'Feedback_ID',
-    'Feedback_Submitted_At', 'Feedback_Notes', 'Feedback_Synced_At',
+    'Feedback_Submitted_At', 'Feedback_Notes', 'Feedback_Synced_At', 'HR_Target_Stages_JSON',
   ], {
     Date: '2026-08-25', Time: '18:55', Type: 'Bieg', Name: 'Easy base 5–6 km', Distance_km: '6.80',
     Duration_text: '51:39', Pace: '7:36/km', HR_avg: '151', HR_max: '161', RPE: '1', Pain: '0',
@@ -33,7 +33,7 @@ const tables = {
   }),
   plan: table([
     'Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session',
-    'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Distance_Target_Min_km', 'Distance_Target_Max_km',
+    'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Distance_Target_Min_km', 'Distance_Target_Max_km', 'HR_Target_Stages_JSON',
   ], {
     Data: '2026-08-25', Dzień: 'Wtorek', Rano: 'Easy base 5–6 km', Status: 'DONE',
     HR_Target_Min_bpm: '145', HR_Target_Max_bpm: '158', Distance_Target_Min_km: '5', Distance_Target_Max_km: '6',
@@ -47,6 +47,34 @@ const tables = {
     HRV_night_ms: '56', Coach_Status: 'MODIFY', Coach_Decision: 'Kontroluj obciążenie', Source: 'Garmin',
   }),
 };
+
+for (const [time, expected] of [
+  ['18:55', 'WYKONANIE ZAPISANE'],
+  ['07:00', 'SESJA PRZED DECYZJĄ — NIE ŁĄCZYMY JEJ Z WERDYKTEM'],
+  ['', 'SESJA TEGO SAMEGO DNIA — BRAK GODZINY'],
+]) {
+  test(`dziennik używa rzeczywistej godziny Training Log: ${time || 'brak'}`, async ({ page }) => {
+    const journalTables = JSON.parse(JSON.stringify(tables));
+    journalTables.log[1][journalTables.log[0].indexOf('Time')] = time;
+    const rawHeaders = journalTables.raw[0];
+    const decision = {
+      Date: '2026-08-25', Timestamp: '2026-08-25 09:00', Source: 'Head Coach',
+      Coach_Status: 'GREEN', Coach_Decision: 'Easy 5–6 km', HRV_night_ms: '60', RHR_bpm: '45',
+    };
+    journalTables.raw.push(rawHeaders.map((header) => decision[header] ?? ''));
+    await page.route('**/api/session', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, configured: true, authenticated: true }),
+    }));
+    await page.route('**/api/data', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, transport: 'test', tables: journalTables }),
+    }));
+    await page.goto('/');
+    await page.getByText('Decyzje, wykonanie i reakcje', { exact: true }).click();
+    const card = page.locator('.decision-journal-card').filter({ hasText: 'Easy 5–6 km' });
+    await expect(card.getByText(expected, { exact: true })).toBeVisible();
+    if (time === '18:55') await expect(card.getByText('reakcja następnego dnia: HRV -4 ms · RHR +1 bpm', { exact: true })).toBeVisible();
+  });
+}
 
 test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', async ({ page }) => {
   await page.route('**/api/session', (route) => route.fulfill({
@@ -71,7 +99,7 @@ test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', asy
   await page.getByRole('button', { name: 'EPA', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'EPA', exact: true })).toBeVisible();
   await expect(page.getByText('6,80 km · 51:39 · HR 151/161')).toBeVisible();
-  await expect(page.getByText(/90,1% w celu 145–158 bpm/)).toBeVisible();
+  await expect(page.getByText('90,1% w celu · 145–158 bpm', { exact: true })).toBeVisible();
   await expect(page.locator('.epa-person-grid button')).toHaveCount(10);
   await page.getByRole('button', { name: 'Elite Athletes · 8' }).click();
   await expect(page.locator('.epa-person-grid button')).toHaveCount(8);
