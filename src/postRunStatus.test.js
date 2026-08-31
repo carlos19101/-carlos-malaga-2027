@@ -39,4 +39,17 @@ describe('tcxDataStatus', () => {
       analyzedDuration: 150,
     })).toMatchObject({ complete: false, validDuration: false });
   });
+
+  it('uznaje zapis z wieloetapowym celem HR bez wymuszania fałszywego jednego zakresu', () => {
+    expect(tcxDataStatus({
+      targetStages: JSON.stringify({ schema: 'carlos.hr-target-stages.v1', stages: [
+        { name: 'WU', durationSeconds: 600, min: 135, max: 145 },
+        { name: 'CD', durationSeconds: 480, max: 150 },
+      ] }),
+      timeInTarget: 900,
+      timeAboveTarget: 120,
+      timeBelowTarget: 60,
+      analyzedDuration: 1080,
+    })).toMatchObject({ complete: true, validTarget: true, targetMode: 'staged' });
+  });
 });

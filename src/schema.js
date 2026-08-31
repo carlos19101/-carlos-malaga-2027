@@ -78,6 +78,7 @@ export const A = {
   logTimeAboveTarget: ['time above target s'],
   logTimeBelowTarget: ['time below target s'],
   logHrAnalyzedDuration: ['hr analyzed duration s'],
+  logHrTargetStages: ['hr target stages json'],
   logFeedbackId: ['feedback id'],
   logFeedbackSubmittedAt: ['feedback submitted at'],
   logFeedbackNotes: ['feedback notes'],
@@ -95,6 +96,7 @@ export const A = {
   planHrTargetMax: ['hr target max bpm'],
   planDistanceTargetMin: ['distance target min km'],
   planDistanceTargetMax: ['distance target max km'],
+  planHrTargetStages: ['hr target stages json'],
 };
 
 const requirement = (id, label = id, fields = [id]) => ({ id, label, fields });
@@ -158,6 +160,7 @@ export const SHEET_CONTRACTS = {
     requirement('logTimeAboveTarget', 'Time_Above_Target_s'),
     requirement('logTimeBelowTarget', 'Time_Below_Target_s'),
     requirement('logHrAnalyzedDuration', 'HR_Analyzed_Duration_s'),
+    requirement('logHrTargetStages', 'HR_Target_Stages_JSON'),
     requirement('logLegFatigue', 'Leg_Fatigue_0_10'),
     requirement('logFeedbackId', 'Feedback_ID'),
     requirement('logFeedbackSubmittedAt', 'Feedback_Submitted_At'),
@@ -177,6 +180,7 @@ export const SHEET_CONTRACTS = {
     requirement('planHrTargetMax', 'HR_Target_Max_bpm'),
     requirement('planDistanceTargetMin', 'Distance_Target_Min_km'),
     requirement('planDistanceTargetMax', 'Distance_Target_Max_km'),
+    requirement('planHrTargetStages', 'HR_Target_Stages_JSON'),
   ],
   Raw_Data: [
     requirement('date', 'Date'),

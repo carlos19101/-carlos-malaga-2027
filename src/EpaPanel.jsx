@@ -52,6 +52,7 @@ function executionFor(row, planRow) {
   return computeExecution({
     targetLo: value(row, 'logHrTargetMin', ''),
     targetHi: value(row, 'logHrTargetMax', ''),
+    targetStages: value(row, 'logHrTargetStages', '') || (planRow ? value(planRow, 'planHrTargetStages', '') : ''),
     timeInTarget: value(row, 'logTimeInTarget', ''),
     timeAboveTarget: value(row, 'logTimeAboveTarget', ''),
     timeBelowTarget: value(row, 'logTimeBelowTarget', ''),
@@ -94,6 +95,11 @@ function pct(valueToFormat) {
 
 function metric(valueToFormat, options = {}) {
   return formatMetricNumber(valueToFormat, { fallback: '—', ...options });
+}
+
+function executionTargetLabel(execution) {
+  if (execution.targetMode === 'staged') return `${execution.targetStages.length} etapów HR`;
+  return execution.targetLo === null ? '—' : `${execution.targetLo}–${execution.targetHi} bpm`;
 }
 
 function SourceField({ label, children, missing = false }) {
@@ -257,7 +263,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         <article className="epa-surface epa-run">
           <div className="epa-run-head"><div><span className="eyebrow">OSTATNI BIEG</span><h2>{metric(analysis.brief.distanceKm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <small>km</small></h2></div><div><strong>{pct(execution.hrTargetPct)}</strong><span>czasu w celu HR</span></div></div>
           {executionReady ? <><div className="epa-execution-track" aria-label={`${pct(execution.belowTargetPct)} poniżej, ${pct(execution.hrTargetPct)} w celu, ${pct(execution.aboveTargetPct)} powyżej`}><i style={{ width: `${execution.belowTargetPct}%` }} /><i style={{ width: `${execution.hrTargetPct}%` }} /><i style={{ width: `${execution.aboveTargetPct}%` }} /></div><div className="epa-track-legend"><span>poniżej {pct(execution.belowTargetPct)}</span><span>w celu {pct(execution.hrTargetPct)}</span><span>powyżej {pct(execution.aboveTargetPct)}</span></div></> : <p className="epa-no-chart">BRAK DANYCH STREFOWYCH — wykres nie rysuje 0%.</p>}
-          <div className="epa-facts"><div><span>CEL HR</span><strong>{execution.targetLo === null ? '—' : `${execution.targetLo}–${execution.targetHi} bpm`}</strong></div><div><span>RPE</span><strong>{metric(session?.rpe, { maximumFractionDigits: 1 })}/10</strong></div><div><span>NOGI</span><strong>{metric(session?.legFatigue, { maximumFractionDigits: 1 })}/10</strong></div></div>
+          <div className="epa-facts"><div><span>CEL HR</span><strong>{executionTargetLabel(execution)}</strong></div><div><span>RPE</span><strong>{metric(session?.rpe, { maximumFractionDigits: 1 })}/10</strong></div><div><span>NOGI</span><strong>{metric(session?.legFatigue, { maximumFractionDigits: 1 })}/10</strong></div></div>
         </article>
       </section>
 
@@ -265,7 +271,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         <div><span className="eyebrow">DANE DO ANALIZY</span><h2>Strava + Training Log + TCX</h2><p>Najpierw sprawdzamy fakty. Brak pola kończy perspektywę jako „brak podstaw”.</p></div>
         <div className="epa-source-fields">
           <SourceField label="STRAVA" missing={!activity}>{stravaText}</SourceField>
-          <SourceField label="TCX / EXECUTION" missing={!executionReady}>{executionReady ? `${pct(execution.hrTargetPct)} w celu ${execution.targetLo}–${execution.targetHi} bpm` : 'brak kompletnej analizy atomowej'}</SourceField>
+          <SourceField label="TCX / EXECUTION" missing={!executionReady}>{executionReady ? `${pct(execution.hrTargetPct)} w celu · ${executionTargetLabel(execution)}` : 'brak kompletnej analizy atomowej'}</SourceField>
           <SourceField label="OCENA ZAWODNIKA" missing={session?.rpe === null || session?.pain === null || session?.legFatigue === null}>RPE {metric(session?.rpe)} · nogi {metric(session?.legFatigue)} · ból {metric(session?.pain)}</SourceField>
           <SourceField label="BRAKUJE" missing>{analysis.sources.missing.join(' · ')}</SourceField>
         </div>

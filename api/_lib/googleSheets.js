@@ -12,7 +12,7 @@ export const APPLICATION_SHEET_RANGES = {
   raw: "'Raw_Data'",
 };
 
-const TRAINING_LOG_TABLE_RANGE = "'Training Log'!A1:AQ2000";
+const TRAINING_LOG_TABLE_RANGE = "'Training Log'!A1:AR2000";
 const TRAINING_LOG_APPEND_RANGE = "'Training Log'!A:A";
 const LOGIN_LIMIT_SHEET = 'Auth_Limits';
 const LOGIN_LIMIT_RANGE = "'Auth_Limits'!A1:E2000";

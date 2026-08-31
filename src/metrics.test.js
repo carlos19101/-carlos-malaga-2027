@@ -298,4 +298,37 @@ describe('computeExecution', () => {
     expect(computeExecution({ ...complete, distanceTargetMin: '', distanceTargetMax: '' }))
       .toEqual(expect.objectContaining({ status: 'over', volumePct: null }));
   });
+
+  it('ocenia pięcioetapowy cel HR z atomów, bez fałszywego pojedynczego zakresu', () => {
+    const targetStages = JSON.stringify({
+      schema: 'carlos.hr-target-stages.v1',
+      stages: [
+        { name: 'WU', durationSeconds: 600, min: 135, max: 145 },
+        { name: 'Baza', durationSeconds: 1500, min: 150, max: 165 },
+        { name: 'Steady', durationSeconds: 600, min: 166, max: 172 },
+        { name: 'Finisz', durationSeconds: 300, min: 173, max: 175 },
+        { name: 'CD', durationSeconds: 480, max: 150 },
+      ],
+    });
+    expect(computeExecution({
+      targetStages,
+      timeInTarget: 2669,
+      timeAboveTarget: 590,
+      timeBelowTarget: 221,
+      analyzedDuration: 3480,
+      unmappedDuration: 4,
+      actualKm: 7.96,
+      distanceTargetMin: 5,
+      distanceTargetMax: 6,
+    })).toEqual(expect.objectContaining({
+      targetMode: 'staged',
+      targetLo: null,
+      hrTargetPct: 76.7,
+      aboveTargetPct: 16.95,
+      belowTargetPct: 6.35,
+      volumePct: 132.67,
+      unmappedDuration: 4,
+      status: 'over',
+    }));
+  });
 });

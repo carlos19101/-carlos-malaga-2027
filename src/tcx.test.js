@@ -1,8 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { analyzeTcx, formatTcxActivityTiming, parseTcxLaps, sanitizeTcx } from './tcx.js';
+import { analyzeTcx, analyzeTcxStages, formatTcxActivityTiming, parseTcxLaps, sanitizeTcx } from './tcx.js';
 
 const fixtureUrl = new URL('../test/fixtures/2026-08-23-run-01.sanitized.tcx', import.meta.url);
+const progressiveFixtureUrl = new URL('../test/fixtures/2026-08-29-progressive.sanitized.tcx', import.meta.url);
+const progressiveStages = {
+  schema: 'carlos.hr-target-stages.v1',
+  stages: [
+    { name: 'WU', durationSeconds: 600, min: 135, max: 145 },
+    { name: 'Baza', durationSeconds: 1500, min: 150, max: 165 },
+    { name: 'Steady', durationSeconds: 600, min: 166, max: 172 },
+    { name: 'Finisz', durationSeconds: 300, min: 173, max: 175 },
+    { name: 'CD', durationSeconds: 480, max: 150 },
+  ],
+};
 
 function tcx(points) {
   const rows = points.map(({ time, hr }) => `
@@ -94,6 +105,22 @@ describe('analyzeTcx', () => {
     ]);
     expect(() => analyzeTcx(source, { targetMin: 150, targetMax: 150 }))
       .toThrow('targetMin musi być mniejsze od targetMax');
+  });
+
+  it('ocenia progresję względem pięciu etapów bez udawania jednego zakresu HR', () => {
+    const result = analyzeTcxStages(readFileSync(progressiveFixtureUrl, 'utf8'), progressiveStages);
+
+    expect(result).toMatchObject({
+      targetMode: 'staged', plannedDuration: 3480, analyzedDuration: 3480, unmappedDuration: 4,
+      timeInTarget: 2669, timeAboveTarget: 590, timeBelowTarget: 221,
+      excludedDuration: 0, lapCount: 11, trackpointCount: 3495, nonPositiveIntervals: 10,
+    });
+    expect(result.stageResults).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'WU', analyzedDuration: 600, timeInTarget: 399, timeAboveTarget: 166, timeBelowTarget: 35 }),
+      expect.objectContaining({ name: 'Baza', analyzedDuration: 1500, timeInTarget: 1284, timeAboveTarget: 169, timeBelowTarget: 47 }),
+      expect.objectContaining({ name: 'Finisz', analyzedDuration: 300, timeInTarget: 105, timeAboveTarget: 79, timeBelowTarget: 116 }),
+      expect.objectContaining({ name: 'CD', analyzedDuration: 480, timeInTarget: 424, timeAboveTarget: 56, timeBelowTarget: 0 }),
+    ]));
   });
 
   it('sanityzuje lokalizację, dystans i prawdziwy czas, zachowując obliczenia', () => {

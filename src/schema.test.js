@@ -16,11 +16,12 @@ const LIVE_HEADERS = {
     'TE_Anaerobic', 'Cadence', 'GCT_ms', 'Notes', 'Source', 'Status', 'Session_ID',
     'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Time_In_Target_s', 'Time_Above_Target_s',
     'Time_Below_Target_s', 'HR_Analyzed_Duration_s', 'Leg_Fatigue_0_10', 'Feedback_ID',
-    'Feedback_Submitted_At', 'Feedback_Notes', 'Feedback_Synced_At',
+    'Feedback_Submitted_At', 'Feedback_Notes', 'Feedback_Synced_At', 'HR_Target_Stages_JSON',
   ],
   Plan: [
     'Data', 'Dzień', 'Rano', 'Później', 'Cel HR', 'RPE max', 'Status', 'Uwagi', 'Trening', 'Session',
     'HR_Target_Min_bpm', 'HR_Target_Max_bpm', 'Distance_Target_Min_km', 'Distance_Target_Max_km',
+    'HR_Target_Stages_JSON',
   ],
   Raw_Data: [
     'Date', 'Timestamp', 'Weight_kg', 'RHR_bpm', 'HRV_night_ms', 'Sleep_min', 'Sleep_score',

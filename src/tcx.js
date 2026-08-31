@@ -1,3 +1,5 @@
+import { parseHrTargetStages } from './hrTargetStages.js';
+
 const DEFAULT_MAX_GAP_SECONDS = 5;
 export const DEFAULT_TCX_TIME_ZONE = 'Europe/Warsaw';
 const XML_PREFIX = String.raw`(?:[A-Za-z_][\w.-]*:)?`;
@@ -119,6 +121,99 @@ export function analyzeTcx(tcxText, options = {}) {
     analyzedIntervals,
     excludedGaps,
     nonPositiveIntervals,
+  };
+}
+
+function classifyHeartRate(heartRate, stage) {
+  if (stage.min !== null && heartRate < stage.min) return 'below';
+  if (stage.max !== null && heartRate > stage.max) return 'above';
+  return 'in';
+}
+
+export function analyzeTcxStages(tcxText, stageInput, options = {}) {
+  const { stages } = parseHrTargetStages(stageInput);
+  const maxGapSeconds = options.maxGapSeconds === undefined
+    ? DEFAULT_MAX_GAP_SECONDS
+    : requireFiniteNumber(options.maxGapSeconds, 'maxGapSeconds');
+  if (maxGapSeconds <= 0) throw new RangeError('maxGapSeconds musi być większe od zera.');
+
+  const laps = parseTcxLaps(tcxText);
+  const points = laps.flat();
+  if (points.length < 2) throw new Error('TCX musi zawierać co najmniej dwa prawidłowe trackpointy z Time i HR.');
+
+  const boundaries = stages.reduce((all, stage) => {
+    const start = all.length ? all.at(-1).end : 0;
+    return [...all, { ...stage, start, end: start + stage.durationSeconds }];
+  }, []);
+  const plannedDuration = boundaries.at(-1).end;
+  const results = boundaries.map(({ name, durationSeconds, min, max }) => ({
+    name, durationSeconds, min, max, timeInTarget: 0, timeAboveTarget: 0, timeBelowTarget: 0, analyzedDuration: 0,
+  }));
+  let excludedDuration = 0;
+  let unmappedDuration = 0;
+  let analyzedIntervals = 0;
+  let excludedGaps = 0;
+  let nonPositiveIntervals = 0;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const current = points[index];
+    const next = points[index + 1];
+    const seconds = (next.timeMs - current.timeMs) / 1000;
+    if (seconds <= 0) {
+      nonPositiveIntervals += 1;
+      continue;
+    }
+    if (seconds > maxGapSeconds) {
+      excludedDuration += seconds;
+      excludedGaps += 1;
+      continue;
+    }
+
+    analyzedIntervals += 1;
+    let cursor = Math.max(0, (current.timeMs - points[0].timeMs) / 1000);
+    const end = cursor + seconds;
+    while (cursor < end) {
+      const stageIndex = boundaries.findIndex((stage) => cursor >= stage.start && cursor < stage.end);
+      if (stageIndex === -1) {
+        const nextBoundary = boundaries.find((stage) => stage.start > cursor)?.start ?? end;
+        const segment = Math.min(end, nextBoundary) - cursor;
+        unmappedDuration += segment;
+        cursor += segment;
+        continue;
+      }
+      const stage = boundaries[stageIndex];
+      const segment = Math.min(end, stage.end) - cursor;
+      const result = results[stageIndex];
+      result.analyzedDuration += segment;
+      const bucket = classifyHeartRate(current.heartRate, stage);
+      if (bucket === 'below') result.timeBelowTarget += segment;
+      else if (bucket === 'above') result.timeAboveTarget += segment;
+      else result.timeInTarget += segment;
+      cursor += segment;
+    }
+  }
+
+  const timeInTarget = results.reduce((total, stage) => total + stage.timeInTarget, 0);
+  const timeAboveTarget = results.reduce((total, stage) => total + stage.timeAboveTarget, 0);
+  const timeBelowTarget = results.reduce((total, stage) => total + stage.timeBelowTarget, 0);
+  return {
+    startedAt: new Date(points[0].timeMs).toISOString(),
+    targetMode: 'staged',
+    targetStages: stages,
+    plannedDuration,
+    maxGapSeconds,
+    timeInTarget,
+    timeAboveTarget,
+    timeBelowTarget,
+    analyzedDuration: timeInTarget + timeAboveTarget + timeBelowTarget,
+    unmappedDuration,
+    excludedDuration,
+    lapCount: laps.length,
+    trackpointCount: points.length,
+    analyzedIntervals,
+    excludedGaps,
+    nonPositiveIntervals,
+    stageResults: results,
   };
 }
 

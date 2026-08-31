@@ -54,7 +54,7 @@ describe('Google Sheets service account', () => {
       now: new Date('2026-08-25T20:01:00.000Z'),
     });
     expect(result).toMatchObject({ action: 'update', rowNumber: 2, srpe: 120 });
-    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
+    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AR2000");
     const writeBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(writeBody.valueInputOption).toBe('RAW');
     expect(writeBody.data).toEqual(expect.arrayContaining([
@@ -147,7 +147,7 @@ describe('Google Sheets service account', () => {
       fetchImpl,
     });
     expect(result).toMatchObject({ action: 'update', rowNumber: 2, range: 'AJ2:AO2' });
-    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
+    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AR2000");
     const writeBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(writeBody).toMatchObject({
       valueInputOption: 'RAW',
@@ -170,7 +170,7 @@ describe('Google Sheets service account', () => {
       fetchImpl,
     });
     expect(result).toMatchObject({ action: 'append', sessionId: 'strava-123456789', rowNumber: 2 });
-    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AQ2000");
+    expect(decodeURIComponent(fetchImpl.mock.calls[1][0])).toContain("'Training Log'!A1:AR2000");
     expect(fetchImpl.mock.calls[2][0]).toContain(':append?');
     const body = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(body).toMatchObject({ majorDimension: 'ROWS', values: [expect.arrayContaining(['Mobilizacja', 'Strava', 'strava-123456789'])] });

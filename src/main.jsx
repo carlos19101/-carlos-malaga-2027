@@ -219,6 +219,7 @@ function executionInput(logRow, planRow) {
   return {
     targetLo: v(logRow, 'logHrTargetMin', ''),
     targetHi: v(logRow, 'logHrTargetMax', ''),
+    targetStages: v(logRow, 'logHrTargetStages', '') || (planRow ? v(planRow, 'planHrTargetStages', '') : ''),
     timeInTarget: v(logRow, 'logTimeInTarget', ''),
     timeAboveTarget: v(logRow, 'logTimeAboveTarget', ''),
     timeBelowTarget: v(logRow, 'logTimeBelowTarget', ''),
@@ -227,6 +228,11 @@ function executionInput(logRow, planRow) {
     distanceTargetMin: planRow ? v(planRow, 'planDistanceTargetMin', '') : '',
     distanceTargetMax: planRow ? v(planRow, 'planDistanceTargetMax', '') : '',
   };
+}
+
+function executionTargetLabel(execution) {
+  if (execution.targetMode === 'staged') return `${execution.targetStages.length} etapów HR`;
+  return execution.targetLo === null ? 'brak celu HR' : `${execution.targetLo}–${execution.targetHi} bpm`;
 }
 
 function getTodayPlan(rows, now = new Date()) {
@@ -533,7 +539,7 @@ function ExecutionCard({ execution }) {
   return (
     <article className={`execution-card execution-${execution.status}`}>
       <div className="execution-heading">
-        <div><span>EXECUTION · CEL HR {execution.targetLo}–{execution.targetHi} BPM</span><strong>{verdict}</strong></div>
+        <div><span>EXECUTION · CEL HR {executionTargetLabel(execution)}</span><strong>{verdict}</strong></div>
         <small>Wyliczone z danych atomowych, nie ze średniego HR.</small>
       </div>
       <div className="execution-grid">
@@ -810,13 +816,12 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       return isRunLogRow(logRow) && date && date >= cutoff && date <= now;
     }).map((logRow) => {
       const feedback = feedbackStatusForRow(logRow);
-      const targetMin = parseMetric(v(logRow, 'logHrTargetMin', ''));
-      const targetMax = parseMetric(v(logRow, 'logHrTargetMax', ''));
+      const tcx = tcxStatusForRow(logRow);
       return {
         feedbackComplete: feedback.complete,
         meaningfulRpe: parseMetric(v(logRow, 'logRpe', '')) > 0,
-        tcxRequired: targetMin !== null && targetMax !== null && targetMin < targetMax,
-        tcxComplete: tcxStatusForRow(logRow).complete,
+        tcxRequired: tcx.validTarget,
+        tcxComplete: tcx.complete,
       };
     });
     return computeDataCompleteness({
@@ -1025,7 +1030,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
               <div><h2>{formatMetricNumber(v(latestRunRow, 'logDistance', ''), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km</h2><strong>{latestRunName}</strong></div>
               <span>{v(latestRunRow, 'logDuration', '—')} · {v(latestRunRow, 'logPace', '—')}</span>
             </div>
-            <p>cel {execution.targetLo ?? '—'}–{execution.targetHi ?? '—'} bpm · HR {formatMetricNumber(v(latestRunRow, 'logHrAvg', ''), { maximumFractionDigits: 0 })} / {formatMetricNumber(v(latestRunRow, 'logHrMax', ''), { maximumFractionDigits: 0 })}</p>
+            <p>cel {executionTargetLabel(execution)} · HR {formatMetricNumber(v(latestRunRow, 'logHrAvg', ''), { maximumFractionDigits: 0 })} / {formatMetricNumber(v(latestRunRow, 'logHrMax', ''), { maximumFractionDigits: 0 })}</p>
             {executionReady ? <div className={`session-execution-label execution-label-${executionTone}`}><strong>{formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% czasu w zaleconym zakresie</strong><span>{executionDisplaySummary}</span></div> : <div className="session-execution-label"><strong>{executionDisplaySummary}</strong></div>}
             <ExecutionSplit execution={execution} />
             <div className="last-session-more"><span>Pełne dane biegu</span><b>Otwórz ›</b></div>
@@ -1159,7 +1164,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         {latestRunRow ? (
           <>
             <article className={`dashboard-detail-hero execution-hero-${executionTone}`}>
-              <strong>{executionReady ? `${formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% w celu ${execution.targetLo}–${execution.targetHi} bpm` : executionDisplaySummary}</strong>
+              <strong>{executionReady ? `${formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 1 })}% w celu · ${executionTargetLabel(execution)}` : executionDisplaySummary}</strong>
               <span>Execution: {executionDisplaySummary}</span>
             </article>
             <div className="dashboard-detail-grid">
@@ -1226,6 +1231,7 @@ function tcxStatusForRow(row) {
   return tcxDataStatus({
     targetMin: v(row, 'logHrTargetMin', ''),
     targetMax: v(row, 'logHrTargetMax', ''),
+    targetStages: v(row, 'logHrTargetStages', ''),
     timeInTarget: v(row, 'logTimeInTarget', ''),
     timeAboveTarget: v(row, 'logTimeAboveTarget', ''),
     timeBelowTarget: v(row, 'logTimeBelowTarget', ''),
@@ -1640,9 +1646,7 @@ function Log({ rows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogi
   const [editingFeedback, setEditingFeedback] = useState(false);
   const feedbackStatus = useMemo(() => feedbackStatusForRow(feedbackTarget), [feedbackTarget]);
   const tcxStatus = useMemo(() => tcxStatusForRow(feedbackTarget), [feedbackTarget]);
-  const tcxRequired = Boolean(feedbackTarget
-    && parseMetric(v(feedbackTarget, 'logHrTargetMin', '')) !== null
-    && parseMetric(v(feedbackTarget, 'logHrTargetMax', '')) !== null);
+  const tcxRequired = tcxStatus.validTarget;
 
   useEffect(() => { setEditingFeedback(false); }, [feedbackTarget]);
 

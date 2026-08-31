@@ -1,4 +1,5 @@
 import { normalize, parseDate, parseNumber } from './parse.js';
+import { tryParseHrTargetStages } from './hrTargetStages.js';
 
 export const VERIFIER_FIELDS = [
   { field: 'km7', label: 'BIEG 7D', unit: 'km', tolerance: 0.05 },
@@ -178,6 +179,8 @@ function executionResult(overrides = {}) {
   return {
     targetLo: null,
     targetHi: null,
+    targetMode: 'none',
+    targetStages: [],
     hrTargetPct: null,
     aboveTargetPct: null,
     belowTargetPct: null,
@@ -185,6 +188,7 @@ function executionResult(overrides = {}) {
     timeAboveTarget: null,
     timeBelowTarget: null,
     analyzedDuration: null,
+    unmappedDuration: null,
     actualKm: null,
     distanceTargetMin: null,
     distanceTargetMax: null,
@@ -201,14 +205,18 @@ function percent(value, total) {
 export function computeExecution(session = {}) {
   const targetLo = parseNumber(session.targetLo);
   const targetHi = parseNumber(session.targetHi);
-  if (targetLo === null || targetHi === null) return executionResult();
-  if (targetLo >= targetHi) return executionResult({ targetLo, targetHi, status: 'data-error' });
+  const staged = tryParseHrTargetStages(session.targetStages);
+  const hasSingleTarget = targetLo !== null && targetHi !== null;
+  if (!staged && !hasSingleTarget) return executionResult();
+  if (!staged && targetLo >= targetHi) return executionResult({ targetLo, targetHi, status: 'data-error' });
 
   const timeInTarget = parseNumber(session.timeInTarget);
   const timeAboveTarget = parseNumber(session.timeAboveTarget);
   const timeBelowTarget = parseNumber(session.timeBelowTarget);
   const analyzedDuration = parseNumber(session.analyzedDuration);
-  const base = { targetLo, targetHi };
+  const base = staged
+    ? { targetLo: null, targetHi: null, targetMode: 'staged', targetStages: staged.stages }
+    : { targetLo, targetHi, targetMode: 'single', targetStages: [] };
 
   if ([timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration].some((value) => value === null)
     || analyzedDuration === 0) {
@@ -224,6 +232,13 @@ export function computeExecution(session = {}) {
   const hrTargetPct = percent(timeInTarget, analyzedDuration);
   const aboveTargetPct = percent(timeAboveTarget, analyzedDuration);
   const belowTargetPct = percent(timeBelowTarget, analyzedDuration);
+  const unmappedDuration = parseNumber(session.unmappedDuration);
+  if (unmappedDuration !== null && unmappedDuration < 0) {
+    return executionResult({
+      ...base, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration,
+      hrTargetPct, aboveTargetPct, belowTargetPct, unmappedDuration, status: 'data-error',
+    });
+  }
   const actualKm = parseNumber(session.actualKm);
   const distanceTargetMin = parseNumber(session.distanceTargetMin);
   const distanceTargetMax = parseNumber(session.distanceTargetMax);
@@ -234,7 +249,7 @@ export function computeExecution(session = {}) {
   if (partialDistanceTarget || invalidDistanceTarget) {
     return executionResult({
       ...base, timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration,
-      hrTargetPct, aboveTargetPct, belowTargetPct, actualKm, distanceTargetMin, distanceTargetMax,
+      hrTargetPct, aboveTargetPct, belowTargetPct, unmappedDuration, actualKm, distanceTargetMin, distanceTargetMax,
       status: 'data-error',
     });
   }
@@ -259,6 +274,7 @@ export function computeExecution(session = {}) {
     timeAboveTarget,
     timeBelowTarget,
     analyzedDuration,
+    unmappedDuration,
     actualKm,
     distanceTargetMin,
     distanceTargetMax,
