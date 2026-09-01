@@ -9,6 +9,7 @@ export const VERIFIER_FIELDS = [
   { field: 'sessions7', label: 'BIEGI 7D', unit: '', tolerance: 0 },
   { field: 'weight', label: 'WAGA', unit: 'kg', tolerance: 0.1 },
 ];
+export const VOLUME_TARGET_TOLERANCE = 0.02;
 
 function localDayNumber(value) {
   const date = value instanceof Date ? new Date(value) : parseDate(value);
@@ -260,7 +261,8 @@ export function computeExecution(session = {}) {
   const intensityStatus = aboveTargetPct > 40 ? 'over' : belowTargetPct > 40 ? 'under' : 'ok';
   const volumeStatus = actualKm === null || distanceTargetMin === null
     ? 'ok'
-    : actualKm > distanceTargetMax ? 'over' : actualKm < distanceTargetMin ? 'under' : 'ok';
+    : actualKm > distanceTargetMax * (1 + VOLUME_TARGET_TOLERANCE) ? 'over'
+      : actualKm < distanceTargetMin * (1 - VOLUME_TARGET_TOLERANCE) ? 'under' : 'ok';
   const status = intensityStatus === 'over' || volumeStatus === 'over'
     ? 'over'
     : intensityStatus === 'under' || volumeStatus === 'under' ? 'under' : 'ok';

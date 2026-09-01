@@ -11,7 +11,7 @@ Time_Below_Target_s
 HR_Analyzed_Duration_s
 ```
 
-Wariant `carlos.tcx-import.v2` dla celu etapowego zapisuje cztery czasy oraz kanoniczne `HR_Target_Stages_JSON`. Nie zapisuje jednej pary min/max jako substytutu etapów. Serwer odczytuje Plan dla daty sesji i wymaga dokładnie jednego poprawnego celu etapowego zgodnego z kopertą; brak celu, niejednoznaczność lub różnica blokują zapis.
+Wariant `carlos.tcx-import.v2` dla czasowego celu etapowego, a `carlos.tcx-import.v3` dla dystansowego celu etapowego, zapisują cztery czasy oraz kanoniczne `HR_Target_Stages_JSON`. Nie zapisują jednej pary min/max jako substytutu etapów. Wersja v3 wymaga `DistanceMeters` w TCX i dzieli odstępy na granicach kilometrów liniowo; nie zamienia kilometrów na szacowany czas. Serwer odczytuje Plan dla daty sesji i wymaga dokładnie jednego poprawnego celu etapowego zgodnego z kopertą; brak celu, niejednoznaczność lub różnica blokują zapis.
 
 ## Zasady bezpieczeństwa
 
@@ -34,6 +34,8 @@ W zakładce **Log → Importuj bieg**:
 4. potwierdź zapis.
 
 TCX jest analizowany lokalnie w przeglądarce. Do `/api/tcx-import` trafia wersjonowana koperta z SHA-256, metodologią, godziną pierwszej poprawnej próbki oraz wartościami właściwymi dla wersji importu, nie surowy plik. Endpoint wymaga sesji HttpOnly i dozwolonego `Origin`. Serwer waliduje sumę czasów, deklarację metodologii, format hasha i kontrakt Training Log; dla etapów dodatkowo sprawdza Plan. Nie analizuje ponownie pliku i nie może potwierdzić jego SHA-256 bez otrzymania oryginału. To walidacja spójności danych, nie niezależny dowód ich pochodzenia.
+
+Execution pokazuje realny procent górnej granicy dystansu, ale nie klasyfikuje śladu GPS jako przekroczenia: status `OVER`/`UNDER` wymaga wyjścia poza cel o więcej niż 2% odpowiednio nad górną lub pod dolną granicą. Tolerancja nie ukrywa wyniku — zmienia tylko werdykt graniczny.
 
 Import sprawdza konflikty w odczytanym stanie arkusza. Google Sheets nie zapewnia tutaj transakcji obejmującej odczyt i zapis; równoczesne importy na wielu instancjach wymagają osobnej kontroli współbieżności przed rozszerzeniem aplikacji na wielu użytkowników.
 

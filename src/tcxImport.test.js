@@ -23,6 +23,17 @@ const progressiveStages = JSON.stringify({ schema: 'carlos.hr-target-stages.v1',
   { name: 'Finisz', durationSeconds: 300, min: 173, max: 175 },
   { name: 'Schłodzenie', durationSeconds: 480, max: 150 },
 ] });
+const distanceStages = JSON.stringify({ schema: 'carlos.hr-target-stages.v2', basis: 'distance', stages: [
+  { name: 'WU', distanceMeters: 1000, min: 135, max: 145 },
+  { name: 'Easy', distanceMeters: 3000, min: 145, max: 158 },
+  { name: 'CD', distanceMeters: 1000, max: 150 },
+] });
+const distanceFixture = `<TrainingCenterDatabase><Activities><Activity><Lap><Track>
+  <Trackpoint><Time>2000-01-01T00:00:00Z</Time><HeartRateBpm><Value>140</Value></HeartRateBpm><DistanceMeters>0</DistanceMeters></Trackpoint>
+  <Trackpoint><Time>2000-01-01T00:00:01Z</Time><HeartRateBpm><Value>140</Value></HeartRateBpm><DistanceMeters>1000</DistanceMeters></Trackpoint>
+  <Trackpoint><Time>2000-01-01T00:00:02Z</Time><HeartRateBpm><Value>150</Value></HeartRateBpm><DistanceMeters>4000</DistanceMeters></Trackpoint>
+  <Trackpoint><Time>2000-01-01T00:00:03Z</Time><HeartRateBpm><Value>145</Value></HeartRateBpm><DistanceMeters>5000</DistanceMeters></Trackpoint>
+</Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
 
 function table(atomicValues = ['', '', '', '', '', ''], options = {}) {
   const headers = ['Date', 'Session_ID', ...TCX_IMPORT_HEADERS];
@@ -82,6 +93,11 @@ const stagedEnvelope = createTcxImport(progressiveFixture, {
   targetStages: progressiveStages,
   sourceSha256: 'AB860110AA046542ECC9FABAC31DB380C561F466B55C42FE3F9B9B0C40A148D1',
 });
+const distanceStagedEnvelope = createTcxImport(distanceFixture, {
+  sessionId: '2026-08-31-run-01',
+  targetStages: distanceStages,
+  sourceSha256: 'AB860110AA046542ECC9FABAC31DB380C561F466B55C42FE3F9B9B0C40A148D1',
+});
 
 describe('createTcxImport', () => {
   it('buduje wersjonowaną kopertę z odtwarzalnymi atomami', () => {
@@ -122,6 +138,20 @@ describe('createTcxImport', () => {
       diagnostics: { unmappedDuration: 4, plannedDuration: 3480 },
     });
     expect(validateTcxImportEnvelope(stagedEnvelope)).toMatchObject({ action: 'valid' });
+  });
+
+  it('wersjonuje osobno import etapów dystansowych i zapisuje metodologię bez zgadywania tempa', () => {
+    expect(distanceStagedEnvelope).toMatchObject({
+      schema: 'carlos.tcx-import.v3',
+      idempotencyKey: expect.stringMatching(/^tcx-v3-[0-9a-f]{8}$/),
+      methodology: { targetMode: 'staged', stageClock: 'distance-from-first-trackpoint-linear-interpolation' },
+      diagnostics: { plannedDistanceMeters: 5000, missingDistanceIntervals: 0, nonMonotonicDistanceIntervals: 0 },
+    });
+    expect(validateTcxImportEnvelope(distanceStagedEnvelope)).toMatchObject({ action: 'valid' });
+    expect(validateTcxImportEnvelope({
+      ...distanceStagedEnvelope,
+      methodology: { ...distanceStagedEnvelope.methodology, stageClock: 'elapsed-from-first-trackpoint' },
+    })).toMatchObject({ action: 'contract-error', reason: 'Nieprawidłowy etapowy cel HR TCX.' });
   });
 });
 

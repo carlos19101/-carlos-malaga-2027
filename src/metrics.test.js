@@ -281,6 +281,13 @@ describe('computeExecution', () => {
     })).toEqual(expect.objectContaining({ hrTargetPct: 90, volumePct: 91.67, status: 'ok' }));
   });
 
+  it('nie nazywa OVER różnicy dystansu mieszczącej się w 2% tolerancji GPS', () => {
+    expect(computeExecution({
+      ...complete, timeInTarget: 1800, timeAboveTarget: 100, timeBelowTarget: 100,
+      analyzedDuration: 2000, actualKm: 5.01516, distanceTargetMin: 4, distanceTargetMax: 5,
+    })).toEqual(expect.objectContaining({ volumePct: 100.3, status: 'ok' }));
+  });
+
   it('duży udział poniżej celu lub za mały dystans daje under', () => {
     expect(computeExecution({
       ...complete, timeInTarget: 900, timeAboveTarget: 100, timeBelowTarget: 1000,
@@ -329,6 +336,34 @@ describe('computeExecution', () => {
       volumePct: 132.67,
       unmappedDuration: 4,
       status: 'over',
+    }));
+  });
+
+  it('ocenia etapowy cel dystansowy z atomów, bez tworzenia zastępczego pojedynczego zakresu', () => {
+    const targetStages = JSON.stringify({
+      schema: 'carlos.hr-target-stages.v2', basis: 'distance', stages: [
+        { name: 'Rozgrzewka', distanceMeters: 1000, min: 135, max: 145 },
+        { name: 'Easy', distanceMeters: 3000, min: 145, max: 158 },
+        { name: 'Schłodzenie', distanceMeters: 1000, max: 150 },
+      ],
+    });
+    expect(computeExecution({
+      targetStages,
+      timeInTarget: 1770,
+      timeAboveTarget: 160,
+      timeBelowTarget: 74,
+      analyzedDuration: 2004,
+      actualKm: 5.01516,
+      distanceTargetMin: 4,
+      distanceTargetMax: 5,
+    })).toEqual(expect.objectContaining({
+      targetMode: 'staged',
+      targetLo: null,
+      hrTargetPct: 88.32,
+      aboveTargetPct: 7.98,
+      belowTargetPct: 3.69,
+      volumePct: 100.3,
+      status: 'ok',
     }));
   });
 });

@@ -4,6 +4,7 @@ import { analyzeTcx, analyzeTcxStages, formatTcxActivityTiming } from './tcx.js'
 
 export const TCX_IMPORT_SCHEMA = 'carlos.tcx-import.v1';
 export const TCX_STAGED_IMPORT_SCHEMA = 'carlos.tcx-import.v2';
+export const TCX_DISTANCE_STAGED_IMPORT_SCHEMA = 'carlos.tcx-import.v3';
 export const TCX_IMPORT_HEADERS = [
   'HR_Target_Min_bpm',
   'HR_Target_Max_bpm',
@@ -18,7 +19,7 @@ export const TCX_STAGE_HEADER = 'HR_Target_Stages_JSON';
 export const TCX_STAGED_ATOMIC_HEADERS = TCX_IMPORT_HEADERS.slice(2);
 const PLAN_DATE_HEADER = 'Data';
 
-const TCX_IMPORT_ID_PATTERN = /^tcx-v[12]-[0-9a-f]{8}$/;
+const TCX_IMPORT_ID_PATTERN = /^tcx-v[123]-[0-9a-f]{8}$/;
 const SESSION_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{5,119}$/i;
 const SHA256_PATTERN = /^[A-F0-9]{64}$/;
 
@@ -58,6 +59,10 @@ function validateTiming(timing) {
   return { valid: true, value: { startedAt, timeZone, localDate, localTime } };
 }
 
+export function isStagedTcxImportSchema(schema) {
+  return schema === TCX_STAGED_IMPORT_SCHEMA || schema === TCX_DISTANCE_STAGED_IMPORT_SCHEMA;
+}
+
 export function createTcxImport(tcxText, options = {}) {
   const sessionId = requiredText(options.sessionId, 'sessionId');
   const sourceSha256 = String(options.sourceSha256 ?? '').trim().toUpperCase();
@@ -80,8 +85,11 @@ export function createTcxImport(tcxText, options = {}) {
     analysis.timeBelowTarget,
     analysis.analyzedDuration,
   ];
-  const schema = stagedTarget ? TCX_STAGED_IMPORT_SCHEMA : TCX_IMPORT_SCHEMA;
-  const idempotencyKey = `tcx-v${stagedTarget ? 2 : 1}-${valueFingerprint([
+  const stagedSchema = stagedTarget?.basis === 'distance'
+    ? TCX_DISTANCE_STAGED_IMPORT_SCHEMA
+    : TCX_STAGED_IMPORT_SCHEMA;
+  const schema = stagedTarget ? stagedSchema : TCX_IMPORT_SCHEMA;
+  const idempotencyKey = `tcx-v${stagedTarget ? (stagedSchema === TCX_DISTANCE_STAGED_IMPORT_SCHEMA ? 3 : 2) : 1}-${valueFingerprint([
     sessionId, sourceSha256 || 'NO_SHA256', timing.localDate, timing.localTime,
     ...(stagedTarget ? [stringifyHrTargetStages(stagedTarget)] : []), ...values,
   ])}`;
@@ -97,7 +105,12 @@ export function createTcxImport(tcxText, options = {}) {
       inclusiveTarget: true,
       maxGapSeconds: analysis.maxGapSeconds,
       lastTrackpointGetsDuration: false,
-      ...(stagedTarget ? { targetMode: 'staged', stageClock: 'elapsed-from-first-trackpoint' } : {}),
+      ...(stagedTarget ? {
+        targetMode: 'staged',
+        stageClock: stagedTarget.basis === 'distance'
+          ? 'distance-from-first-trackpoint-linear-interpolation'
+          : 'elapsed-from-first-trackpoint',
+      } : {}),
     },
     ...(stagedTarget ? { targetStages: stringifyHrTargetStages(stagedTarget) } : {}),
     atomic: Object.fromEntries(atomicHeaders.map((header, index) => [header, values[index]])),
@@ -108,13 +121,19 @@ export function createTcxImport(tcxText, options = {}) {
       excludedGaps: analysis.excludedGaps,
       excludedDuration: analysis.excludedDuration,
       nonPositiveIntervals: analysis.nonPositiveIntervals,
-      ...(stagedTarget ? { unmappedDuration: analysis.unmappedDuration, plannedDuration: analysis.plannedDuration } : {}),
+      ...(stagedTarget ? {
+        unmappedDuration: analysis.unmappedDuration,
+        ...(analysis.plannedDuration === undefined ? {} : { plannedDuration: analysis.plannedDuration }),
+        ...(analysis.plannedDistanceMeters === undefined ? {} : { plannedDistanceMeters: analysis.plannedDistanceMeters }),
+        ...(analysis.missingDistanceIntervals === undefined ? {} : { missingDistanceIntervals: analysis.missingDistanceIntervals }),
+        ...(analysis.nonMonotonicDistanceIntervals === undefined ? {} : { nonMonotonicDistanceIntervals: analysis.nonMonotonicDistanceIntervals }),
+      } : {}),
     },
   };
 }
 
 export function validateTcxImportEnvelope(envelope = {}) {
-  const staged = envelope.schema === TCX_STAGED_IMPORT_SCHEMA;
+  const staged = isStagedTcxImportSchema(envelope.schema);
   if (envelope.schema !== TCX_IMPORT_SCHEMA && !staged) {
     return result('contract-error', { reason: `Nieobsługiwany schemat importu: ${envelope.schema ?? 'brak'}` });
   }
@@ -155,9 +174,17 @@ export function validateTcxImportEnvelope(envelope = {}) {
     || methodology.maxGapSeconds <= 0) {
     return result('contract-error', { reason: 'Nieprawidłowa metodologia analizy TCX.' });
   }
-  if (staged && (!tryParseHrTargetStages(envelope.targetStages)
+  const targetStages = staged ? tryParseHrTargetStages(envelope.targetStages) : null;
+  const expectedStageClock = targetStages?.basis === 'distance'
+    ? 'distance-from-first-trackpoint-linear-interpolation'
+    : 'elapsed-from-first-trackpoint';
+  const expectedSchema = targetStages?.basis === 'distance'
+    ? TCX_DISTANCE_STAGED_IMPORT_SCHEMA
+    : TCX_STAGED_IMPORT_SCHEMA;
+  if (staged && (!targetStages
+    || envelope.schema !== expectedSchema
     || methodology.targetMode !== 'staged'
-    || methodology.stageClock !== 'elapsed-from-first-trackpoint')) {
+    || methodology.stageClock !== expectedStageClock)) {
     return result('contract-error', { reason: 'Nieprawidłowy etapowy cel HR TCX.' });
   }
   return result('valid', { envelope: timing.value ? { ...envelope, timing: timing.value } : envelope });
@@ -337,7 +364,7 @@ export function resolvePlanStagedTarget(logTable = {}, planTable = {}, sessionId
 export function reconcileTcxImport(table = {}, envelope = {}, options = {}) {
   const validation = validateTcxImportEnvelope(envelope);
   if (validation.action !== 'valid') return validation;
-  const staged = validation.envelope.schema === TCX_STAGED_IMPORT_SCHEMA;
+  const staged = isStagedTcxImportSchema(validation.envelope.schema);
   const atomicHeaders = staged ? TCX_STAGED_ATOMIC_HEADERS : TCX_IMPORT_HEADERS;
 
   const headers = Array.isArray(table.headers) ? table.headers : [];

@@ -20,11 +20,13 @@ function parseTrackpoint(xml) {
   const timeText = textValue(xml, 'Time');
   const heartRateBlock = blocks(xml, 'HeartRateBpm')[0];
   const heartRateText = heartRateBlock ? textValue(heartRateBlock, 'Value') : '';
+  const distanceText = textValue(xml, 'DistanceMeters');
   const timeMs = Date.parse(timeText);
   const heartRate = Number(heartRateText);
+  const distance = Number(distanceText);
 
   if (!Number.isFinite(timeMs) || !heartRateText || !Number.isFinite(heartRate)) return null;
-  return { timeMs, heartRate };
+  return { timeMs, heartRate, distanceMeters: distanceText && Number.isFinite(distance) && distance >= 0 ? distance : null };
 }
 
 export function parseTcxLaps(tcxText) {
@@ -131,7 +133,7 @@ function classifyHeartRate(heartRate, stage) {
 }
 
 export function analyzeTcxStages(tcxText, stageInput, options = {}) {
-  const { stages } = parseHrTargetStages(stageInput);
+  const { stages, basis } = parseHrTargetStages(stageInput);
   const maxGapSeconds = options.maxGapSeconds === undefined
     ? DEFAULT_MAX_GAP_SECONDS
     : requireFiniteNumber(options.maxGapSeconds, 'maxGapSeconds');
@@ -143,17 +145,27 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
 
   const boundaries = stages.reduce((all, stage) => {
     const start = all.length ? all.at(-1).end : 0;
-    return [...all, { ...stage, start, end: start + stage.durationSeconds }];
+    const span = basis === 'time' ? stage.durationSeconds : stage.distanceMeters;
+    return [...all, { ...stage, start, end: start + span }];
   }, []);
-  const plannedDuration = boundaries.at(-1).end;
-  const results = boundaries.map(({ name, durationSeconds, min, max }) => ({
-    name, durationSeconds, min, max, timeInTarget: 0, timeAboveTarget: 0, timeBelowTarget: 0, analyzedDuration: 0,
+  const plannedSpan = boundaries.at(-1).end;
+  const results = boundaries.map((stage) => ({
+    name: stage.name,
+    ...(basis === 'time' ? { durationSeconds: stage.durationSeconds } : { distanceMeters: stage.distanceMeters }),
+    min: stage.min, max: stage.max,
+    timeInTarget: 0, timeAboveTarget: 0, timeBelowTarget: 0, analyzedDuration: 0,
   }));
   let excludedDuration = 0;
   let unmappedDuration = 0;
   let analyzedIntervals = 0;
   let excludedGaps = 0;
   let nonPositiveIntervals = 0;
+  let missingDistanceIntervals = 0;
+  let nonMonotonicDistanceIntervals = 0;
+  const firstDistance = basis === 'distance' ? points.find(({ distanceMeters }) => distanceMeters !== null)?.distanceMeters : null;
+  if (basis === 'distance' && firstDistance === undefined) {
+    throw new Error('TCX z celem dystansowym musi zawierać DistanceMeters.');
+  }
 
   for (let index = 0; index < points.length - 1; index += 1) {
     const current = points[index];
@@ -169,27 +181,61 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
       continue;
     }
 
+    let cursor;
+    let end;
+    if (basis === 'time') {
+      cursor = Math.max(0, (current.timeMs - points[0].timeMs) / 1000);
+      end = cursor + seconds;
+    } else {
+      if (current.distanceMeters === null || next.distanceMeters === null) {
+        missingDistanceIntervals += 1;
+        excludedDuration += seconds;
+        continue;
+      }
+      cursor = Math.max(0, current.distanceMeters - firstDistance);
+      end = Math.max(0, next.distanceMeters - firstDistance);
+      if (end < cursor) {
+        nonMonotonicDistanceIntervals += 1;
+        excludedDuration += seconds;
+        continue;
+      }
+    }
     analyzedIntervals += 1;
-    let cursor = Math.max(0, (current.timeMs - points[0].timeMs) / 1000);
-    const end = cursor + seconds;
+    const fullSpan = end - cursor;
+    if (basis === 'distance' && fullSpan === 0) {
+      const stageIndex = boundaries.findIndex((stage) => cursor >= stage.start && cursor < stage.end);
+      if (stageIndex === -1) {
+        unmappedDuration += seconds;
+        continue;
+      }
+      const result = results[stageIndex];
+      result.analyzedDuration += seconds;
+      const bucket = classifyHeartRate(current.heartRate, boundaries[stageIndex]);
+      if (bucket === 'below') result.timeBelowTarget += seconds;
+      else if (bucket === 'above') result.timeAboveTarget += seconds;
+      else result.timeInTarget += seconds;
+      continue;
+    }
     while (cursor < end) {
       const stageIndex = boundaries.findIndex((stage) => cursor >= stage.start && cursor < stage.end);
       if (stageIndex === -1) {
         const nextBoundary = boundaries.find((stage) => stage.start > cursor)?.start ?? end;
-        const segment = Math.min(end, nextBoundary) - cursor;
-        unmappedDuration += segment;
-        cursor += segment;
+        const span = Math.min(end, nextBoundary) - cursor;
+        const duration = basis === 'time' ? span : fullSpan === 0 ? seconds : seconds * (span / fullSpan);
+        unmappedDuration += duration;
+        cursor += span;
         continue;
       }
       const stage = boundaries[stageIndex];
-      const segment = Math.min(end, stage.end) - cursor;
+      const span = Math.min(end, stage.end) - cursor;
+      const duration = basis === 'time' ? span : fullSpan === 0 ? seconds : seconds * (span / fullSpan);
       const result = results[stageIndex];
-      result.analyzedDuration += segment;
+      result.analyzedDuration += duration;
       const bucket = classifyHeartRate(current.heartRate, stage);
-      if (bucket === 'below') result.timeBelowTarget += segment;
-      else if (bucket === 'above') result.timeAboveTarget += segment;
-      else result.timeInTarget += segment;
-      cursor += segment;
+      if (bucket === 'below') result.timeBelowTarget += duration;
+      else if (bucket === 'above') result.timeAboveTarget += duration;
+      else result.timeInTarget += duration;
+      cursor += span;
     }
   }
 
@@ -199,8 +245,9 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
   return {
     startedAt: new Date(points[0].timeMs).toISOString(),
     targetMode: 'staged',
+    stageBasis: basis,
     targetStages: stages,
-    plannedDuration,
+    ...(basis === 'time' ? { plannedDuration: plannedSpan } : { plannedDistanceMeters: plannedSpan }),
     maxGapSeconds,
     timeInTarget,
     timeAboveTarget,
@@ -213,6 +260,7 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
     analyzedIntervals,
     excludedGaps,
     nonPositiveIntervals,
+    ...(basis === 'distance' ? { missingDistanceIntervals, nonMonotonicDistanceIntervals } : {}),
     stageResults: results,
   };
 }
@@ -237,10 +285,11 @@ export function sanitizeTcx(tcxText, options = {}) {
   const shiftedTime = (timeMs) => new Date(baseTimeMs + timeMs - sourceStartMs).toISOString();
 
   const lapXml = laps.filter((lap) => lap.length).map((lap) => {
-    const trackpoints = lap.map(({ timeMs, heartRate }) => [
+    const trackpoints = lap.map(({ timeMs, heartRate, distanceMeters }) => [
       '          <Trackpoint>',
       `            <Time>${escapeXml(shiftedTime(timeMs))}</Time>`,
       `            <HeartRateBpm><Value>${escapeXml(heartRate)}</Value></HeartRateBpm>`,
+      ...(options.preserveDistance && distanceMeters !== null ? [`            <DistanceMeters>${escapeXml(distanceMeters)}</DistanceMeters>`] : []),
       '          </Trackpoint>',
     ].join('\n')).join('\n');
     return [

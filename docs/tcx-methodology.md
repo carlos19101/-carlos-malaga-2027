@@ -23,7 +23,15 @@ HR_Analyzed_Duration_s =
 
 ## Cele etapowe
 
-Powyższe zasady dotyczą również celów etapowych. Ich zegar to czas od pierwszej poprawnej próbki HR, nie czas ruchu. Interwał przecinający granicę etapu jest dzielony na tej granicy; obie części nadal używają HR wcześniejszej próbki. Luki nie zatrzymują zegara etapów. Czas poza zapisanymi etapami jest raportowany jako `unmappedDuration` i nie wchodzi do sumy czasów w/powyżej/poniżej celu. Źródłem etapów przy zapisie jest Plan, a nie domyślny zakres pojedynczego HR.
+Powyższe zasady dotyczą również celów etapowych. Źródłem etapów przy zapisie jest Plan, a nie domyślny zakres pojedynczego HR.
+
+### Etapy czasowe (`carlos.hr-target-stages.v1`)
+
+Ich zegar to czas od pierwszej poprawnej próbki HR, nie czas ruchu. Interwał przecinający granicę etapu jest dzielony na tej granicy; obie części nadal używają HR wcześniejszej próbki. Luki nie zatrzymują zegara etapów. Czas poza zapisanymi etapami jest raportowany jako `unmappedDuration` i nie wchodzi do sumy czasów w/powyżej/poniżej celu.
+
+### Etapy dystansowe (`carlos.hr-target-stages.v2`)
+
+Granice etapów wyznacza kumulowane `DistanceMeters` od pierwszej dostępnej próbki, nie tempo ani przewidywany czas. Interwał przekraczający granicę kilometrową jest dzielony proporcjonalnie do dystansu; oba fragmenty nadal używają HR wcześniejszej próbki. Interwał bez `DistanceMeters` lub z malejącym dystansem nie jest analizowany i trafia do diagnostyki, zamiast być zgadywany. Postój z niezmienionym dystansem przypisujemy etapowi, w którym rozpoczął się interwał. Czas po ostatniej zaplanowanej granicy jest `unmappedDuration`.
 
 ## Przypadek kontrolny 23.08.2026
 

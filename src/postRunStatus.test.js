@@ -52,4 +52,18 @@ describe('tcxDataStatus', () => {
       analyzedDuration: 1080,
     })).toMatchObject({ complete: true, validTarget: true, targetMode: 'staged' });
   });
+
+  it('uznaje etapy dystansowe za cel HR, gdy atomy są kompletne', () => {
+    expect(tcxDataStatus({
+      targetStages: JSON.stringify({ schema: 'carlos.hr-target-stages.v2', basis: 'distance', stages: [
+        { name: 'WU', distanceMeters: 1000, min: 135, max: 145 },
+        { name: 'Easy', distanceMeters: 3000, min: 145, max: 158 },
+        { name: 'CD', distanceMeters: 1000, max: 150 },
+      ] }),
+      timeInTarget: 1770,
+      timeAboveTarget: 160,
+      timeBelowTarget: 74,
+      analyzedDuration: 2004,
+    })).toMatchObject({ complete: true, validTarget: true, targetMode: 'staged' });
+  });
 });

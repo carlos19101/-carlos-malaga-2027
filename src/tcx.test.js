@@ -16,10 +16,11 @@ const progressiveStages = {
 };
 
 function tcx(points) {
-  const rows = points.map(({ time, hr }) => `
+  const rows = points.map(({ time, hr, distance }) => `
     <Trackpoint>
       <Time>${time}</Time>
       ${hr === null ? '' : `<HeartRateBpm><Value>${hr}</Value></HeartRateBpm>`}
+      ${distance === undefined ? '' : `<DistanceMeters>${distance}</DistanceMeters>`}
     </Trackpoint>`).join('');
   return `<TrainingCenterDatabase><Activities><Activity><Lap><Track>${rows}</Track></Lap></Activity></Activities></TrainingCenterDatabase>`;
 }
@@ -123,6 +124,46 @@ describe('analyzeTcx', () => {
     ]));
   });
 
+  it('ocenia etapy dystansowe po kumulowanym DistanceMeters, bez przeliczania kilometrów na czas', () => {
+    const source = tcx([
+      { time: '2000-01-01T00:00:00Z', hr: 140, distance: 0 },
+      { time: '2000-01-01T00:00:01Z', hr: 140, distance: 1000 },
+      { time: '2000-01-01T00:00:02Z', hr: 150, distance: 2000 },
+      { time: '2000-01-01T00:00:03Z', hr: 160, distance: 3000 },
+      { time: '2000-01-01T00:00:04Z', hr: 150, distance: 3020 },
+    ]);
+    const stages = {
+      schema: 'carlos.hr-target-stages.v2', basis: 'distance', stages: [
+        { name: 'WU', distanceMeters: 1000, min: 135, max: 145 },
+        { name: 'Easy', distanceMeters: 1000, min: 145, max: 158 },
+        { name: 'CD', distanceMeters: 1000, max: 150 },
+      ],
+    };
+
+    expect(analyzeTcxStages(source, stages)).toMatchObject({
+      stageBasis: 'distance', plannedDistanceMeters: 3000,
+      timeInTarget: 2, timeAboveTarget: 0, timeBelowTarget: 1,
+      analyzedDuration: 3, unmappedDuration: 1,
+      missingDistanceIntervals: 0, nonMonotonicDistanceIntervals: 0,
+    });
+  });
+
+  it('dzieli czas liniowo, gdy pojedynczy odstęp przekracza granicę etapu dystansowego', () => {
+    const source = tcx([
+      { time: '2000-01-01T00:00:00Z', hr: 150, distance: 0 },
+      { time: '2000-01-01T00:00:03Z', hr: 150, distance: 1500 },
+    ]);
+    const result = analyzeTcxStages(source, {
+      schema: 'carlos.hr-target-stages.v2', basis: 'distance', stages: [
+        { name: 'WU', distanceMeters: 1000, min: 135, max: 145 },
+        { name: 'Easy', distanceMeters: 1000, min: 145, max: 158 },
+      ],
+    });
+    expect(result.timeAboveTarget).toBeCloseTo(2, 8);
+    expect(result.timeInTarget).toBeCloseTo(1, 8);
+    expect(result.analyzedDuration).toBeCloseTo(3, 8);
+  });
+
   it('sanityzuje lokalizację, dystans i prawdziwy czas, zachowując obliczenia', () => {
     const source = readFileSync(fixtureUrl, 'utf8');
     const sanitized = sanitizeTcx(source);
@@ -132,5 +173,15 @@ describe('analyzeTcx', () => {
     expect(parseTcxLaps(sanitized)).toHaveLength(9);
     expect(analyzeTcx(sanitized, { targetMin: 150, targetMax: 162 }))
       .toEqual(analyzeTcx(source, { targetMin: 150, targetMax: 162 }));
+  });
+
+  it('zachowuje tylko dystans kumulowany, gdy fixture ma testować plan etapów dystansowych', () => {
+    const source = tcx([
+      { time: '2026-08-31T18:00:00Z', hr: 140, distance: 12.5 },
+      { time: '2026-08-31T18:00:01Z', hr: 141, distance: 16.2 },
+    ]);
+    const sanitized = sanitizeTcx(source, { preserveDistance: true });
+    expect(sanitized).toContain('<DistanceMeters>12.5</DistanceMeters>');
+    expect(sanitized).not.toContain('2026-08-31');
   });
 });

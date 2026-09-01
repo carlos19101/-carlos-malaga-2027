@@ -1,6 +1,6 @@
 import { createHash, createSign } from 'node:crypto';
 import { feedbackBatchData, planTrainingFeedbackUpdate } from '../../src/trainingFeedbackServer.js';
-import { reconcileTcxImport, resolvePlanStagedTarget, TCX_STAGED_IMPORT_SCHEMA } from '../../src/tcxImport.js';
+import { isStagedTcxImportSchema, reconcileTcxImport, resolvePlanStagedTarget } from '../../src/tcxImport.js';
 import { stringifyHrTargetStages } from '../../src/hrTargetStages.js';
 import { planStravaActivityAppend } from '../../src/stravaImport.js';
 
@@ -208,7 +208,7 @@ export async function updateTcxImport(envelope, options = {}) {
     headers: Array.isArray(values[0]) ? values[0].map((value) => String(value ?? '')) : [],
     rows: values.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row })),
   };
-  const staged = envelope.schema === TCX_STAGED_IMPORT_SCHEMA;
+  const staged = isStagedTcxImportSchema(envelope.schema);
   let reconciliation;
   if (staged) {
     const planResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, PLAN_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {

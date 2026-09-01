@@ -816,7 +816,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       return isRunLogRow(logRow) && date && date >= cutoff && date <= now;
     }).map((logRow) => {
       const feedback = feedbackStatusForRow(logRow);
-      const tcx = tcxStatusForRow(logRow);
+      const tcx = tcxStatusForRow(logRow, planForLogRow(plan, logRow));
       return {
         feedbackComplete: feedback.complete,
         meaningfulRpe: parseMetric(v(logRow, 'logRpe', '')) > 0,
@@ -830,7 +830,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       runs: recentRuns,
       sourceOk: validation.ok && freshnessState === 'fresh',
     });
-  }, [daily, freshnessState, log, now, validation.ok]);
+  }, [daily, freshnessState, log, now, plan, validation.ok]);
   const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
   const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
   const weeklySnapshot = useMemo(() => computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now), [log, plan, now]);
@@ -945,9 +945,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     'no-data': 'brak danych atomowych',
     'data-error': 'błąd danych Execution',
   }[execution.status] || 'brak oceny';
-  const executionDisplaySummary = execution.status === 'no-target' && v(latestRunPlan, 'planHr', '')
-    ? 'cel wieloetapowy — brak automatycznej oceny'
-    : executionSummary;
+  const executionDisplaySummary = executionSummary;
   const staffMembers = staffPanel.core.length + staffPanel.specialists.length;
   const allStaff = [...staffPanel.core, ...staffPanel.specialists];
   const staffAlerts = allStaff
@@ -1228,11 +1226,11 @@ function feedbackStatusForRow(row) {
   });
 }
 
-function tcxStatusForRow(row) {
+function tcxStatusForRow(row, planRow = null) {
   return tcxDataStatus({
     targetMin: v(row, 'logHrTargetMin', ''),
     targetMax: v(row, 'logHrTargetMax', ''),
-    targetStages: v(row, 'logHrTargetStages', ''),
+    targetStages: v(row, 'logHrTargetStages', '') || (planRow ? v(planRow, 'planHrTargetStages', '') : ''),
     timeInTarget: v(row, 'logTimeInTarget', ''),
     timeAboveTarget: v(row, 'logTimeAboveTarget', ''),
     timeBelowTarget: v(row, 'logTimeBelowTarget', ''),
