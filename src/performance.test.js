@@ -67,6 +67,13 @@ describe('coach decision', () => {
     expect(result.reasons).toContain('dane starsze niż 36 godzin');
   });
 
+  it('brak dzisiejszego APP_FEED blokuje decyzję zamiast przenosić werdykt z wczoraj', () => {
+    const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
+    const result = integrateCoachDecision({ decision, integrity: { validationOk: true, freshnessState: 'previous-day' } });
+    expect(result.action).toBe(COACH_ACTION.NO_DECISION);
+    expect(result.reasons).toContain('brak wpisu APP_FEED z bieżącego dnia');
+  });
+
   it('czerwony sygnał bólowy ma pierwszeństwo przed zielonym statusem źródłowym', () => {
     const decision = resolveCoachDecision({ sheetStatus: 'GREEN', sheetDecision: 'Easy.' });
     const result = integrateCoachDecision({
@@ -168,6 +175,14 @@ describe('sourceFreshness', () => {
   });
   it('oznacza świeży pomiar jako fresh', () => {
     expect(sourceFreshness(new Date('2026-08-22T07:00:00'), new Date('2026-08-22T20:30:00')).state).toBe('fresh');
+  });
+  it('nie uznaje wczorajszego APP_FEED za dzisiejszy check-in tylko dlatego, że ma mniej niż 36 godzin', () => {
+    expect(sourceFreshness(
+      new Date('2026-08-31T22:10:54+02:00'),
+      new Date('2026-09-01T08:00:00+02:00'),
+      36,
+      { requireCurrentDay: true, contentDate: '2026-08-31' },
+    )).toMatchObject({ state: 'previous-day' });
   });
 });
 

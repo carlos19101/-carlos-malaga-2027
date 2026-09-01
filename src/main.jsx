@@ -2016,12 +2016,17 @@ function App() {
 
   const feedRow = latestRow(data.feed);
   const sourceAt = sourceTime(feedRow);
-  const freshness = sourceFreshness(sourceAt, calendarNow, STALE_AFTER_HOURS);
+  const freshness = sourceFreshness(sourceAt, calendarNow, STALE_AFTER_HOURS, {
+    requireCurrentDay: true,
+    contentDate: v(feedRow, 'date', ''),
+  });
   const errorCount = Object.keys(errors).length;
   const offline = Boolean(errors.private) || errorCount === APPLICATION_TABLE_COUNT;
-  const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
+  const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'previous-day' || freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
   const statusLabel = {
-    live: 'Dane aktualne', partial: 'Dane częściowe', stale: 'Dane źródłowe są stare', offline: 'Offline — lokalna kopia',
+    live: 'Dane aktualne',
+    partial: freshness.state === 'previous-day' ? 'Brak dzisiejszego check-inu' : 'Dane częściowe',
+    stale: 'Dane źródłowe są stare', offline: 'Offline — lokalna kopia',
   }[status];
 
   return (

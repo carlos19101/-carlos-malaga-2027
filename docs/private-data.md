@@ -11,6 +11,8 @@ Po kompletnej konfiguracji środowiska aplikacja nie pobiera danych sportowych b
 
 Odpowiedź ma `Cache-Control: no-store`. Service worker zawsze kieruje `/api/` do sieci. Tabele z Values API przechodzą po stronie klienta przez te same kontrakty nagłówków i dat co dotychczasowy CSV.
 
+Świeżość techniczna `Last Synced` krótsza niż 36 godzin nie wystarcza do dziennej decyzji treningowej. Dashboard wymaga również, aby `APP_FEED.Date` był tym samym lokalnym dniem kalendarzowym co data aplikacji. W przeciwnym razie pokazuje „Brak dzisiejszego check-inu” i blokuje pewną decyzję sztabu, zamiast przedstawiać wczorajszy stan jako aktualny.
+
 ## Bezpieczne przełączenie
 
 - `configured:false` — aplikacja pozostaje zamknięta i nie pokazuje danych, dopóki prywatny endpoint nie zostanie skonfigurowany;

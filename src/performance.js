@@ -195,6 +195,7 @@ export function integrateCoachDecision({
 
   if (integrity.validationOk === false) dataProblems.push('brak lub anomalia danych wymaganych');
   if (integrity.freshnessState === 'stale') dataProblems.push('dane starsze niż 36 godzin');
+  if (integrity.freshnessState === 'previous-day') dataProblems.push('brak wpisu APP_FEED z bieżącego dnia');
   if ((integrity.verifierMismatches || []).some(({ severity }) => severity === 'error')) dataProblems.push('niezgodność źródeł w Verifierze');
   if ((integrity.dailyIssues || []).some(({ severity }) => severity === 'error')) dataProblems.push('błąd integralności Raw_Data');
   if (execution?.status === 'data-error') dataProblems.push('błąd danych Execution');
@@ -331,12 +332,23 @@ export function summarizeLoad(records, now = new Date()) {
   return { sum7, sum28, sessions7: rows7.length, sessions28: rows28.length, ratio, enoughForRatio };
 }
 
-export function sourceFreshness(sourceDate, now = new Date(), staleHours = 36) {
+function sameLocalDay(left, right) {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+}
+
+export function sourceFreshness(sourceDate, now = new Date(), staleHours = 36, options = {}) {
   const src = sourceDate instanceof Date ? sourceDate : new Date(sourceDate);
   const current = now instanceof Date ? now : new Date(now);
   if (Number.isNaN(src.getTime()) || Number.isNaN(current.getTime())) return { state: 'unknown', ageHours: null };
   const ageHours = (current - src) / 3600000;
   if (ageHours < -0.25) return { state: 'future', ageHours };
+  if (options.requireCurrentDay) {
+    const content = options.contentDate instanceof Date ? options.contentDate : new Date(options.contentDate);
+    if (Number.isNaN(content.getTime())) return { state: 'unknown', ageHours };
+    if (!sameLocalDay(content, current)) return { state: 'previous-day', ageHours };
+  }
   if (ageHours > staleHours) return { state: 'stale', ageHours };
   return { state: 'fresh', ageHours };
 }
