@@ -37,6 +37,15 @@ export function parseRawTimestamp(value) {
   return date;
 }
 
+const LATE_NIGHT_AUDIT_CUTOFF_HOUR = 3;
+
+function timestampBelongsToDataDay(timestamp, dayNumber) {
+  const timestampDay = localDayNumber(timestamp);
+  if (timestampDay === null) return false;
+  if (timestampDay === dayNumber) return true;
+  return timestampDay === dayNumber + 1 && timestamp.getHours() < LATE_NIGHT_AUDIT_CUTOFF_HOUR;
+}
+
 function sourcePriority(field, sourceValue) {
   const source = normalize(sourceValue);
   if (field === 'weight' && source.includes('user')) return 5;
@@ -115,7 +124,7 @@ export function normalizeRawData(rows = []) {
     if (rawTimestamp && !parsedTimestamp) {
       issues.push(issue('invalid-timestamp', 'warning', dateString, `Nieczytelny Timestamp: ${rawTimestamp}`));
     }
-    if (parsedTimestamp && localDayNumber(parsedTimestamp) !== dayNumber) {
+    if (parsedTimestamp && !timestampBelongsToDataDay(parsedTimestamp, dayNumber)) {
       issues.push(issue('timestamp-date-mismatch', 'warning', dateString, `Date ${dateString} nie zgadza się z Timestamp ${rawTimestamp}.`));
     }
     const timestamp = parsedTimestamp || date;
