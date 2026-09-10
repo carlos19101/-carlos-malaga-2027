@@ -6,6 +6,36 @@ function response(status, body) {
 }
 
 describe('feedbackApi', () => {
+  it('kończy zawieszone sprawdzanie sesji i przerywa żądanie', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn(() => new Promise(() => {}));
+      const pending = feedbackSessionStatus(fetchImpl);
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(await pending).toEqual({ ok: false, status: 0, error: 'timeout' });
+      expect(fetchImpl.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('obejmuje limitem również zawieszone odczytywanie body', async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = feedbackSessionStatus(vi.fn().mockResolvedValue({
+        ok: true, status: 200, json: () => new Promise(() => {}),
+      }));
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(await pending).toMatchObject({ ok: false, error: 'timeout' });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('usuwa timer po poprawnej odpowiedzi', async () => {
+    vi.useFakeTimers();
+    try {
+      await feedbackSessionStatus(vi.fn().mockResolvedValue(response(200, { ok: true })));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it('sprawdza sesję bez cache i z cookie same-origin', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(response(200, { ok: true, configured: true, authenticated: false }));
     expect(await feedbackSessionStatus(fetchImpl)).toMatchObject({ ok: true, status: 200, configured: true });

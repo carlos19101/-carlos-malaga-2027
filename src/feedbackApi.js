@@ -6,12 +6,24 @@ export function retryAfterSeconds(headers) {
   return Number.isInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
+export const REQUEST_TIMEOUT_MS = 15000;
+
 async function jsonRequest(url, options = {}, fetchImpl = fetch) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('timeout'));
+    }, REQUEST_TIMEOUT_MS);
+  });
   try {
+    const request = (async () => {
     const response = await fetchImpl(url, {
       credentials: 'same-origin',
       cache: 'no-store',
       ...options,
+      signal: controller.signal,
       headers: options.body ? { 'Content-Type': 'application/json', ...(options.headers || {}) } : options.headers,
     });
     let body = {};
@@ -22,8 +34,12 @@ async function jsonRequest(url, options = {}, fetchImpl = fetch) {
       status: response.status,
       retryAfterSeconds: retryAfterSeconds(response.headers),
     };
+    })();
+    return await Promise.race([request, timeout]);
   } catch {
-    return { ok: false, status: 0, error: 'offline' };
+    return { ok: false, status: 0, error: controller.signal.aborted ? 'timeout' : 'offline' };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

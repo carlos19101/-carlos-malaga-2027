@@ -48,6 +48,23 @@ const tables = {
   }),
 };
 
+test('szkic oceny przetrwa odświeżenie danych i przeładowanie strony', async ({ page }) => {
+  const draftTables = JSON.parse(JSON.stringify(tables));
+  draftTables.log[1][draftTables.log[0].indexOf('RPE')] = '';
+  await page.route('**/api/session', route => route.fulfill({ json: { ok: true, configured: true, authenticated: true } }));
+  await page.route('**/api/data', route => route.fulfill({ json: { ok: true, transport: 'test', tables: draftTables } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Log', exact: true }).first().click();
+  const note = page.locator('.feedback-notes textarea');
+  await note.fill('Mój niewysłany szkic');
+  await page.getByRole('button', { name: 'Odśwież dane', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Odśwież dane', exact: true })).toBeEnabled();
+  await expect(note).toHaveValue('Mój niewysłany szkic');
+  await page.reload();
+  await page.getByRole('button', { name: 'Log', exact: true }).first().click();
+  await expect(note).toHaveValue('Mój niewysłany szkic');
+});
+
 for (const [time, expected] of [
   ['18:55', 'WYKONANIE ZAPISANE'],
   ['07:00', 'SESJA PRZED DECYZJĄ — NIE ŁĄCZYMY JEJ Z WERDYKTEM'],

@@ -46,6 +46,8 @@ import {
 import { MAX_TCX_FILE_BYTES, prepareTcxImport, tcxImportPreview } from './tcxImportClient';
 import { tcxDataStatus, trainingFeedbackStatus } from './postRunStatus';
 import { A } from './schema';
+import { latestFeedRow } from './feedSelection';
+import { readFeedbackDraft, saveFeedbackDraft, clearFeedbackDraft } from './feedbackDraft';
 import { EpaPanel } from './EpaPanel';
 import './styles.css';
 
@@ -87,7 +89,7 @@ function sortedRows(rows, direction = 'desc') {
 }
 
 function latestRow(rows) {
-  return sortedRows(rows, 'desc')[0] || {};
+  return latestFeedRow(rows);
 }
 
 function sameCalendarDay(a, b) {
@@ -804,9 +806,10 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const computedMetrics = useMemo(() => computeVerifierMetrics(
     verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
   ), [log, raw, verifierEndDate]);
-  const verifierMismatches = useMemo(() => verifierReady
-    ? [...crossValidate(computedMetrics, verifierFeedMetrics(row)), ...decisionStatusVerification.mismatches]
-    : [], [computedMetrics, row, verifierReady, decisionStatusVerification]);
+  // Refresh state must not erase integrity failures in the displayed snapshot.
+  const verifierMismatches = useMemo(() =>
+    [...crossValidate(computedMetrics, verifierFeedMetrics(row)), ...decisionStatusVerification.mismatches],
+  [computedMetrics, row, decisionStatusVerification]);
   const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
   const dataCompleteness = useMemo(() => {
     const cutoff = new Date(now);
@@ -1284,20 +1287,31 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
   const [passcode, setPasscode] = useState('');
   const [values, setValues] = useState({ rpe: '', pain: '', legFatigue: '', notes: '' });
   const [state, setState] = useState({ busy: false, message: '' });
+  const sessionId = v(target, 'logSessionId', '');
+  const initializedSession = useRef(null);
 
   useEffect(() => {
+    if (initializedSession.current === sessionId) return;
+    initializedSession.current = sessionId;
     const storedRpe = v(target, 'logRpe', '');
-    setValues({
+    setValues(readFeedbackDraft(sessionId) || {
       rpe: parseMetric(storedRpe) === 0 ? '' : storedRpe,
       pain: v(target, 'logPain', ''),
       legFatigue: v(target, 'logLegFatigue', ''),
       notes: v(target, 'logFeedbackNotes', ''),
     });
     setState({ busy: false, message: '' });
-  }, [target]);
+  }, [target, sessionId]);
+
+  const updateField = (field, value) => {
+    const next = { ...values, [field]: value };
+    setValues(next);
+    if (!saveFeedbackDraft(sessionId, next)) {
+      setState((current) => ({ ...current, message: 'Nie można zachować szkicu na urządzeniu. Nie zamykaj formularza przed zapisem.' }));
+    }
+  };
 
   if (!access.checked || !access.configured || !target) return null;
-  const sessionId = v(target, 'logSessionId', '');
   const sessionLabel = `${formatDate(v(target, 'date', ''))} · ${v(target, 'logName', resolveLogSession(target, A.logType) || 'Sesja')}`;
   const legacyRpeZero = parseMetric(v(target, 'logRpe', '')) === 0;
 
@@ -1320,7 +1334,10 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
           ? 'Ocena czeka — sesja nie pojawiła się jeszcze w Training Log.'
           : 'Ocena zapisana lokalnie i czeka na synchronizację.';
       setState({ busy: false, message });
-      if (result.synced.length) onSaved?.();
+      if (result.synced.length) {
+        clearFeedbackDraft(sessionId);
+        onSaved?.();
+      }
     } catch (error) {
       const first = Object.values(error.validation || {})[0];
       setState({ busy: false, message: first || 'Nie udało się przygotować oceny.' });
@@ -1352,12 +1369,12 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
             ].map(([field, label, note, minimum]) => (
               <label key={field}>
                 <span>{label}</span>
-                <input type="number" min={minimum} max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => setValues((current) => ({ ...current, [field]: event.target.value }))} required />
+                <input type="number" min={minimum} max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => updateField(field, event.target.value)} disabled={state.busy} required />
                 <small>{note}</small>
               </label>
             ))}
           </div>
-          <label className="feedback-notes"><span>Notatka opcjonalna</span><textarea maxLength="500" rows="3" value={values.notes} onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))} placeholder="Odczucia, warunki, co zadziałało…" /></label>
+          <label className="feedback-notes"><span>Notatka opcjonalna</span><textarea maxLength="500" rows="3" value={values.notes} onChange={(event) => updateField('notes', event.target.value)} disabled={state.busy} placeholder="Odczucia, warunki, co zadziałało…" /></label>
           <div className="feedback-actions">
             <small>Najpierw zapis lokalny, potem idempotentna synchronizacja po Session_ID.</small>
             <div className="feedback-action-buttons">
@@ -1661,7 +1678,8 @@ function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFe
   const tcxStatus = useMemo(() => tcxStatusForRow(feedbackTarget), [feedbackTarget]);
   const tcxRequired = tcxStatus.validTarget;
 
-  useEffect(() => { setEditingFeedback(false); }, [feedbackTarget]);
+  const feedbackSessionId = v(feedbackTarget, 'logSessionId', '');
+  useEffect(() => { setEditingFeedback(false); }, [feedbackSessionId]);
 
   return (
     <>
