@@ -125,7 +125,15 @@ export function normalizeRawData(rows = []) {
       issues.push(issue('invalid-timestamp', 'warning', dateString, `Nieczytelny Timestamp: ${rawTimestamp}`));
     }
     if (parsedTimestamp && !timestampBelongsToDataDay(parsedTimestamp, dayNumber)) {
-      issues.push(issue('timestamp-date-mismatch', 'warning', dateString, `Date ${dateString} nie zgadza się z Timestamp ${rawTimestamp}.`));
+      const report = exactValue(row, ['coach decision'], '');
+      const reportDate = report.match(/^AUDYT\s+(\d{2})\.(\d{2}):/i);
+      const reportOnly = Object.keys(DAILY_METRIC_DEFS).every((field) => isNullish(exactValue(row, RAW_DAILY_FIELDS[field], '')));
+      const nextDayReport = reportOnly && reportDate
+        && Number(reportDate[1]) === date.getDate() && Number(reportDate[2]) === date.getMonth() + 1
+        && localDayNumber(parsedTimestamp) === dayNumber + 1;
+      issues.push(nextDayReport
+        ? issue('delayed-audit', 'info', dateString, `Raport dotyczący ${dateString} zapisano ${rawTimestamp}. Zachowano rzeczywisty czas zapisu; wpis nie zawiera pomiarów Daily Metrics.`)
+        : issue('timestamp-date-mismatch', 'warning', dateString, `Date ${dateString} nie zgadza się z Timestamp ${rawTimestamp}.`));
     }
     const timestamp = parsedTimestamp || date;
     const source = exactValue(row, RAW_DAILY_FIELDS.source, '');

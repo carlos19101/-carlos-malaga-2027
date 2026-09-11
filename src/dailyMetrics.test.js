@@ -19,6 +19,21 @@ function dateOffset(day) {
 }
 
 describe('normalizeRawData', () => {
+  it('rozpoznaje opisowy audyt poprzedniego dnia bez zmiany czasu źródła', () => {
+    const row = { ...raw('2026-09-08', '2026-09-09 07:52:00'), Coach_Decision: 'AUDYT 08.09: boks 120 min.', Pain_0_10: 2 };
+    const before = JSON.stringify(row);
+    const result = normalizeRawData([row]);
+    expect(result.issues).toContainEqual(expect.objectContaining({ id: 'delayed-audit', severity: 'info' }));
+    expect(result.issues.some(x => x.id === 'timestamp-date-mismatch')).toBe(false);
+    expect(result.days[0].values.rhr).toBeNull();
+    expect(JSON.stringify(row)).toBe(before);
+  });
+  it('nie wycisza niezgodności pomiarów, niejasnych opisów ani wielodniowego opóźnienia', () => {
+    const base = { ...raw('2026-09-08', '2026-09-09 07:52:00'), Coach_Decision: 'AUDYT 08.09: boks.' };
+    for (const change of [{ RHR_bpm: 50 }, { Coach_Decision: 'AUDYT 07.09: boks.' }, { Coach_Decision: '' }, { Timestamp: '2026-09-10 07:52:00' }]) {
+      expect(normalizeRawData([{ ...base, ...change }]).issues).toContainEqual(expect.objectContaining({ id: 'timestamp-date-mismatch', severity: 'warning' }));
+    }
+  });
   it('scala pola atomowo i wybiera najnowszy prawidłowy odczyt', () => {
     const result = normalizeRawData([
       raw('2026-08-25', '2026-08-25 09:00', { hrv: 60, rhr: 47 }),
