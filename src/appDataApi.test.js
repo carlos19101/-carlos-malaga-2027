@@ -42,6 +42,25 @@ function response(status, body) {
 }
 
 describe('prywatny transport danych', () => {
+  it.each([undefined, null, {}, { ...tables, plan: null }])('nie traktuje brakującej tabeli jako pustego arkusza', (input) => {
+    expect(() => applicationDataFromTables(input)).toThrow('DATA ERROR');
+  });
+
+  it('akceptuje jawnie puste arkusze', () => {
+    expect(applicationDataFromTables({ feed: [], log: [], plan: [], raw: [] })).toEqual({ feed: [], log: [], plan: [], raw: [] });
+  });
+
+  it.each([
+    [['Date', ' date '], ['2026-09-11', '2026-09-10']],
+    [['Date'], null],
+    [['Date'], ['2026-09-11', 'zagubiona wartość']],
+  ])('odrzuca uszkodzoną strukturę zamiast gubić dane', (input) => {
+    expect(() => rowsFromValuesTable(input)).toThrow('DATA ERROR');
+  });
+
+  it.each([null, [], 'html', {}])('odrzuca niekompletną odpowiedź 200', async (body) => {
+    await expect(fetchPrivateApplicationData(undefined, vi.fn().mockResolvedValue(response(200, body)))).rejects.toThrow('DATA ERROR');
+  });
   it('zamienia tabelę Values API na rekordy i zachowuje nagłówki verbatim', () => {
     expect(rowsFromValuesTable([['Data', 'Cel HR'], ['25.08.2026', '145–158'], ['', '']]))
       .toEqual([{ Data: '25.08.2026', 'Cel HR': '145–158' }]);

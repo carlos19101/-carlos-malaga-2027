@@ -18,10 +18,18 @@ export function parsePrivateApplicationSnapshot(raw) {
 }
 
 export function rowsFromValuesTable(table = []) {
-  if (!Array.isArray(table) || !table.length) return [];
+  if (!Array.isArray(table)) throw new Error('DATA ERROR — niepoprawny format tabeli');
+  if (!table.length) return [];
+  if (table.some((row) => !Array.isArray(row))) throw new Error('DATA ERROR — niepoprawny format wiersza');
   const headers = (Array.isArray(table[0]) ? table[0] : []).map((header, index) => (
     String(header ?? '').trim() || `column_${index + 1}`
   ));
+  if (new Set(headers.map((header) => header.toLowerCase())).size !== headers.length) {
+    throw new Error('DATA ERROR — powtórzone nagłówki kolumn');
+  }
+  if (table.slice(1).some((row) => row.slice(headers.length).some((value) => !isNullish(value)))) {
+    throw new Error('DATA ERROR — dane poza nagłówkami tabeli');
+  }
   return table.slice(1).filter((values) => (
     Array.isArray(values) && values.some((value) => !isNullish(value))
   )).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
@@ -29,6 +37,9 @@ export function rowsFromValuesTable(table = []) {
 
 export function applicationDataFromTables(tables = {}) {
   return Object.fromEntries(Object.entries(APPLICATION_SHEET_NAMES).map(([key, sheetName]) => {
+    if (!tables || !Object.hasOwn(tables, key) || !Array.isArray(tables[key])) {
+      throw new Error(`DATA ERROR — ${sheetName}: brak tabeli w odpowiedzi serwera`);
+    }
     const rows = rowsFromValuesTable(tables[key]);
     const contractError = sheetContractError(rows, sheetName);
     if (contractError) throw new Error(`DATA ERROR — ${contractError}`);
@@ -54,10 +65,13 @@ export async function fetchPrivateApplicationData(signal, fetchImpl = fetch) {
   }
   let body = {};
   try { body = await response.json(); } catch { body = {}; }
-  if (!response.ok || body.ok === false) {
-    const error = new Error(body.error || `private-data-${response.status}`);
+  if (!response.ok || body?.ok === false) {
+    const error = new Error(body?.error || `private-data-${response.status}`);
     error.status = response.status;
     throw error;
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('DATA ERROR — niepoprawna odpowiedź serwera');
   }
   return {
     data: applicationDataFromTables(body.tables),

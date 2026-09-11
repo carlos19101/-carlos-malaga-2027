@@ -8,7 +8,7 @@ export function retryAfterSeconds(headers) {
 
 export const REQUEST_TIMEOUT_MS = 15000;
 
-async function jsonRequest(url, options = {}, fetchImpl = fetch) {
+export async function jsonRequest(url, options = {}, fetchImpl = fetch) {
   const controller = new AbortController();
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -26,8 +26,11 @@ async function jsonRequest(url, options = {}, fetchImpl = fetch) {
       signal: controller.signal,
       headers: options.body ? { 'Content-Type': 'application/json', ...(options.headers || {}) } : options.headers,
     });
-    let body = {};
-    try { body = await response.json(); } catch { body = {}; }
+    let body;
+    try { body = await response.json(); } catch { body = null; }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return { ok: false, status: response.status, error: 'invalid-response', retryAfterSeconds: retryAfterSeconds(response.headers) };
+    }
     return {
       ...body,
       ok: response.ok && body.ok !== false,

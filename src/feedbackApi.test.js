@@ -6,6 +6,12 @@ function response(status, body) {
 }
 
 describe('feedbackApi', () => {
+  it.each([null, [], 'html'])('nie potwierdza zapisu dla niepoprawnego body', async (body) => {
+    expect(await sendTrainingFeedback({}, vi.fn().mockResolvedValue(response(200, body)))).toMatchObject({ ok: false, error: 'invalid-response' });
+  });
+  it('nie potwierdza zapisu gdy JSON jest uszkodzony', async () => {
+    expect(await sendTrainingFeedback({}, vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => { throw new Error('JSON'); } }))).toMatchObject({ ok: false, error: 'invalid-response' });
+  });
   it('kończy zawieszone sprawdzanie sesji i przerywa żądanie', async () => {
     vi.useFakeTimers();
     try {

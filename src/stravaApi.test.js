@@ -6,6 +6,17 @@ function response(status, body) {
 }
 
 describe('stravaApi', () => {
+  it('przerywa zawieszony odczyt Stravy po 15 sekundach', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn(() => new Promise(() => {}));
+      const pending = stravaActivities(20, 1, fetchImpl);
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(await pending).toMatchObject({ ok: false, error: 'timeout' });
+      expect(fetchImpl.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it('odczytuje status i aktywności z prywatnych endpointów', async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(response(200, { ok: true, configured: true, connected: true }))
