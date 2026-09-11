@@ -48,6 +48,26 @@ const tables = {
   }),
 };
 
+test('panel zatrzymuje fokus i oddaje go po zamknięciu', async ({ page }) => {
+  await page.route('**/api/session', route => route.fulfill({ json: { ok: true, configured: true, authenticated: true } }));
+  await page.route('**/api/data', route => route.fulfill({ json: { ok: true, transport: 'test', tables } }));
+  await page.goto('/');
+  const opener = page.locator('.decision-summary-card');
+  await opener.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'Zamknij panel' })).toBeFocused();
+  for (const key of ['Shift+Tab', 'Tab', 'Tab']) {
+    await page.keyboard.press(key);
+    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await dialog.getByRole('button', { name: 'Zamknij panel' }).click();
+  await expect(opener).toBeFocused();
+});
+
 test('nieudane wylogowanie pokazuje ostrzeżenie i pozwala ponowić żądanie', async ({ page }) => {
   let attempts = 0;
   await page.route('**/api/session', route => {

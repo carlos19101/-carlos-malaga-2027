@@ -1,4 +1,4 @@
-import { Component, useEffect, useState } from 'react';
+import { Component, useEffect, useRef, useState } from 'react';
 
 export function loginFailureMessage(result = {}) {
   if (result.status === 401) return 'Nieprawidłowy passcode.';
@@ -64,22 +64,46 @@ export function DashboardSignal({ label, value, unit = '', note = '', tone = '' 
 }
 
 export function DashboardDrawer({ open, onClose, eyebrow, title, id, className = '', children }) {
+  const panelRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return undefined;
+    const panel = panelRef.current;
+    const opener = document.activeElement;
     const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event) => { if (event.key === 'Escape') onClose(); };
+    const controls = () => [...panel.querySelectorAll('button, a[href], input, select, textarea, summary, [tabindex]')]
+      .filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && !element.closest('[inert]') && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden');
+    const focusFirst = () => (controls()[0] || panel).focus();
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRef.current();
+      } else if (event.key === 'Tab') {
+        const items = controls();
+        const current = items.indexOf(document.activeElement);
+        if (!items.length) { event.preventDefault(); panel.focus(); }
+        else if (event.shiftKey && current <= 0) { event.preventDefault(); items.at(-1).focus(); }
+        else if (!event.shiftKey && (current === -1 || current === items.length - 1)) { event.preventDefault(); items[0].focus(); }
+      }
+    };
+    const onFocus = (event) => { if (!panel.contains(event.target)) focusFirst(); };
     document.body.style.overflow = 'hidden';
+    focusFirst();
     window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusin', onFocus);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('focusin', onFocus);
+      if (opener?.isConnected) opener.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (
     <div className="dashboard-drawer-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className={`dashboard-drawer ${className}`} role="dialog" aria-modal="true" aria-labelledby={id}>
+      <section ref={panelRef} tabIndex={-1} className={`dashboard-drawer ${className}`} role="dialog" aria-modal="true" aria-labelledby={id}>
         <header className="dashboard-drawer-header">
           <div><span className="eyebrow">{eyebrow}</span><h2 id={id}>{title}</h2></div>
           <button type="button" onClick={onClose} aria-label="Zamknij panel">×</button>
