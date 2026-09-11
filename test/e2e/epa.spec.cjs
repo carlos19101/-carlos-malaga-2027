@@ -65,6 +65,29 @@ test('szkic oceny przetrwa odświeżenie danych i przeładowanie strony', async 
   await expect(note).toHaveValue('Mój niewysłany szkic');
 });
 
+test('odświeżanie i błąd API nie kasują alarmu niezgodności źródeł', async ({ page }) => {
+  const mismatchTables = JSON.parse(JSON.stringify(tables));
+  mismatchTables.feed[1][mismatchTables.feed[0].indexOf('Run km 7d')] = '999';
+  await page.route('**/api/session', route => route.fulfill({ json: { ok: true, configured: true, authenticated: true } }));
+  let pendingRefresh;
+  let calls = 0;
+  await page.route('**/api/data', async route => {
+    calls += 1;
+    if (calls === 1) await route.fulfill({ json: { ok: true, transport: 'test', tables: mismatchTables } });
+    else pendingRefresh = route;
+  });
+  await page.goto('/');
+  const alarm = page.locator('.verifier-error');
+  await expect(alarm).toBeVisible();
+  const evidence = await alarm.textContent();
+  await page.getByRole('button', { name: 'Odśwież dane', exact: true }).click();
+  await expect.poll(() => Boolean(pendingRefresh)).toBe(true);
+  await expect(alarm).toHaveText(evidence);
+  await pendingRefresh.fulfill({ status: 503, json: { ok: false, error: 'unavailable' } });
+  await expect(page.getByRole('button', { name: 'Odśwież dane', exact: true })).toBeEnabled();
+  await expect(alarm).toHaveText(evidence);
+});
+
 for (const [time, expected] of [
   ['18:55', 'WYKONANIE ZAPISANE'],
   ['07:00', 'SESJA PRZED DECYZJĄ — NIE ŁĄCZYMY JEJ Z WERDYKTEM'],
