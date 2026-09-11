@@ -1762,6 +1762,7 @@ function Plan({ rows, loading, now }) {
 }
 
 function App() {
+  const [logoutState, setLogoutState] = useState({ busy: false, error: '' });
   const [tab, setTab] = useState('dashboard');
   const [data, setData] = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
@@ -1888,7 +1889,13 @@ function App() {
   }, [commitAccess, refresh, restoreSnapshot, syncFeedback]);
 
   const logout = useCallback(async () => {
-    await feedbackLogout();
+    setLogoutState({ busy: true, error: '' });
+    const result = await feedbackLogout();
+    if (!result.ok) {
+      setLogoutState({ busy: false, error: 'Nie potwierdzono wylogowania. Sesja może nadal być aktywna. Spróbuj ponownie przyciskiem Wyloguj.' });
+      return;
+    }
+    setLogoutState({ busy: false, error: '' });
     try { localStorage.removeItem(SNAPSHOT_KEY); } catch { /* optional */ }
     if (inFlight.current) inFlight.current.abort();
     dataRef.current = EMPTY_DATA;
@@ -2057,13 +2064,14 @@ function App() {
           {TABS.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}</button>)}
         </nav>
         <div className="topbar-actions">
-          {feedbackAccess.configured ? <button className="logout-button" onClick={logout} aria-label="Wyloguj" title="Wyloguj">⇥</button> : null}
+          {feedbackAccess.configured ? <button className="logout-button" onClick={logout} disabled={logoutState.busy} aria-label="Wyloguj" title="Wyloguj">⇥</button> : null}
           <button className="refresh-button" onClick={() => refresh({ force: true })} disabled={loading} aria-label="Odśwież dane">
             <span className={loading ? 'spin' : ''}>↻</span><b>{loading ? 'Sync' : 'Odśwież'}</b>
           </button>
         </div>
       </header>
 
+      {logoutState.error ? <div className="data-quality-banner" role="alert">{logoutState.error}</div> : null}
       <div className={`sync-strip sync-${status}`} aria-live="polite">
         <span className="live-dot" />
         <strong>{statusLabel}</strong>

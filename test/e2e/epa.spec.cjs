@@ -48,6 +48,25 @@ const tables = {
   }),
 };
 
+test('nieudane wylogowanie pokazuje ostrzeżenie i pozwala ponowić żądanie', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/session', route => {
+    if (route.request().method() === 'DELETE') {
+      attempts += 1;
+      return route.fulfill({ status: attempts === 1 ? 503 : 200, json: { ok: attempts > 1 } });
+    }
+    return route.fulfill({ json: { ok: true, configured: true, authenticated: true } });
+  });
+  await page.route('**/api/data', route => route.fulfill({ json: { ok: true, transport: 'test', tables } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Wyloguj', exact: true }).click();
+  await expect(page.getByText(/Nie potwierdzono wylogowania/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Wyloguj', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Wyloguj', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Wyloguj', exact: true })).toHaveCount(0);
+  expect(attempts).toBe(2);
+});
+
 test('szkic oceny przetrwa odświeżenie danych i przeładowanie strony', async ({ page }) => {
   const draftTables = JSON.parse(JSON.stringify(tables));
   draftTables.log[1][draftTables.log[0].indexOf('RPE')] = '';
