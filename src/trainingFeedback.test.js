@@ -32,6 +32,12 @@ function valid(overrides = {}) {
 }
 
 describe('validateTrainingFeedback', () => {
+  it.each([null, [], 'broken', 0])('odrzuca uszkodzony format bez wyjątku', (input) => {
+    expect(validateTrainingFeedback(input).ok).toBe(false);
+  });
+  it.each([null, '', 0, false])('nie zamienia brakującego czasu na rok 1970', (submittedAt) => {
+    expect(validateTrainingFeedback(valid({ submittedAt })).errors.submittedAt).toBeTruthy();
+  });
   it('normalizuje prawidłowy formularz', () => {
     expect(validateTrainingFeedback(valid({ rpe: '3,5', notes: '  OK  ' }))).toEqual({
       ok: true,
@@ -81,6 +87,19 @@ describe('createTrainingFeedback', () => {
 });
 
 describe('kolejka offline', () => {
+  it.each([{ ok: false, status: 200 }, { status: 200 }, { ok: true, status: 503 }])('zachowuje ocenę bez jednoznacznego potwierdzenia zapisu', async (response) => {
+    const storage = memoryStorage();
+    enqueueTrainingFeedback(storage, valid());
+    const result = await flushTrainingFeedbackQueue(storage, vi.fn().mockResolvedValue(response));
+    expect(result.synced).toEqual([]);
+    expect(result.remaining).toEqual([valid()]);
+  });
+  it('uszkodzony wpis nie ukrywa pozostałych poprawnych ocen', () => {
+    expect(readFeedbackQueue(memoryStorage({ [FEEDBACK_QUEUE_KEY]: JSON.stringify([null, valid(), []]) }))).toEqual([valid()]);
+  });
+  it('brak magazynu nie udaje lokalnego zapisu', () => {
+    expect(() => enqueueTrainingFeedback(undefined, valid())).toThrow('lokalnie');
+  });
   it('nie zastępuje nowszej oceny starszą, dodaną później', () => {
     const storage = memoryStorage();
     const newer = valid({ feedbackId: 'feedback-newer-123', submittedAt: '2026-08-25T21:00:00.000Z', rpe: 4 });

@@ -13,11 +13,15 @@ function scaleValue(value, scale) {
 }
 
 function isoTimestamp(value) {
+  if (!(value instanceof Date) && (typeof value !== 'string' || !value.trim())) return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export function validateTrainingFeedback(input = {}, options = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { ok: false, errors: { input: 'Nieprawidłowy format oceny.' }, value: null };
+  }
   const allowLegacyRpeZero = options.allowLegacyRpeZero === true && !input.schemaVersion;
   const sessionId = String(input.sessionId || '').trim();
   const feedbackId = String(input.feedbackId || '').trim();
@@ -71,7 +75,8 @@ export function readFeedbackQueue(storage) {
 }
 
 function writeFeedbackQueue(storage, queue) {
-  storage?.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(queue));
+  if (typeof storage?.setItem !== 'function') throw new Error('Nie można zapisać oceny lokalnie.');
+  storage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(queue));
   return queue;
 }
 
@@ -106,7 +111,7 @@ async function drainTrainingFeedbackQueue(storage, send) {
     try {
       const result = await send(feedback);
       const status = Number(result?.status || (result?.ok ? 200 : 0));
-      if (result?.ok || (status >= 200 && status < 300)) synced.push(feedback);
+      if (result?.ok === true && status >= 200 && status < 300) synced.push(feedback);
       else if ([400, 422].includes(status)) rejected.push({ feedback, status });
       else {
         if ([401, 403].includes(status)) blocked = 'auth';

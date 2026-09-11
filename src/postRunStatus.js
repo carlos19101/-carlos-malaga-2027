@@ -12,7 +12,8 @@ export function trainingFeedbackStatus(input = {}) {
     legFatigue: numeric(input.legFatigue),
   };
   const missing = Object.entries(values).filter(([, value]) => value === null).map(([field]) => field);
-  return { complete: missing.length === 0, missing, values };
+  const invalid = Object.entries(values).filter(([, value]) => value !== null && (!Number.isFinite(value) || value < 0 || value > 10)).map(([field]) => field);
+  return { complete: missing.length === 0 && invalid.length === 0, missing, invalid, values };
 }
 
 export function tcxDataStatus(input = {}) {
@@ -33,6 +34,7 @@ export function tcxDataStatus(input = {}) {
     : values.timeInTarget + values.timeAboveTarget + values.timeBelowTarget;
   const validTarget = Boolean(staged) || (values.targetMin !== null && values.targetMax !== null && values.targetMin < values.targetMax);
   const validDuration = values.analyzedDuration !== null && values.analyzedDuration > 0
+    && [values.timeInTarget, values.timeAboveTarget, values.timeBelowTarget, values.analyzedDuration].every((value) => Number.isFinite(value) && value >= 0)
     && durationSum !== null && Math.abs(durationSum - values.analyzedDuration) <= 1e-6;
   return {
     complete: missing.length === 0 && validTarget && validDuration,

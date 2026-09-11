@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { tcxDataStatus, trainingFeedbackStatus } from './postRunStatus.js';
 
 describe('trainingFeedbackStatus', () => {
+  it.each(['rpe', 'pain', 'legFatigue'])('wartość poza skalą %s nie jest kompletną oceną', (field) => {
+    expect(trainingFeedbackStatus({ rpe: 2, pain: 0, legFatigue: 1, [field]: 11 })).toMatchObject({ complete: false, invalid: [field] });
+  });
   it('uznaje zera za kompletną ocenę, a nie brak danych', () => {
     expect(trainingFeedbackStatus({ rpe: 0, pain: '0', legFatigue: 2 })).toMatchObject({
       complete: true,
@@ -18,6 +21,9 @@ describe('trainingFeedbackStatus', () => {
 });
 
 describe('tcxDataStatus', () => {
+  it('ujemny czas nie przechodzi nawet gdy suma jest zgodna', () => {
+    expect(tcxDataStatus({ targetMin: 145, targetMax: 158, timeInTarget: 100, timeAboveTarget: -20, timeBelowTarget: 20, analyzedDuration: 100 })).toMatchObject({ complete: false, validDuration: false });
+  });
   it('wymaga kompletnego i sumującego się zestawu atomowego', () => {
     expect(tcxDataStatus({
       targetMin: 145,
