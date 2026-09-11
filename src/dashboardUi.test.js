@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { loginFailureMessage } from './dashboardUi.jsx';
 
 describe('interfejs dostępu', () => {
+  it('odróżnia timeout od utraty połączenia', () => {
+    expect(loginFailureMessage({ status: 0, error: 'timeout' })).toContain('15 sekund');
+    expect(loginFailureMessage({ status: 0, error: 'offline' })).toBe('Brak połączenia z serwerem.');
+  });
   it('wyjaśnia blokadę logowania wraz z czasem następnej próby', () => {
     expect(loginFailureMessage({ status: 429, retryAfterSeconds: 900 })).toBe('Zbyt wiele prób. Spróbuj ponownie za około 15 min.');
     expect(loginFailureMessage({ status: 429 })).toBe('Zbyt wiele prób. Spróbuj ponownie później.');

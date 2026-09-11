@@ -15,6 +15,14 @@ describe('sesja HttpOnly', () => {
   const secret = 'test-secret-that-is-long-enough';
   const now = new Date('2026-08-25T20:00:00.000Z');
 
+  it('uszkodzone kodowanie cookie nie powoduje wyjątku ani nie otwiera sesji', () => {
+    for (const broken of ['%', '%ZZ', '%E0%A4%A']) {
+      expect(authenticated({ headers: { cookie: `${SESSION_COOKIE}=${broken}` } }, { SESSION_SECRET: secret }, { now })).toBe(false);
+    }
+    const token = createSessionToken(secret, { now, nonce: 'fixed' });
+    expect(authenticated({ headers: { cookie: `other=%ZZ; ${SESSION_COOKIE}=${token}` } }, { SESSION_SECRET: secret }, { now })).toBe(true);
+  });
+
   it('tworzy i weryfikuje podpisany token z terminem ważności', () => {
     const token = createSessionToken(secret, { now, ttlSeconds: 60, nonce: 'fixed' });
     expect(verifySessionToken(token, secret, { now: new Date('2026-08-25T20:00:30.000Z') })).toBe(true);

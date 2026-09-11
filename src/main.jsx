@@ -4,6 +4,7 @@ import {
   exactValue,
   findRecentMeasurement,
   formatMetricNumber,
+  formatPlanRpe,
   isRecoveryActivity,
   normalize,
   normalizeActivityStatus,
@@ -336,7 +337,7 @@ function TodayPlanCard({ row }) {
       </div>
       <div className="today-plan-grid">
         <p><b>Cel HR</b>{v(row, 'planHr', '—')}</p>
-        <p><b>RPE max</b>{v(row, 'planRpe', '—')}</p>
+        <p><b>RPE max</b>{formatPlanRpe(v(row, 'planRpe', '—'))}</p>
         <p><b>Później</b>{later || '—'}</p>
       </div>
       {v(row, 'planNotes', '') ? <small>{v(row, 'planNotes')}</small> : null}
@@ -1046,7 +1047,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       </button>
 
       <section className="section-block dashboard-core-stack compact-plan-stack">
-        <DashboardDisclosure eyebrow="PLAN NA DZIŚ" title={todaySession} summary={todayPlan ? `${v(todayPlan, 'planHr', 'bez celu HR')} · RPE ${v(todayPlan, 'planRpe', '—')}` : 'sprawdź zakładkę Plan'}>
+        <DashboardDisclosure eyebrow="PLAN NA DZIŚ" title={todaySession} summary={todayPlan ? `${v(todayPlan, 'planHr', 'bez celu HR')} · RPE ${formatPlanRpe(v(todayPlan, 'planRpe', '—'))}` : 'sprawdź zakładkę Plan'}>
           <TodayPlanCard row={todayPlan} />
         </DashboardDisclosure>
         <DashboardDisclosure eyebrow="NASTĘPNE" title="Najbliższe sesje" summary={upcoming.length ? `${upcoming.length} · ${formatDate(v(upcoming[0], 'date', ''))} · ${v(upcoming[0], 'planMorning', v(upcoming[0], 'planSession', 'Sesja'))}` : 'brak kolejnych datowanych sesji'}>
@@ -1739,7 +1740,7 @@ function PlanCard({ row, now }) {
         <div className="plan-details">
           <p><b>Później</b>{v(row, 'planLater', '—')}</p>
           <p><b>Cel HR</b>{v(row, 'planHr', '—')}</p>
-          <p><b>RPE max</b>{v(row, 'planRpe', '—')}</p>
+          <p><b>RPE max</b>{formatPlanRpe(v(row, 'planRpe', '—'))}</p>
         </div>
         {v(row, 'planNotes', '') ? <small>{v(row, 'planNotes')}</small> : null}
       </div>

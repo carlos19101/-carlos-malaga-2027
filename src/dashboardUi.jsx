@@ -1,6 +1,7 @@
 import { Component, useEffect, useRef, useState } from 'react';
 
 export function loginFailureMessage(result = {}) {
+  if (result.error === 'timeout') return 'Serwer nie odpowiedział w ciągu 15 sekund. Spróbuj ponownie.';
   if (result.status === 401) return 'Nieprawidłowy passcode.';
   if (result.status === 429) {
     const seconds = Number(result.retryAfterSeconds);

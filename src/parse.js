@@ -187,6 +187,13 @@ export function exactValue(row, aliases = [], fallback = '') {
   return value === '' ? fallback : value;
 }
 
+// Presentation only: preserve ranges and qualifiers; do not turn them into a scalar.
+export function formatPlanRpe(value) {
+  if (isNullish(value)) return '—';
+  const text = String(value).trim().replace(/^RPE\b(?:\s+max\b)?\s*:?\s*/i, '').trim();
+  return isNullish(text) ? '—' : text;
+}
+
 export function datedRowsError(rows = [], aliases = ['date', 'data'], label = 'Arkusz') {
   if (!Array.isArray(rows) || rows.length === 0) return '';
   const hasDatedRow = rows.some((row) => parseDate(exactValue(row, aliases, '')) !== null);

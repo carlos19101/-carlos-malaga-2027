@@ -88,7 +88,10 @@ export async function passcodeMatches(supplied, verifier) {
 export function parseCookies(header = '') {
   return Object.fromEntries(String(header).split(';').map((part) => part.trim()).filter(Boolean).map((part) => {
     const separator = part.indexOf('=');
-    return separator === -1 ? [part, ''] : [part.slice(0, separator), decodeURIComponent(part.slice(separator + 1))];
+    if (separator === -1) return [part, ''];
+    const name = part.slice(0, separator);
+    try { return [name, decodeURIComponent(part.slice(separator + 1))]; }
+    catch { return [name, '']; } // Invalid encoding is an invalid value, not a server crash.
   }));
 }
 

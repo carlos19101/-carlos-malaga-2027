@@ -4,6 +4,7 @@ import {
   exactValue,
   findRecentMeasurement,
   formatMetricNumber,
+  formatPlanRpe,
   isRecoveryActivity,
   normalize,
   normalizeActivityStatus,
@@ -14,6 +15,12 @@ import {
   resolveLogSession,
   validateDailyFeed,
 } from './parse';
+
+describe('formatPlanRpe', () => {
+  it.each([['RPE 0–1', '0–1'], ['RPE max: 4–5', '4–5'], ['RPE≤5', '≤5'], ['2 / 2', '2 / 2'], [0, '0'], ['', '—'], [null, '—'], ['#N/A', '—'], ['RPE', '—']])('formatuje %s jako %s bez zmiany celu', (value, expected) => {
+    expect(formatPlanRpe(value)).toBe(expected);
+  });
+});
 
 describe('normalize', () => {
   it('normalizuje polskie znaki, podkreślenia i spacje', () => {
