@@ -6,6 +6,7 @@ import { A } from './schema';
 import { connectStrava, stravaActivities, stravaStatus } from './stravaApi';
 import { reconcileStravaActivities } from './stravaReconcile';
 import { parseSessionMinutes } from './loadMap';
+import { buildProgressReport } from './progressReport';
 
 const ZONES = [
   { key: 'z1', id: 'Z1', name: 'Regeneracja', note: 'bardzo lekko', color: '#58c5e8' },
@@ -221,6 +222,23 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
     const result = executionFor(row, planForSession(plan, row));
     return ['ok', 'over', 'under'].includes(result.status);
   }).length, [plan, runRows]);
+  const progressReport = useMemo(() => {
+    const sessions = runRows.map((row) => ({
+      date: dateKey(rowDate(row)),
+      name: value(row, 'logName', resolveLogSession(row, A.logType) || 'Sesja'),
+      type: resolveLogSession(row, A.logType),
+      distanceKm: value(row, 'logDistance', ''),
+      durationMinutes: parseSessionMinutes(value(row, 'logDuration', '')),
+      rpe: value(row, 'logRpe', ''),
+      pain: value(row, 'logPain', ''),
+      legFatigue: value(row, 'logLegFatigue', ''),
+    }));
+    const executionRecords = runRows.map((row) => {
+      const facts = sessionFacts(row);
+      return { ...executionFor(row, planForSession(plan, row)), isEasy: /(?:^|\s)(?:easy|spokoj|recovery|regener)/i.test(normalize(`${facts?.name || ''} ${facts?.type || ''}`)) };
+    });
+    return buildProgressReport({ sessions, execution: executionRecords, goalId: '1h30' });
+  }, [plan, runRows]);
   const feedRow = useMemo(() => newest(feed), [feed]);
   const nextDayAvailable = Boolean(session?.date && rowDate(feedRow) && dateKey(rowDate(feedRow)) > session.date);
   const analysis = useMemo(() => buildEpaAnalysis({
@@ -251,6 +269,16 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         <div><span className="eyebrow">ELITE PERFORMANCE ACADEMY</span><h1>EPA</h1></div>
         <p>Praktyka elity przechodzi przez dane CARLOS i kontrolę podstaw. Nazwisko bez źródła nie tworzy porady.</p>
         <div className="epa-status-row"><span>FAZA · <strong>{analysis.phase}</strong></span><span>EXECUTION · <strong>{comparableSessions} SESJI</strong></span><span>STRAVA · <strong>{strava.connected ? 'POŁĄCZONA' : 'BRAK POŁĄCZENIA'}</strong></span></div>
+      </section>
+
+      <section className="epa-surface epa-progress">
+        <div className="epa-progress-head"><div><span className="eyebrow">DROGA DO MÁLAGI</span><h2>Cel: {progressReport.target.label}</h2><p>Tempo celu: <strong>{progressReport.target.pace}</strong>. Cel nie jest blokadą; silnik oddziela go od prognozy formy.</p></div><div className={`epa-progress-state epa-progress-${progressReport.history.state}`}>{progressReport.history.state === 'ready' ? 'HISTORIA GOTOWA' : progressReport.history.state === 'missing' ? 'BRAK BIEGÓW' : 'KALIBRACJA'}</div></div>
+        <div className="epa-progress-grid">
+          <article><span>OD POCZĄTKU</span><strong>{metric(progressReport.history.km, { maximumFractionDigits: 1 })} km</strong><small>{progressReport.history.sessions} biegów · najdłuższy {metric(progressReport.history.longestKm, { maximumFractionDigits: 1 })} km</small></article>
+          <article><span>OSTATNIE 14 DNI</span><strong>{metric(progressReport.history.recentKm, { maximumFractionDigits: 1 })} km</strong><small>{progressReport.history.recentSessions} biegów · poprzednie 14 dni: {metric(progressReport.history.previousKm, { maximumFractionDigits: 1 })} km</small></article>
+          <article><span>PROGNOZA 1/2 M</span><strong>{progressReport.estimate.state === 'provisional' ? metric(progressReport.estimate.predictedSeconds / 60, { maximumFractionDigits: 0 }) + ' min' : 'BRAK TESTU'}</strong><small>{progressReport.estimate.state === 'provisional' ? `z testu ${progressReport.estimate.source.km} km · ${progressReport.estimate.source.date}` : 'Easy biegi nie są używane do prognozy.'}</small></article>
+        </div>
+        <div className="epa-priority-list"><span className="eyebrow">PRIORYTETY NA TERAZ</span>{progressReport.priorities.map((item, index) => <article key={`${item.state}-${item.title}`}><b>{String(index + 1).padStart(2, '0')}</b><div><strong>{item.title}</strong><p>{item.detail}</p></div><small>{item.state}</small></article>)}</div>
       </section>
 
       <section className="epa-main-grid">
@@ -303,3 +331,4 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
     </>
   );
 }
+
