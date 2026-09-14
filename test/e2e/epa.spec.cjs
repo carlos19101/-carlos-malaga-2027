@@ -1,5 +1,9 @@
 const { expect, test } = require('playwright/test');
 
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-08-26T12:00:00+02:00'));
+});
+
 function table(headers, values) {
   return [headers, headers.map((header) => values[header] ?? '')];
 }
@@ -155,7 +159,7 @@ for (const [time, expected] of [
   });
 }
 
-test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', async ({ page }) => {
+test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', async ({ page }, testInfo) => {
   await page.route('**/api/session', (route) => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, configured: true, authenticated: true }),
   }));
@@ -192,5 +196,74 @@ test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', asy
   await page.locator('.mobile-nav button').filter({ hasText: 'EPA' }).click();
   await expect(page.getByRole('heading', { name: 'EPA', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('epa-mobile.png'), fullPage: true });
 });
 
+async function openEpa(page, data, activities = []) {
+  await page.route('**/api/session', route => route.fulfill({ json: { ok: true, configured: true, authenticated: true } }));
+  await page.route('**/api/data', route => route.fulfill({ json: { ok: true, transport: 'test', tables: data } }));
+  await page.route('**/api/strava/status', route => route.fulfill({ json: { ok: true, configured: true, connected: true } }));
+  await page.route('**/api/strava/activities**', route => route.fulfill({ json: { ok: true, activities } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'EPA', exact: true }).first().click();
+}
+
+test('EPA nie podstawia starszej Stravy pod nowy bieg bez TCX', async ({ page }) => {
+  const data = structuredClone(tables);
+  const fields = data.log[0];
+  const last = [...data.log[1]];
+  const updates = { Date: '2026-08-26', Name: 'Nowy bieg', Session_ID: 'latest', Distance_km: '8.5', HR_Target_Min_bpm: '', HR_Target_Max_bpm: '', Time_In_Target_s: '', Time_Above_Target_s: '', Time_Below_Target_s: '', HR_Analyzed_Duration_s: '' };
+  for (const [key, value] of Object.entries(updates)) last[fields.indexOf(key)] = value;
+  data.log.push(last);
+  await openEpa(page, data, [{ id: 'older', type: 'Run', startLocal: '2026-08-25T18:55:00', distanceMeters: 6800, movingSeconds: 3099 }]);
+  await expect(page.locator('.epa-source-audit')).toContainText('brak pewnej pary z ostatnią sesją');
+  await expect(page.locator('.epa-run h2')).toHaveText('8,50 km');
+  await expect(page.locator('.epa-no-chart')).toContainText('BIEG ZAPISANY');
+  await expect(page.locator('.epa-execution-track')).toHaveCount(0);
+});
+
+test('EPA pokazuje dokładny test, wiek źródła i różnicę do celu na mobile', async ({ page }) => {
+  const data = structuredClone(tables);
+  data.log[1][data.log[0].indexOf('Name')] = 'Test 10 km';
+  data.log[1][data.log[0].indexOf('Distance_km')] = '10';
+  data.log[1][data.log[0].indexOf('Duration_text')] = '45:00';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openEpa(page, data);
+  await expect(page.locator('.epa-progress-grid')).toContainText('1:39:17');
+  await expect(page.locator('.epa-progress-grid')).toContainText('Wiek wyniku: 1 dzień');
+  await page.getByText('Wynik źródłowy i różnica do celu', { exact: true }).click();
+  await expect(page.locator('.epa-progress-grid')).toContainText('Test 10 km: 10 km w 45:00');
+  await expect(page.locator('.epa-progress-grid')).toContainText('+9:17');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+test('EPA zachowuje puste tygodnie, zakres dat i brak analizy po przerwie', async ({ page }) => {
+  const data = structuredClone(tables);
+  data.log[1][data.log[0].indexOf('Date')] = '2026-08-01';
+  await openEpa(page, data);
+  const period = page.locator('.epa-progress-grid article').nth(1);
+  await expect(period).toContainText('2026-08-13 — 2026-08-26');
+  await expect(period.locator('strong')).toHaveText('0 km');
+  await expect(page.locator('.epa-week-empty')).toHaveCount(4);
+  const heights = await page.locator('.epa-week-empty i').evaluateAll(nodes => nodes.map(el => el.getBoundingClientRect().height));
+  expect(heights.every(height => height === 0)).toBe(true);
+});
+
+test('EPA odróżnia konflikt celów od brakującego pliku TCX', async ({ page }) => {
+  const data = structuredClone(tables);
+  data.plan[1][data.plan[0].indexOf('HR_Target_Max_bpm')] = '162';
+  await openEpa(page, data);
+  await expect(page.locator('.epa-brief h2')).toHaveText('Dane analizy HR wymagają sprawdzenia');
+  await expect(page.locator('.epa-no-chart')).toContainText('BŁĄD ANALIZY HR');
+  await expect(page.locator('.epa-execution-track')).toHaveCount(0);
+});
+
+test('EPA usuwa poprzedni odczyt Stravy po błędzie odświeżenia', async ({ page }) => {
+  await openEpa(page, tables, [{ id: 'run-25', type: 'Run', startLocal: '2026-08-25T18:55:00', distanceMeters: 6800, movingSeconds: 3099, averageHeartRate: 151, maxHeartRate: 161 }]);
+  await expect(page.locator('.epa-source-audit')).toContainText('6,80 km · 51:39 · HR 151/161');
+  await page.route('**/api/strava/activities**', route => route.fulfill({ status: 503, json: { ok: false } }));
+  await page.getByRole('button', { name: 'Odśwież Stravę' }).click();
+  await expect(page.locator('.epa-source-audit')).toContainText('Nie udało się odczytać aktywności');
+  await expect(page.locator('.epa-source-audit')).not.toContainText('6,80 km · 51:39 · HR 151/161');
+  await expect(page.locator('.epa-run h2')).toHaveText('6,80 km');
+});

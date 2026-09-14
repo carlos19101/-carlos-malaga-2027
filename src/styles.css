@@ -1145,7 +1145,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .epa-weekly-chart, .epa-easy-trend { min-height: 240px; padding: 17px; border-radius: 18px; background: var(--panel-2); }
 .epa-bars { height: 146px; margin: 15px 0 10px; display: flex; align-items: end; gap: 7px; }
 .epa-bars > div { height: 100%; flex: 1; min-width: 0; display: grid; grid-template-rows: 1fr auto auto; gap: 4px; align-items: end; text-align: center; }
-.epa-bars i { min-height: 7px; display: block; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, #67d9a1, #218b5d); box-shadow: 0 0 17px rgba(11,217,124,.16); transition: height .7s cubic-bezier(.2,.8,.2,1); }
+.epa-bars i { min-height: 0; display: block; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, #67d9a1, #218b5d); box-shadow: 0 0 17px rgba(11,217,124,.16); transition: height .7s cubic-bezier(.2,.8,.2,1); }
 .epa-bars strong { color: #fff; font-size: .66rem; }
 .epa-bars small { color: var(--muted); font-size: .55rem; }
 .epa-bars p { align-self: center; color: var(--muted); font-size: .75rem; }
@@ -1154,8 +1154,17 @@ tbody tr:last-child td { border-bottom: 0; }
 .epa-easy-trend > strong { margin-top: 14px; color: #ffe18c; font-size: 1.22rem; letter-spacing: -.03em; }
 .epa-easy-potential-improvement > strong { color: #8ff0bd; }
 .epa-easy-potential-regression > strong { color: #ff8d99; }
-.epa-easy > p { margin: 11px 0 0; color: var(--muted-2); font-size: .78rem; line-height: 1.55; }
-.epa-easy > small { margin-top: auto; padding-top: 17px; color: var(--muted); font-size: .66rem; line-height: 1.45; }
+.epa-easy-trend > p { margin: 11px 0 0; color: var(--muted-2); font-size: .78rem; line-height: 1.55; }
+.epa-easy-trend > small { margin-top: auto; padding-top: 17px; color: var(--muted); font-size: .66rem; line-height: 1.45; }
+.epa-week-empty strong { color: var(--muted); }
+.epa-evidence { margin-top: 12px; color: var(--muted-2); font-size: .75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.epa-evidence > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: #d8dee8; font-weight: 700; }
+.epa-evidence > summary::before { content: '+'; margin-right: 8px; }
+.epa-evidence[open] > summary::before { content: '−'; }
+.epa-evidence p { margin: 8px 0; }
+.epa-audit { padding: 10px 20px; }
+.epa-evidence summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .epa-bars i { transition: none; } }
 .epa-methods { margin: 0 0 40px; border-top: 1px solid var(--line); }
 .epa-methods > summary { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 18px; cursor: pointer; color: var(--muted-2); list-style: none; }
 .epa-methods > summary::-webkit-details-marker { display: none; }
@@ -1418,4 +1427,3 @@ tbody tr:last-child td { border-bottom: 0; }
   .dashboard-detail-grid { grid-template-columns: 1fr; }
   .execution-split-legend { display: grid; grid-template-columns: 1fr; gap: 3px; }
 }
-

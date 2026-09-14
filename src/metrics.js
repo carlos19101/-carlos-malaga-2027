@@ -194,6 +194,8 @@ function executionResult(overrides = {}) {
     distanceTargetMin: null,
     distanceTargetMax: null,
     volumePct: null,
+    intensityStatus: null,
+    volumeStatus: null,
     status: 'no-target',
     ...overrides,
   };
@@ -281,6 +283,8 @@ export function computeExecution(session = {}) {
     distanceTargetMin,
     distanceTargetMax,
     volumePct,
+    intensityStatus,
+    volumeStatus: actualKm === null || distanceTargetMin === null ? null : volumeStatus,
     status,
   });
 }

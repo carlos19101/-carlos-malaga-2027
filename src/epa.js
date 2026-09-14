@@ -1,3 +1,5 @@
+import { VOLUME_TARGET_TOLERANCE } from './metrics.js';
+
 function number(value) {
   if (value === null || value === undefined || String(value).trim() === '') return null;
   const parsed = Number(value);
@@ -47,6 +49,7 @@ function sourceSummary({ activity, session, execution, nextDayAvailable, compara
   const executionReady = ['ok', 'over', 'under'].includes(execution?.status)
     && number(execution?.hrTargetPct) !== null;
   const available = [
+    number(session?.distanceKm) > 0 ? 'Training Log: zapisany dystans biegu' : null,
     stravaFacts.length ? `Strava: ${stravaFacts.join(', ')}` : null,
     executionReady ? 'TCX: rozkład czasu względem celu HR' : null,
     feedbackFacts.length ? `ocena zawodnika: ${feedbackFacts.join(', ')}` : null,
@@ -55,6 +58,9 @@ function sourceSummary({ activity, session, execution, nextDayAvailable, compara
     !stravaFacts.length ? 'aktywność Stravy' : null,
     !executionReady ? 'pełna analiza TCX / Execution' : null,
     !feedbackFacts.length ? 'ocena zawodnika' : null,
+    feedbackFacts.length && !present(session?.rpe) ? 'RPE' : null,
+    feedbackFacts.length && !present(session?.pain) ? 'ból po treningu' : null,
+    feedbackFacts.length && !present(session?.legFatigue) ? 'zmęczenie nóg po treningu' : null,
     !nextDayAvailable ? 'reakcja następnego dnia' : null,
     comparableSessions < 3 ? `seria porównywalnych sesji (${comparableSessions}/3)` : null,
     'zweryfikowane karty źródłowe metod EPA',
@@ -65,14 +71,14 @@ function sourceSummary({ activity, session, execution, nextDayAvailable, compara
     missing,
     stravaFacts,
     feedbackFacts,
+    feedbackComplete: feedbackFacts.length === 3,
     executionReady,
   };
 }
 
 function sessionBrief({ activity, session, execution }) {
-  const distanceKm = number(activity?.distanceMeters) !== null
-    ? number(activity.distanceMeters) / 1000
-    : number(session?.distanceKm);
+  const distanceKm = session ? number(session.distanceKm)
+    : number(activity?.distanceMeters) !== null ? number(activity.distanceMeters) / 1000 : null;
   const rpe = number(session?.rpe);
   const pain = number(session?.pain);
   const targetPct = number(execution?.hrTargetPct);
@@ -83,10 +89,20 @@ function sessionBrief({ activity, session, execution }) {
   let copy = 'EPA nie tworzy wniosku, dopóki nie ma atomowych danych wykonania i odczuć zawodnika.';
   let tone = 'missing';
 
+  if (distanceKm !== null && distanceKm > 0) {
+    title = 'Bieg zapisany — analiza HR do uzupełnienia';
+    copy = `${distanceKm.toFixed(2).replace('.', ',')} km jest zapisane w historii. Brakuje pełnej analizy czasu względem celu HR.`;
+  }
+  if (status === 'data-error') {
+    title = 'Dane analizy HR wymagają sprawdzenia';
+    copy = 'Cel sesji lub czasy analizy są niespójne. Zapisany bieg pozostaje w historii; werdykt wykonania jest wstrzymany.';
+    tone = 'attention';
+  }
+
   if (['ok', 'over', 'under'].includes(status) && targetPct !== null) {
     tone = status === 'ok' ? 'ok' : 'attention';
-    const intensityOver = abovePct !== null && abovePct > 40;
-    const volumeOver = volumePct !== null && volumePct > 100;
+    const intensityOver = execution.intensityStatus ? execution.intensityStatus === 'over' : abovePct !== null && abovePct > 40;
+    const volumeOver = execution.volumeStatus ? execution.volumeStatus === 'over' : volumePct !== null && volumePct > 100 * (1 + VOLUME_TARGET_TOLERANCE);
     title = status === 'ok'
       ? 'Wykonanie mieści się w zapisanym kontrakcie sesji'
       : status === 'over' && volumeOver && !intensityOver ? 'Objętość przekroczyła zapisany kontrakt sesji'
@@ -151,7 +167,7 @@ export function buildEpaAnalysis(input = {}) {
     coaches: EPA_COACHES.map((person) => coachAssessment(person, normalized, sources)),
     athletes: EPA_ATHLETES.map((person) => athleteAssessment(person, sources)),
     synthesis: {
-      state: sources.executionReady ? 'DANE SESJI GOTOWE' : 'BRAK PEŁNEJ PODSTAWY',
+      state: sources.executionReady && sources.feedbackComplete ? 'DANE SESJI GOTOWE' : 'BRAK PEŁNEJ PODSTAWY',
       conclusion: 'EPA porządkuje dowody i luki. Nie głosuje, nie zastępuje Sztabu i nie nadpisuje werdyktu Głównego Trenera.',
     },
   };

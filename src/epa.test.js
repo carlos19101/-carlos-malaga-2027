@@ -21,7 +21,7 @@ describe('EPA', () => {
   it('uses exact supplied facts without changing missing HR into zero', () => {
     const result = buildEpaAnalysis({
       activity: { distanceMeters: 6800, movingSeconds: 3099, averageHeartRate: null, maxHeartRate: null },
-      session: { name: 'Easy base', rpe: 1, pain: 0, legFatigue: 2 },
+      session: { name: 'Easy base', distanceKm: 6.8, rpe: 1, pain: 0, legFatigue: 2 },
       execution: { status: 'ok', hrTargetPct: 90.1, aboveTargetPct: 4.5 },
     });
     expect(result.brief.distanceKm).toBe(6.8);
@@ -58,5 +58,30 @@ describe('EPA', () => {
     expect(result.synthesis.conclusion).toContain('nie nadpisuje werdyktu Głównego Trenera');
     expect(result).not.toHaveProperty('decision');
     expect(result).not.toHaveProperty('direction');
+  });
+
+  it('uses Training Log distance and identifies partial feedback', () => {
+    const result = buildEpaAnalysis({ activity: { distanceMeters: 9900 }, session: { distanceKm: 6.8, rpe: 0 } });
+    expect(result.brief.distanceKm).toBe(6.8);
+    expect(result.brief.title).toBe('Bieg zapisany — analiza HR do uzupełnienia');
+    expect(result.sources.missing).toContain('ból po treningu');
+    expect(result.sources.missing).toContain('zmęczenie nóg po treningu');
+  });
+
+  it('uses the engine volume tolerance when describing an intensity OVER', () => {
+    const result = buildEpaAnalysis({ execution: { status: 'over', hrTargetPct: 40, aboveTargetPct: 50, volumePct: 101 } });
+    expect(result.brief.title).toBe('Intensywność przekroczyła zapisany kontrakt sesji');
+    expect(result.brief.copy).not.toContain('górnego celu');
+  });
+
+  it('distinguishes corrupt analysis from missing TCX', () => {
+    const result = buildEpaAnalysis({ session: { distanceKm: 8 }, execution: { status: 'data-error' } });
+    expect(result.brief.title).toBe('Dane analizy HR wymagają sprawdzenia');
+    expect(result.sources.executionReady).toBe(false);
+  });
+
+  it('uses canonical engine dimensions even when rounded percentage is on the boundary', () => {
+    const result = buildEpaAnalysis({ execution: { status: 'over', hrTargetPct: 80, aboveTargetPct: 10, volumePct: 102, intensityStatus: 'ok', volumeStatus: 'over' } });
+    expect(result.brief.title).toBe('Objętość przekroczyła zapisany kontrakt sesji');
   });
 });
