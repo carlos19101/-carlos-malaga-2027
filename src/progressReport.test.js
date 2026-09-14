@@ -16,8 +16,9 @@ describe('raport progresu EPA', () => {
       run('2026-08-20', 10, 50, { name: 'Easy 10 km' }),
       run('2026-09-10', 10, 45, { name: 'Test 10 km' }),
     ] });
-    expect(report.estimate).toMatchObject({ state: 'provisional', source: { name: 'Test 10 km', km: 10 } });
+    expect(report.estimate).toMatchObject({ state: 'provisional', source: { name: 'Test 10 km', km: 10, durationSeconds: 2700 } });
     expect(report.estimate.predictedSeconds).toBeGreaterThan(5400);
+    expect(report.estimate.targetGapSeconds).toBeGreaterThan(0);
   });
 
   it('porównuje dwa pełne okna 14 dni zamiast mieszać je z całą historią', () => {

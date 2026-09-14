@@ -88,6 +88,16 @@ function duration(seconds) {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
 }
 
+function raceTime(seconds) {
+  const parsed = parseMetric(seconds);
+  if (parsed === null || parsed < 0) return '—';
+  const rounded = Math.round(parsed);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const remainder = rounded % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}` : `${minutes}:${String(remainder).padStart(2, '0')}`;
+}
+
 function pct(valueToFormat) {
   return parseMetric(valueToFormat) === null
     ? '—'
@@ -299,7 +309,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         <div className="epa-progress-grid">
           <article><span>OD POCZĄTKU</span><strong>{metric(progressReport.history.km, { maximumFractionDigits: 1 })} km</strong><small>{progressReport.history.sessions} biegów · najdłuższy {metric(progressReport.history.longestKm, { maximumFractionDigits: 1 })} km</small></article>
           <article><span>OSTATNIE 14 DNI</span><strong>{metric(progressReport.history.recentKm, { maximumFractionDigits: 1 })} km</strong><small>{progressReport.history.recentSessions} biegów · poprzednie 14 dni: {metric(progressReport.history.previousKm, { maximumFractionDigits: 1 })} km</small></article>
-          <article><span>PROGNOZA 1/2 M</span><strong>{progressReport.estimate.state === 'provisional' ? metric(progressReport.estimate.predictedSeconds / 60, { maximumFractionDigits: 0 }) + ' min' : 'BRAK TESTU'}</strong><small>{progressReport.estimate.state === 'provisional' ? `z testu ${progressReport.estimate.source.km} km · ${progressReport.estimate.source.date}` : 'Easy biegi nie są używane do prognozy.'}</small></article>
+          <article><span>PROGNOZA 1/2 M</span><strong>{progressReport.estimate.state === 'provisional' ? raceTime(progressReport.estimate.predictedSeconds) : 'BRAK TESTU'}</strong><small>{progressReport.estimate.state === 'provisional' ? `Riegel 1,06 · ${progressReport.estimate.source.name}: ${metric(progressReport.estimate.source.km, { maximumFractionDigits: 2 })} km w ${raceTime(progressReport.estimate.source.durationSeconds)} · ${progressReport.estimate.source.date}` : 'Easy biegi nie są używane do prognozy.'}</small>{progressReport.estimate.state === 'provisional' ? <small>Różnica do celu {progressReport.target.label}: {progressReport.estimate.targetGapSeconds >= 0 ? '+' : '−'}{raceTime(Math.abs(progressReport.estimate.targetGapSeconds))}. Jedna próba, nie decyzja treningowa.</small> : null}</article>
         </div>
         <div className="epa-priority-list"><span className="eyebrow">PRIORYTETY NA TERAZ</span>{progressReport.priorities.map((item, index) => <article key={`${item.state}-${item.title}`}><b>{String(index + 1).padStart(2, '0')}</b><div><strong>{item.title}</strong><p>{item.detail}</p></div><small>{item.state}</small></article>)}</div>
       </section>

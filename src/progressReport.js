@@ -117,7 +117,12 @@ function raceEstimate(sessions) {
   return {
     state: 'provisional',
     predictedSeconds,
-    source: { date: source.date, km: source.km, durationMinutes: source.minutes, name: source.name || source.type || 'test' },
+    source: {
+      date: source.date,
+      km: source.km,
+      durationSeconds: Math.round(source.minutes * 60),
+      name: source.name || source.type || 'test',
+    },
   };
 }
 
@@ -158,8 +163,11 @@ export function buildProgressReport(input = {}) {
     ...item,
     aboveTargetPct: parseNumber(item.aboveTargetPct),
   }));
-  const estimate = raceEstimate(sessions);
   const target = RACE_GOALS.find(({ id }) => id === input.goalId) || RACE_GOALS[0];
+  const baseEstimate = raceEstimate(sessions);
+  const estimate = baseEstimate.state === 'provisional'
+    ? { ...baseEstimate, targetGapSeconds: baseEstimate.predictedSeconds - target.seconds }
+    : { ...baseEstimate, targetGapSeconds: null };
   const recentKm = sum(recent, 'km');
   const previousKm = sum(previous, 'km');
   const historyDays = sessions.length > 1 ? sessions.at(-1).day - sessions[0].day + 1 : sessions.length;
