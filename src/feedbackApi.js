@@ -1,9 +1,12 @@
-export function retryAfterSeconds(headers) {
+export function retryAfterSeconds(headers, now = Date.now()) {
   const raw = typeof headers?.get === 'function'
     ? headers.get('Retry-After')
     : headers?.['retry-after'] ?? headers?.['Retry-After'];
   const seconds = Number(raw);
-  return Number.isInteger(seconds) && seconds > 0 ? seconds : null;
+  if (Number.isInteger(seconds) && seconds > 0) return seconds;
+  if (typeof raw !== 'string' || !/[a-z]/i.test(raw)) return null;
+  const date = Date.parse(raw);
+  return Number.isFinite(date) && date > now ? Math.ceil((date - now) / 1000) : null;
 }
 
 export const REQUEST_TIMEOUT_MS = 15000;
@@ -33,7 +36,8 @@ export async function jsonRequest(url, options = {}, fetchImpl = fetch) {
     }
     return {
       ...body,
-      ok: response.ok && body.ok !== false,
+      ok: response.ok && body.ok === true,
+      ...(response.ok && body.ok !== true && body.ok !== false ? { error: 'invalid-response' } : {}),
       status: response.status,
       retryAfterSeconds: retryAfterSeconds(response.headers),
     };

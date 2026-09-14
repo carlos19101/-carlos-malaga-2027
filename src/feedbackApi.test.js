@@ -1,11 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, retryAfterSeconds, sendTcxImport, sendTrainingFeedback } from './feedbackApi.js';
+import { createTrainingFeedback, enqueueTrainingFeedback, flushTrainingFeedbackQueue, readFeedbackQueue } from './trainingFeedback.js';
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, json: vi.fn().mockResolvedValue(body) };
 }
 
 describe('feedbackApi', () => {
+  it.each([{}, { ok: 'true' }, { ok: 1 }, { ok: null }])('wymaga jawnego logicznego potwierdzenia serwera', async (body) => {
+    expect(await sendTrainingFeedback({}, vi.fn().mockResolvedValue(response(200, body))))
+      .toMatchObject({ ok: false, status: 200, error: 'invalid-response' });
+  });
+  it('błędna odpowiedź API zachowuje kolejkę, następna poprawna synchronizuje ten sam wpis', async () => {
+    const entries = new Map();
+    const storage = { getItem: (key) => entries.get(key), setItem: (key, value) => entries.set(key, value) };
+    const feedback = createTrainingFeedback({ sessionId: '2026-09-14-run-01', rpe: 2, pain: 0, legFatigue: 1 });
+    enqueueTrainingFeedback(storage, feedback);
+    const fetchImpl = vi.fn().mockResolvedValueOnce(response(200, {})).mockResolvedValueOnce(response(200, { ok: true }));
+    const send = (item) => sendTrainingFeedback(item, fetchImpl);
+    expect((await flushTrainingFeedbackQueue(storage, send)).synced).toEqual([]);
+    expect(readFeedbackQueue(storage)).toEqual([feedback]);
+    expect((await flushTrainingFeedbackQueue(storage, send)).synced).toEqual([feedback]);
+    expect(readFeedbackQueue(storage)).toEqual([]);
+    expect(fetchImpl.mock.calls[0][1].body).toBe(fetchImpl.mock.calls[1][1].body);
+  });
+  it('rozpoznaje datę HTTP w Retry-After i odrzuca przeszły termin', () => {
+    const now = Date.parse('2026-09-14T12:00:00Z');
+    expect(retryAfterSeconds(new Headers({ 'Retry-After': 'Mon, 14 Sep 2026 12:02:00 GMT' }), now)).toBe(120);
+    expect(retryAfterSeconds(new Headers({ 'Retry-After': 'Mon, 14 Sep 2026 11:59:00 GMT' }), now)).toBeNull();
+    expect(retryAfterSeconds(new Headers({ 'Retry-After': '-1' }), now)).toBeNull();
+  });
   it.each([null, [], 'html'])('nie potwierdza zapisu dla niepoprawnego body', async (body) => {
     expect(await sendTrainingFeedback({}, vi.fn().mockResolvedValue(response(200, body)))).toMatchObject({ ok: false, error: 'invalid-response' });
   });
