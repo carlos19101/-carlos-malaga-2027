@@ -80,9 +80,11 @@ function weeklyHistory(sessions) {
 
 function easyTrend(sessions) {
   const easy = sessions.filter(({ isEasy, minutes, km, hrAvg }) => isEasy && minutes !== null && km > 0 && hrAvg !== null);
-  if (easy.length < 6) return { state: 'missing', sample: `${easy.length}/6`, first: null, recent: null, paceDeltaSeconds: null, hrDelta: null };
-  const firstSample = easy.slice(0, 3);
-  const recentSample = easy.slice(-3);
+  const referenceKm = median(easy.slice(-3).map(({ km }) => km));
+  const comparable = referenceKm === null ? [] : easy.filter(({ km }) => Math.abs(km - referenceKm) / referenceKm <= 0.2);
+  if (comparable.length < 6) return { state: 'missing', sample: `${comparable.length}/6`, first: null, recent: null, paceDeltaSeconds: null, hrDelta: null, referenceKm };
+  const firstSample = comparable.slice(0, 3);
+  const recentSample = comparable.slice(-3);
   const summarize = (sample) => ({
     paceSeconds: median(sample.map(({ minutes, km }) => minutes * 60 / km)),
     hr: median(sample.map(({ hrAvg }) => hrAvg)),
@@ -94,7 +96,7 @@ function easyTrend(sessions) {
   const similarHr = Math.abs(hrDelta) <= 3;
   const state = similarHr && paceDeltaSeconds <= -5 ? 'potential-improvement'
     : similarHr && paceDeltaSeconds >= 5 ? 'potential-regression' : 'mixed';
-  return { state, sample: '3/3', first, recent, paceDeltaSeconds, hrDelta };
+  return { state, sample: '3/3', first, recent, paceDeltaSeconds, hrDelta, referenceKm };
 }
 
 function windows(sessions) {

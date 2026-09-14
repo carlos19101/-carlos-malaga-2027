@@ -179,6 +179,7 @@ test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', asy
   await expect(page.getByRole('heading', { name: 'EPA', exact: true })).toBeVisible();
   await expect(page.getByText('6,80 km · 51:39 · HR 151/161')).toBeVisible();
   await expect(page.getByText('90,1% w celu · 145–158 bpm', { exact: true })).toBeVisible();
+  await page.getByText('Metodyka EPA i case studies', { exact: true }).click();
   await expect(page.locator('.epa-person-grid button')).toHaveCount(10);
   await page.getByRole('button', { name: 'Elite Athletes · 8' }).click();
   await expect(page.locator('.epa-person-grid button')).toHaveCount(8);
@@ -192,3 +193,4 @@ test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', asy
   await expect(page.getByRole('heading', { name: 'EPA', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
+

@@ -295,7 +295,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
       </section>
 
       <section className="epa-surface epa-progress">
-        <div className="epa-progress-head"><div><span className="eyebrow">DROGA DO MÁLAGI</span><h2>Cel: {progressReport.target.label}</h2><p>Tempo celu: <strong>{progressReport.target.pace}</strong>. Cel nie jest blokadą; silnik oddziela go od prognozy formy.</p></div><div className={`epa-progress-state epa-progress-${progressReport.history.state}`}>{progressReport.history.state === 'ready' ? 'HISTORIA GOTOWA' : progressReport.history.state === 'missing' ? 'BRAK BIEGÓW' : 'KALIBRACJA'}</div></div>
+        <div className="epa-progress-head"><div><span className="eyebrow">DROGA DO MÁLAGI</span><h2>Cel: {progressReport.target.label}</h2><p>Tempo celu: <strong>{progressReport.target.pace}</strong>. Cel nie jest blokadą; silnik oddziela go od prognozy formy.</p><div className="epa-goal-ladder" aria-label="Drabinka celów półmaratonu">{progressReport.goalOptions.map((goal) => <span className={goal.id === progressReport.target.id ? 'active' : ''} key={goal.id}><strong>{goal.label}</strong> · {goal.pace}</span>)}</div></div><div className={`epa-progress-state epa-progress-${progressReport.history.state}`}>{progressReport.history.state === 'ready' ? 'HISTORIA GOTOWA' : progressReport.history.state === 'missing' ? 'BRAK BIEGÓW' : 'KALIBRACJA'}</div></div>
         <div className="epa-progress-grid">
           <article><span>OD POCZĄTKU</span><strong>{metric(progressReport.history.km, { maximumFractionDigits: 1 })} km</strong><small>{progressReport.history.sessions} biegów · najdłuższy {metric(progressReport.history.longestKm, { maximumFractionDigits: 1 })} km</small></article>
           <article><span>OSTATNIE 14 DNI</span><strong>{metric(progressReport.history.recentKm, { maximumFractionDigits: 1 })} km</strong><small>{progressReport.history.recentSessions} biegów · poprzednie 14 dni: {metric(progressReport.history.previousKm, { maximumFractionDigits: 1 })} km</small></article>
@@ -334,14 +334,18 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         </div>
       </section>
 
+      <details className="epa-methods">
+        <summary><span><strong>Metodyka EPA i case studies</strong><small>10 trenerów + 8 studiów przypadku — nie są automatycznymi opiniami o Twoim treningu.</small></span><b>Rozwiń</b></summary>
       <section className="epa-academy">
-        <div className="section-heading"><div><span className="eyebrow">PEŁNA AKADEMIA</span><h2>10 trenerów + 8 case studies</h2></div><span className="section-aside">podstawa albo jawny jej brak</span></div>
+        <div className="section-heading"><div><span className="eyebrow">METODYKA EPA</span><h2>Perspektywy do weryfikacji</h2></div><span className="section-aside">podstawa albo jawny jej brak</span></div>
         <div className="epa-tabs" role="group" aria-label="Część Akademii"><button type="button" aria-pressed={group === 'coaches'} onClick={() => switchGroup('coaches')}>Elite Coaches · 10</button><button type="button" aria-pressed={group === 'athletes'} onClick={() => switchGroup('athletes')}>Elite Athletes · 8</button></div>
         <div className="epa-person-grid" role="group" aria-label={group === 'coaches' ? 'Trenerzy EPA' : 'Zawodnicy EPA'}>
           {people.map((person) => <button type="button" key={person.id} aria-pressed={person.id === selected?.id} onClick={() => setSelectedId(person.id)}><span className={`epa-person-${person.tone}`}>{person.state}</span><strong>{person.name}</strong></button>)}
         </div>
         {selected ? <PersonDetail person={selected} /> : null}
       </section>
+
+      </details>
 
       <section className="epa-synthesis">
         <div className="section-heading"><div><span className="eyebrow">SYNTEZA</span><h2>Główny Trener × Sztab × EPA</h2></div><span className="section-aside">bez fikcyjnego głosowania</span></div>
