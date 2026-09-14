@@ -31,6 +31,18 @@ function sum(items, key) {
   return items.reduce((total, item) => total + (item[key] ?? 0), 0);
 }
 
+function median(values) {
+  const sorted = values.filter(Number.isFinite).sort((left, right) => left - right);
+  if (!sorted.length) return null;
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function weekKey(day) {
+  const weekday = new Date(day * 86400000).getUTCDay() || 7;
+  return new Date((day - weekday + 1) * 86400000).toISOString().slice(0, 10);
+}
+
 function isRaceOrTest(session) {
   return /(?:test|sprawdzian|zawod|race|parkrun|time trial)/i.test(`${session.name} ${session.type}`);
 }
@@ -45,11 +57,44 @@ function normalizedSessions(input) {
     const legs = parseNumber(session.legFatigue);
     return {
       ...session, index, day, km, minutes, rpe, pain, legs,
+      hrAvg: parseNumber(session.hrAvg),
       name: String(session.name ?? ''), type: String(session.type ?? ''),
       isEasy: /(?:^|\s)(?:easy|spokoj|recovery|regener)/i.test(normalize(`${session.name} ${session.type}`)),
     };
   }).filter(({ day, km }) => day !== null && km !== null && km > 0)
     .sort((left, right) => left.day - right.day || left.index - right.index);
+}
+
+function weeklyHistory(sessions) {
+  const weeks = new Map();
+  sessions.forEach(({ day, km }) => {
+    const key = weekKey(day);
+    const current = weeks.get(key) || { week: key, km: 0, sessions: 0 };
+    current.km += km;
+    current.sessions += 1;
+    weeks.set(key, current);
+  });
+  const values = [...weeks.values()].sort((left, right) => left.week.localeCompare(right.week));
+  return { values, maximumKm: values.length ? Math.max(...values.map(({ km }) => km)) : 0 };
+}
+
+function easyTrend(sessions) {
+  const easy = sessions.filter(({ isEasy, minutes, km, hrAvg }) => isEasy && minutes !== null && km > 0 && hrAvg !== null);
+  if (easy.length < 6) return { state: 'missing', sample: `${easy.length}/6`, first: null, recent: null, paceDeltaSeconds: null, hrDelta: null };
+  const firstSample = easy.slice(0, 3);
+  const recentSample = easy.slice(-3);
+  const summarize = (sample) => ({
+    paceSeconds: median(sample.map(({ minutes, km }) => minutes * 60 / km)),
+    hr: median(sample.map(({ hrAvg }) => hrAvg)),
+  });
+  const first = summarize(firstSample);
+  const recent = summarize(recentSample);
+  const paceDeltaSeconds = Math.round(recent.paceSeconds - first.paceSeconds);
+  const hrDelta = Math.round((recent.hr - first.hr) * 10) / 10;
+  const similarHr = Math.abs(hrDelta) <= 3;
+  const state = similarHr && paceDeltaSeconds <= -5 ? 'potential-improvement'
+    : similarHr && paceDeltaSeconds >= 5 ? 'potential-regression' : 'mixed';
+  return { state, sample: '3/3', first, recent, paceDeltaSeconds, hrDelta };
 }
 
 function windows(sessions) {
@@ -116,6 +161,7 @@ export function buildProgressReport(input = {}) {
   const recentKm = sum(recent, 'km');
   const previousKm = sum(previous, 'km');
   const historyDays = sessions.length > 1 ? sessions.at(-1).day - sessions[0].day + 1 : sessions.length;
+  const weekly = weeklyHistory(sessions);
   return {
     target: { ...target, pace: pace(target.seconds, HALF_MARATHON_KM) },
     goalOptions: RACE_GOALS.map((goal) => ({ ...goal, pace: pace(goal.seconds, HALF_MARATHON_KM) })),
@@ -132,6 +178,8 @@ export function buildProgressReport(input = {}) {
       volumeDeltaPct: previous.length >= 2 && previousKm > 0 ? Number((((recentKm / previousKm) - 1) * 100).toFixed(1)) : null,
     },
     estimate,
+    weekly,
+    easyTrend: easyTrend(sessions),
     priorities: priorities({ sessions, recent, previous, execution, estimate }),
   };
 }

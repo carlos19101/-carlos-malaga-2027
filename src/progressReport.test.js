@@ -35,5 +35,21 @@ describe('raport progresu EPA', () => {
     const report = buildProgressReport({ sessions, execution });
     expect(report.priorities.some(({ title }) => title === 'Dopilnuj easy')).toBe(true);
   });
+
+  it('pokazuje historię tygodni i ocenia easy tylko przy porównywalnym HR', () => {
+    const sessions = [
+      run('2026-08-03', 5, 35, { hrAvg: 150 }), run('2026-08-05', 5, 35, { hrAvg: 150 }), run('2026-08-07', 5, 35, { hrAvg: 151 }),
+      run('2026-08-24', 5, 33, { hrAvg: 151 }), run('2026-08-26', 5, 33, { hrAvg: 152 }), run('2026-08-28', 5, 33, { hrAvg: 150 }),
+    ];
+    const report = buildProgressReport({ sessions });
+    expect(report.weekly.values).toHaveLength(2);
+    expect(report.weekly.values[0]).toMatchObject({ km: 15, sessions: 3 });
+    expect(report.easyTrend).toMatchObject({ state: 'potential-improvement', paceDeltaSeconds: -24, hrDelta: 1 });
+  });
+
+  it('nie udaje trendu easy przy zbyt małej próbce', () => {
+    const report = buildProgressReport({ sessions: [run('2026-08-03', 5, 35, { hrAvg: 150 })] });
+    expect(report.easyTrend).toMatchObject({ state: 'missing', sample: '1/6' });
+  });
 });
 

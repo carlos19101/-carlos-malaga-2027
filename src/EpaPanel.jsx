@@ -98,6 +98,28 @@ function metric(valueToFormat, options = {}) {
   return formatMetricNumber(valueToFormat, { fallback: '—', ...options });
 }
 
+function paceText(seconds) {
+  const valueToFormat = parseMetric(seconds);
+  if (valueToFormat === null || valueToFormat <= 0) return '—';
+  return `${Math.floor(valueToFormat / 60)}:${String(Math.round(valueToFormat) % 60).padStart(2, '0')}/km`;
+}
+
+function ProgressCharts({ report }) {
+  const weeks = report.weekly.values.slice(-8);
+  const trend = report.easyTrend;
+  const trendTitle = trend.state === 'potential-improvement' ? 'SYGNAŁ POPRAWY' : trend.state === 'potential-regression' ? 'SYGNAŁ POGORSZENIA' : trend.state === 'mixed' ? 'TREND NIEJEDNOZNACZNY' : 'BRAK PORÓWNYWALNEJ PRÓBY';
+  const trendCopy = trend.state === 'missing'
+    ? `Potrzeba 6 porównywalnych easy z dystansem, czasem i HR średnim. Jest ${trend.sample}.`
+    : `Pierwsze 3: ${paceText(trend.first.paceSeconds)} przy HR ${metric(trend.first.hr, { maximumFractionDigits: 0 })}; ostatnie 3: ${paceText(trend.recent.paceSeconds)} przy HR ${metric(trend.recent.hr, { maximumFractionDigits: 0 })}.`;
+  return <section className="epa-surface epa-charts">
+    <div className="section-heading"><div><span className="eyebrow">HISTORIA I PORÓWNANIE</span><h2>Czy coś się poprawia?</h2></div><span className="section-aside">fakty, nie automatyczna ocena</span></div>
+    <div className="epa-chart-grid">
+      <article className="epa-weekly-chart"><span className="eyebrow">OBJĘTOŚĆ TYGODNIOWA</span><div className="epa-bars" aria-label="Kilometraż tygodniowy">{weeks.length ? weeks.map((week) => <div key={week.week}><i style={{ height: `${Math.max(7, (week.km / report.weekly.maximumKm) * 100)}%` }} title={`${week.week}: ${metric(week.km, { maximumFractionDigits: 1 })} km`} /><strong>{metric(week.km, { maximumFractionDigits: 1 })}</strong><small>{week.week.slice(5)}</small></div>) : <p>Brak biegów z czytelną datą.</p>}</div><p>Każdy słupek to suma biegów w tygodniu, nie ocena jakości treningu.</p></article>
+      <article className={`epa-easy-trend epa-easy-${trend.state}`}><span className="eyebrow">EASY · TEMPO WZGLĘDEM HR</span><strong>{trendTitle}</strong><p>{trendCopy}</p>{trend.state !== 'missing' ? <small>{trend.paceDeltaSeconds < 0 ? `${Math.abs(trend.paceDeltaSeconds)} s/km szybciej` : `${trend.paceDeltaSeconds} s/km wolniej`} · HR {trend.hrDelta >= 0 ? '+' : ''}{metric(trend.hrDelta, { maximumFractionDigits: 1 })} bpm. To obserwacja, nie prognoza wyniku.</small> : null}</article>
+    </div>
+  </section>;
+}
+
 function executionTargetLabel(execution) {
   if (execution.targetMode === 'staged') return `${execution.targetStages.length} etapów HR`;
   return execution.targetLo === null ? '—' : `${execution.targetLo}–${execution.targetHi} bpm`;
@@ -232,6 +254,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
       rpe: value(row, 'logRpe', ''),
       pain: value(row, 'logPain', ''),
       legFatigue: value(row, 'logLegFatigue', ''),
+      hrAvg: value(row, 'logHrAvg', ''),
     }));
     const executionRecords = runRows.map((row) => {
       const facts = sessionFacts(row);
@@ -280,6 +303,8 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         </div>
         <div className="epa-priority-list"><span className="eyebrow">PRIORYTETY NA TERAZ</span>{progressReport.priorities.map((item, index) => <article key={`${item.state}-${item.title}`}><b>{String(index + 1).padStart(2, '0')}</b><div><strong>{item.title}</strong><p>{item.detail}</p></div><small>{item.state}</small></article>)}</div>
       </section>
+
+      <ProgressCharts report={progressReport} />
 
       <section className="epa-main-grid">
         <article className={`epa-surface epa-brief epa-brief-${analysis.brief.tone}`}>
