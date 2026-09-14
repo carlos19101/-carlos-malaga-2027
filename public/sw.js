@@ -1,4 +1,4 @@
-const CACHE_NAME = 'carlos-malaga-2027-final-v7';
+const CACHE_NAME = 'carlos-malaga-2027-final-v8';
 const APP_SHELL = [
   './',
   './index.html',
@@ -27,13 +27,9 @@ self.addEventListener('activate', (event) => {
 });
 
 function timeoutFetch(request, ms) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('network timeout')), ms);
-    fetch(request).then(
-      (response) => { clearTimeout(timer); resolve(response); },
-      (error) => { clearTimeout(timer); reject(error); },
-    );
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
 async function networkFirstNavigation(request) {
@@ -89,3 +85,4 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(staleWhileRevalidate(request));
   }
 });
+
