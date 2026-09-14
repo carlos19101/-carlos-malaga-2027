@@ -4,6 +4,7 @@ import {
   fetchPrivateApplicationData,
   parsePrivateApplicationSnapshot,
   rowsFromValuesTable,
+  validateApplicationData,
 } from './appDataApi.js';
 
 function table(headers, values) {
@@ -59,7 +60,7 @@ describe('prywatny transport danych', () => {
   });
 
   it.each([null, [], 'html', {}])('odrzuca niekompletną odpowiedź 200', async (body) => {
-    await expect(fetchPrivateApplicationData(undefined, vi.fn().mockResolvedValue(response(200, body)))).rejects.toThrow('DATA ERROR');
+    await expect(fetchPrivateApplicationData(undefined, vi.fn().mockResolvedValue(response(200, body)))).rejects.toThrow();
   });
   it('zamienia tabelę Values API na rekordy i zachowuje nagłówki verbatim', () => {
     expect(rowsFromValuesTable([['Data', 'Cel HR'], ['25.08.2026', '145–158'], ['', '']]))
@@ -100,10 +101,26 @@ describe('prywatny transport danych', () => {
 
   it('akceptuje wyłącznie prywatny snapshot', () => {
     const legacy = JSON.stringify({ data: { feed: [{ Date: '2026-08-25' }] }, at: 1 });
-    const privateSnapshot = JSON.stringify({ data: { feed: [] }, at: 2, mode: 'private' });
+    const privateSnapshot = JSON.stringify({ data: applicationDataFromTables(tables), at: 2, mode: 'private' });
     const publicSnapshot = JSON.stringify({ data: { feed: [] }, at: 3, mode: 'public' });
     expect(parsePrivateApplicationSnapshot(legacy)).toBeNull();
     expect(parsePrivateApplicationSnapshot(publicSnapshot)).toBeNull();
     expect(parsePrivateApplicationSnapshot(privateSnapshot)).not.toBeNull();
+  });
+
+  it('nie przywraca z localStorage niepełnego lub uszkodzonego snapshotu', () => {
+    expect(parsePrivateApplicationSnapshot(JSON.stringify({ mode: 'private', data: { feed: [] } }))).toBeNull();
+    expect(parsePrivateApplicationSnapshot(JSON.stringify({ mode: 'private', data: { ...applicationDataFromTables(tables), plan: [{}] } }))).toBeNull();
+  });
+
+  it('nie uznaje odpowiedzi 200 bez jawnego ok:true za aktualne dane', async () => {
+    for (const body of [{ tables }, { ok: 'true', tables }, { ok: false, tables }]) {
+      await expect(fetchPrivateApplicationData(undefined, vi.fn().mockResolvedValue(response(200, body))))
+        .rejects.toThrow();
+    }
+  });
+
+  it('waliduje snapshot już w postaci rekordów', () => {
+    expect(validateApplicationData(applicationDataFromTables(tables)).feed).toHaveLength(1);
   });
 });

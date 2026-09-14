@@ -11,7 +11,9 @@ export const APPLICATION_SHEET_NAMES = {
 export function parsePrivateApplicationSnapshot(raw) {
   try {
     const snapshot = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return snapshot?.data && snapshot.mode === 'private' ? snapshot : null;
+    if (!snapshot?.data || snapshot.mode !== 'private') return null;
+    validateApplicationData(snapshot.data);
+    return snapshot;
   } catch {
     return null;
   }
@@ -36,7 +38,7 @@ export function rowsFromValuesTable(table = []) {
 }
 
 export function applicationDataFromTables(tables = {}) {
-  return Object.fromEntries(Object.entries(APPLICATION_SHEET_NAMES).map(([key, sheetName]) => {
+  return validateApplicationData(Object.fromEntries(Object.entries(APPLICATION_SHEET_NAMES).map(([key, sheetName]) => {
     if (!tables || !Object.hasOwn(tables, key) || !Array.isArray(tables[key])) {
       throw new Error(`DATA ERROR — ${sheetName}: brak tabeli w odpowiedzi serwera`);
     }
@@ -46,7 +48,23 @@ export function applicationDataFromTables(tables = {}) {
     const dateError = datedRowsError(rows, A.date, sheetName);
     if (dateError) throw new Error(`DATA ERROR — ${dateError}`);
     return [key, rows];
-  }));
+  })));
+}
+
+export function validateApplicationData(data = {}) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('DATA ERROR — niepoprawny format danych aplikacji');
+  }
+  for (const [key, sheetName] of Object.entries(APPLICATION_SHEET_NAMES)) {
+    if (!Object.hasOwn(data, key) || !Array.isArray(data[key])) {
+      throw new Error(`DATA ERROR — ${sheetName}: brak danych aplikacji`);
+    }
+    const contractError = sheetContractError(data[key], sheetName);
+    if (contractError) throw new Error(`DATA ERROR — ${contractError}`);
+    const dateError = datedRowsError(data[key], A.date, sheetName);
+    if (dateError) throw new Error(`DATA ERROR — ${dateError}`);
+  }
+  return data;
 }
 
 export async function fetchPrivateApplicationData(signal, fetchImpl = fetch) {
@@ -65,7 +83,7 @@ export async function fetchPrivateApplicationData(signal, fetchImpl = fetch) {
   }
   let body = {};
   try { body = await response.json(); } catch { body = {}; }
-  if (!response.ok || body?.ok === false) {
+  if (!response.ok || body?.ok !== true) {
     const error = new Error(body?.error || `private-data-${response.status}`);
     error.status = response.status;
     throw error;
