@@ -289,6 +289,8 @@ export function redirect(response, url, headers = {}) {
   response.statusCode = 302;
   response.setHeader('Cache-Control', 'no-store');
   response.setHeader('Referrer-Policy', 'no-referrer');
+  response.setHeader('X-Frame-Options', 'DENY');
+  response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   Object.entries(headers).forEach(([name, value]) => response.setHeader(name, value));
   response.setHeader('Location', url);
   response.end();
@@ -299,3 +301,4 @@ export function stravaReturnUrl(env = process.env, status) {
   url.searchParams.set('strava', status);
   return url.toString();
 }
+

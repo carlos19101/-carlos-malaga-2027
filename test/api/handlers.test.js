@@ -97,6 +97,9 @@ describe('/api/session', () => {
     expect(response.headers['Cache-Control']).toBe('no-store');
     expect(response.headers['X-Content-Type-Options']).toBe('nosniff');
     expect(response.headers['Referrer-Policy']).toBe('no-referrer');
+    expect(response.headers['X-Frame-Options']).toBe('DENY');
+    expect(response.headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=()');
+    expect(response.headers['Cross-Origin-Resource-Policy']).toBe('same-origin');
   });
 
   it('POST z poprawnym passcode ustawia sesję HttpOnly', async () => {
@@ -257,3 +260,4 @@ describe('/api/tcx-import', () => {
     expect(response.body).toMatchObject({ ok: false, error: 'validation-error' });
   });
 });
+
