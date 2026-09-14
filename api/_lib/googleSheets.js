@@ -20,6 +20,24 @@ const LOGIN_LIMIT_SHEET = 'Auth_Limits';
 const LOGIN_LIMIT_RANGE = "'Auth_Limits'!A1:E2000";
 const LOGIN_LIMIT_HEADER = ['Client_Key_HMAC', 'Window_Started_At', 'Failures', 'Blocked_Until', 'Updated_At'];
 
+async function responseJsonObject(response, errorCode) {
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error(errorCode);
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error(errorCode);
+  return body;
+}
+
+async function responseValues(response, errorCode) {
+  const body = await responseJsonObject(response, errorCode);
+  if (body.values === undefined) return [];
+  if (!Array.isArray(body.values)) throw new Error(errorCode);
+  return body.values;
+}
+
 function base64urlJson(value) {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
@@ -62,8 +80,11 @@ async function accessToken(env = process.env, fetchImpl = fetch) {
     }),
   });
   if (!response.ok) throw new Error(`google-auth-${response.status}`);
-  const body = await response.json();
-  tokenCache = { identity, value: body.access_token, expiresAt: now + Number(body.expires_in || 3600) * 1000 };
+  const body = await responseJsonObject(response, 'google-auth-invalid-response');
+  if (!String(body.access_token ?? '').trim()) throw new Error('google-auth-invalid-response');
+  const expiresIn = Number(body.expires_in ?? 3600);
+  if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error('google-auth-invalid-response');
+  tokenCache = { identity, value: body.access_token, expiresAt: now + expiresIn * 1000 };
   return tokenCache.value;
 }
 
@@ -92,7 +113,7 @@ function hasLoginLimitSheet(metadata = {}) {
 async function loginLimitMetadata(env, fetchImpl, headers) {
   const response = await fetchImpl(`${spreadsheetUrl(env.GOOGLE_SHEET_ID)}?fields=sheets.properties`, { headers });
   if (!response.ok) throw new Error(`google-rate-limit-metadata-${response.status}`);
-  return response.json();
+  return responseJsonObject(response, 'google-rate-limit-metadata-invalid-response');
 }
 
 async function ensureLoginLimitSheet(env, fetchImpl, token) {
@@ -125,7 +146,7 @@ export async function readLoginLimitRows(options = {}) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error(`google-rate-limit-read-${response.status}`);
-  const values = (await response.json()).values || [];
+  const values = await responseValues(response, 'google-rate-limit-read-invalid-response');
   return values.slice(1);
 }
 
@@ -159,8 +180,12 @@ export async function readApplicationTables(options = {}) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error(`google-read-${response.status}`);
-  const body = await response.json();
-  const valueRanges = Array.isArray(body.valueRanges) ? body.valueRanges : [];
+  const body = await responseJsonObject(response, 'google-read-invalid-response');
+  const valueRanges = body.valueRanges;
+  if (!Array.isArray(valueRanges) || valueRanges.length !== entries.length
+    || valueRanges.some((range) => !range || typeof range !== 'object' || (range.values !== undefined && !Array.isArray(range.values)))) {
+    throw new Error('google-read-invalid-response');
+  }
   return Object.fromEntries(entries.map(([key], index) => [
     key,
     Array.isArray(valueRanges[index]?.values) ? valueRanges[index].values : [],
@@ -176,7 +201,7 @@ export async function updateTrainingFeedback(feedback, options = {}) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
-  const table = (await tableResponse.json()).values || [];
+  const table = await responseValues(tableResponse, 'google-read-invalid-response');
   const plan = planTrainingFeedbackUpdate(table, feedback, { syncedAt: options.now || new Date() });
   if (plan.action !== 'update') return plan;
 
@@ -190,7 +215,7 @@ export async function updateTrainingFeedback(feedback, options = {}) {
     }),
   });
   if (!updateResponse.ok) throw new Error(`google-write-${updateResponse.status}`);
-  const result = await updateResponse.json();
+  const result = await responseJsonObject(updateResponse, 'google-write-invalid-response');
   return { ...plan, updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [] };
 }
 
@@ -203,7 +228,7 @@ export async function updateTcxImport(envelope, options = {}) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
-  const values = (await tableResponse.json()).values || [];
+  const values = await responseValues(tableResponse, 'google-read-invalid-response');
   const table = {
     headers: Array.isArray(values[0]) ? values[0].map((value) => String(value ?? '')) : [],
     rows: values.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row })),
@@ -215,7 +240,7 @@ export async function updateTcxImport(envelope, options = {}) {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!planResponse.ok) throw new Error(`google-plan-read-${planResponse.status}`);
-    const planValues = (await planResponse.json()).values || [];
+    const planValues = await responseValues(planResponse, 'google-plan-read-invalid-response');
     const planTable = {
       headers: Array.isArray(planValues[0]) ? planValues[0].map((value) => String(value ?? '')) : [],
       rows: planValues.slice(1).map((row, index) => ({ rowNumber: index + 2, values: row })),
@@ -249,7 +274,7 @@ export async function updateTcxImport(envelope, options = {}) {
     }),
   });
   if (!updateResponse.ok) throw new Error(`google-write-${updateResponse.status}`);
-  const result = await updateResponse.json();
+  const result = await responseJsonObject(updateResponse, 'google-write-invalid-response');
   return {
     ...reconciliation,
     updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [],
@@ -265,7 +290,7 @@ export async function appendStravaActivity(record, options = {}) {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
-  const table = (await tableResponse.json()).values || [];
+  const table = await responseValues(tableResponse, 'google-read-invalid-response');
   const plan = planStravaActivityAppend(table, record);
   if (plan.action !== 'append') return plan;
 
@@ -274,7 +299,7 @@ export async function appendStravaActivity(record, options = {}) {
     body: JSON.stringify({ majorDimension: 'ROWS', values: [plan.rowValues] }),
   });
   if (!appendResponse.ok) throw new Error(`google-write-${appendResponse.status}`);
-  const response = await appendResponse.json();
+  const response = await responseJsonObject(appendResponse, 'google-write-invalid-response');
   return {
     ...plan,
     updatedRange: response.updates?.updatedRange || null,
@@ -282,3 +307,4 @@ export async function appendStravaActivity(record, options = {}) {
       ? Number(response.updates.updatedRange.match(/!(?:[A-Z]+)(\d+)(?::[A-Z]+\d+)?$/)[1]) : null,
   };
 }
+

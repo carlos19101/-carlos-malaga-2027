@@ -116,6 +116,39 @@ describe('Google Sheets service account', () => {
     expect(options.headers.Authorization).toBe('Bearer private-read-token');
   });
 
+  it.each([
+    null,
+    [],
+    { valueRanges: [] },
+    { valueRanges: [{ values: [] }, { values: [] }, { values: [] }, { values: 'błędne' }] },
+  ])('odrzuca odpowiedź 200 bez czterech prawidłowych tabel', async (body) => {
+    const { privateKey } = keyPair();
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200, { access_token: 'private-read-token', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse(200, body));
+    await expect(readApplicationTables({
+      env: {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: 'private-read@example.test',
+        GOOGLE_PRIVATE_KEY: privateKey,
+        GOOGLE_SHEET_ID: 'private-sheet',
+      },
+      fetchImpl,
+    })).rejects.toThrow('google-read-invalid-response');
+  });
+
+  it.each([null, [], {}, { access_token: '' }, { access_token: 'token', expires_in: 0 }])('odrzuca niepełną odpowiedź tokenu Google', async (body) => {
+    const { privateKey } = keyPair();
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, body));
+    await expect(readApplicationTables({
+      env: {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: `invalid-token-${Math.random()}@example.test`,
+        GOOGLE_PRIVATE_KEY: privateKey,
+        GOOGLE_SHEET_ID: 'private-sheet',
+      },
+      fetchImpl,
+    })).rejects.toThrow('google-auth-invalid-response');
+  });
+
   it('przetrwa równoległe utworzenie trwałej zakładki ochrony logowania', async () => {
     const { privateKey } = keyPair();
     const fetchImpl = vi.fn()
@@ -239,3 +272,4 @@ describe('Google Sheets service account', () => {
     expect(body).toMatchObject({ majorDimension: 'ROWS', values: [expect.arrayContaining(['Mobilizacja', 'Strava', 'strava-123456789'])] });
   });
 });
+
