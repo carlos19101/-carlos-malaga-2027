@@ -64,6 +64,16 @@ afterEach(() => {
 });
 
 describe('/api/session', () => {
+  it('odrzuca tablicę JSON jako nieprawidłowe żądanie przed ochroną logowania', async () => {
+    configuredEnvironment();
+    const response = responseMock();
+    await sessionHandler({
+      method: 'POST', headers: { origin: 'https://carlos-malaga-2027.vercel.app' }, body: [],
+    }, response);
+    expect(response.statusCode).toBe(400);
+    expect(response.body.error).toBe('invalid-request');
+  });
+
   it('po dwóch błędnych próbach poprawne hasło zeruje istniejący licznik i loguje', async () => {
     configuredEnvironment();
     const rows = [];
@@ -259,5 +269,20 @@ describe('/api/tcx-import', () => {
     expect(response.statusCode).toBe(422);
     expect(response.body).toMatchObject({ ok: false, error: 'validation-error' });
   });
-});
 
+  it('odrzuca tablicę JSON jako nieprawidłowe żądanie', async () => {
+    configuredEnvironment();
+    const token = createSessionToken('session-secret-long-enough', { nonce: 'tcx-array' });
+    const response = responseMock();
+    await tcxImportHandler({
+      method: 'POST',
+      headers: {
+        origin: 'https://carlos-malaga-2027.vercel.app',
+        cookie: `${SESSION_COOKIE}=${token}`,
+      },
+      body: [],
+    }, response);
+    expect(response.statusCode).toBe(400);
+    expect(response.body.error).toBe('invalid-request');
+  });
+});

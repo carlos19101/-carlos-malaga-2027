@@ -1,5 +1,5 @@
 import { appendStravaActivity } from '../_lib/googleSheets.js';
-import { methodNotAllowed, readJson, sendJson } from '../_lib/http.js';
+import { isInvalidRequestError, methodNotAllowed, readJson, sendJson } from '../_lib/http.js';
 import { allowedRequestOrigin, authenticated, serviceConfiguration } from '../_lib/session.js';
 import { getStravaActivity, readStravaCredentials, stravaConfiguration, stravaTokenCookie } from '../_lib/strava.js';
 import { createStravaImportRecord, validateStravaImportRequest } from '../../src/stravaImport.js';
@@ -55,7 +55,7 @@ export default async function handler(request, response) {
   } catch (error) {
     console.error('strava-import', error.message);
     const status = error.message === 'payload-too-large' ? 413
-      : error instanceof SyntaxError ? 400
+      : isInvalidRequestError(error) ? 400
         : error.message === 'strava-activity-404' ? 404 : 502;
     const code = status === 413 ? 'payload-too-large'
       : status === 400 ? 'invalid-request'

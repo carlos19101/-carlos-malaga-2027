@@ -1,4 +1,4 @@
-import { methodNotAllowed, readJson, sendJson } from './_lib/http.js';
+import { isInvalidRequestError, methodNotAllowed, readJson, sendJson } from './_lib/http.js';
 import { allowedRequestOrigin, authenticated, serviceConfiguration } from './_lib/session.js';
 import { updateTrainingFeedback } from './_lib/googleSheets.js';
 import { validateTrainingFeedback } from '../src/trainingFeedback.js';
@@ -44,7 +44,7 @@ export default async function handler(request, response) {
     });
   } catch (error) {
     console.error('training-feedback', error.message);
-    const status = error.message === 'payload-too-large' ? 413 : error instanceof SyntaxError ? 400 : 502;
+    const status = error.message === 'payload-too-large' ? 413 : isInvalidRequestError(error) ? 400 : 502;
     const code = status === 413 ? 'payload-too-large' : status === 400 ? 'invalid-request' : 'sheets-unavailable';
     sendJson(response, status, { ok: false, error: code });
   }
