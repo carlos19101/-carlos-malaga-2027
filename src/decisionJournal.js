@@ -152,6 +152,9 @@ export function verifyDecisionStatus(feedDecision = {}, journalEntries = []) {
     return { state: 'verified', checkedDate: date, entry, mismatches: [] };
   }
 
+  const feedTimestamp = parseRawTimestamp(feedDecision.lastSynced);
+  const rawTimestamp = parseRawTimestamp(entry.rawTimestamp);
+  const newerDecision = Boolean(feedTimestamp && rawTimestamp && rawTimestamp > feedTimestamp);
   return {
     state: 'mismatch',
     checkedDate: date,
@@ -165,6 +168,9 @@ export function verifyDecisionStatus(feedDecision = {}, journalEntries = []) {
       delta: null,
       severity: 'error',
       source: 'Raw_Data',
+      newerDecision,
+      fromFeedAt: feedTimestamp ? String(feedDecision.lastSynced) : null,
+      fromRawAt: rawTimestamp ? String(entry.rawTimestamp) : null,
     }],
   };
 }

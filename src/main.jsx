@@ -23,7 +23,7 @@ import {
   resolveCoachDecision,
   sourceFreshness,
 } from './performance';
-import { computeEasyExecutionPattern, computeExecution, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
+import { computeEasyExecutionPattern, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeLoadMap, parseSessionMinutes } from './loadMap';
 import { computeWeeklySnapshot } from './weeklySnapshot';
 import { computePerformanceResponse } from './performanceResponse';
@@ -50,6 +50,8 @@ import { A } from './schema';
 import { latestFeedRow } from './feedSelection';
 import { readFeedbackDraft, saveFeedbackDraft, clearFeedbackDraft } from './feedbackDraft';
 import { EpaPanel } from './EpaPanel';
+import { latestEpaRun } from './epaData';
+import { executionForLogRow, executionIssueMessage, planForLogRow } from './sessionExecution';
 import './styles.css';
 
 const APPLICATION_TABLE_COUNT = 4;
@@ -173,7 +175,6 @@ function verifierTrainingRecords(rows) {
 
 function weeklySnapshotRecords(logRows, planRows) {
   return (logRows || []).map((logRow) => {
-    const planRow = planForLogRow(planRows, logRow);
     return {
       date: v(logRow, 'date', ''),
       timestamp: logTimestamp(logRow),
@@ -183,7 +184,7 @@ function weeklySnapshotRecords(logRows, planRows) {
       duration: v(logRow, 'logDuration', ''),
       rpe: v(logRow, 'logRpe', ''),
       srpe: v(logRow, 'logSrpe', ''),
-      execution: isRunLogRow(logRow) ? computeExecution(executionInput(logRow, planRow)) : null,
+      execution: isRunLogRow(logRow) ? executionForLogRow(logRow, planRows) : null,
     };
   });
 }
@@ -207,33 +208,12 @@ function isRunLogRow(row) {
   return ['bieg', 'run', 'running'].includes(normalize(resolveLogSession(row, A.logType)));
 }
 
-function planForLogRow(planRows, logRow) {
-  const date = logRow ? rowDate(logRow) : null;
-  if (!date) return null;
-  return planRows.find((planRow) => sameCalendarDay(rowDate(planRow), date)) || null;
-}
-
 function logTimestamp(row) {
   return parseTrainingLogTimestamp(v(row, 'date', ''), v(row, 'logTime', ''));
 }
 
-function executionInput(logRow, planRow) {
-  if (!logRow) return {};
-  return {
-    targetLo: v(logRow, 'logHrTargetMin', ''),
-    targetHi: v(logRow, 'logHrTargetMax', ''),
-    targetStages: v(logRow, 'logHrTargetStages', '') || (planRow ? v(planRow, 'planHrTargetStages', '') : ''),
-    timeInTarget: v(logRow, 'logTimeInTarget', ''),
-    timeAboveTarget: v(logRow, 'logTimeAboveTarget', ''),
-    timeBelowTarget: v(logRow, 'logTimeBelowTarget', ''),
-    analyzedDuration: v(logRow, 'logHrAnalyzedDuration', ''),
-    actualKm: v(logRow, 'logDistance', ''),
-    distanceTargetMin: planRow ? v(planRow, 'planDistanceTargetMin', '') : '',
-    distanceTargetMax: planRow ? v(planRow, 'planDistanceTargetMax', '') : '',
-  };
-}
-
 function executionTargetLabel(execution) {
+  if (execution.status === 'data-error') return 'cel wymaga sprawdzenia';
   if (execution.targetMode === 'staged') return `${execution.targetStages.length} etapów HR`;
   return execution.targetLo === null ? 'brak celu HR' : `${execution.targetLo}–${execution.targetHi} bpm`;
 }
@@ -348,6 +328,7 @@ function TodayPlanCard({ row }) {
 function VerifierBanner({ mismatches }) {
   if (!mismatches.length) return null;
   const severity = mismatches.some((item) => item.severity === 'error') ? 'error' : 'warning';
+  const needsDecisionSync = mismatches.every((item) => item.field === 'coachStatus' && item.newerDecision);
   const digits = (field) => field.startsWith('km') || field === 'weight' ? 2 : 0;
   const display = (item, value) => {
     if (typeof value === 'string' && parseMetric(value) === null) return value || '—';
@@ -356,11 +337,11 @@ function VerifierBanner({ mismatches }) {
   };
   return (
     <div className={`data-quality-banner verifier-${severity}`} role={severity === 'error' ? 'alert' : 'status'}>
-      <strong>{severity === 'error'
-        ? 'NIEZGODNOŚĆ ŹRÓDEŁ — jedna z wartości jest błędna.'
+      <strong>{needsDecisionSync ? 'DECYZJA WYMAGA SYNCHRONIZACJI — Raw_Data zawiera nowszy wpis.' : severity === 'error'
+        ? 'NIEZGODNOŚĆ ŹRÓDEŁ — sprawdź wartości i czas ich zapisu.'
         : 'RÓŻNICA ŹRÓDEŁ — sprawdź wartości przed decyzją.'}</strong>
       {mismatches.map((item) => (
-        <span key={item.field}>{item.label}: APP_FEED {display(item, item.fromFeed)} vs {item.source || 'policzone'} {display(item, item.computed)}</span>
+        <span key={item.field}>{item.label}: APP_FEED {display(item, item.fromFeed)} vs {item.source || 'policzone'} {display(item, item.computed)}{item.fromFeedAt && item.fromRawAt ? <small>APP_FEED: {item.fromFeedAt} · Raw_Data: {item.fromRawAt}</small> : null}</span>
       ))}
     </div>
   );
@@ -524,7 +505,7 @@ function ExecutionCard({ execution }) {
   const unavailable = {
     'no-target': 'BRAK CELU — Execution wymaga atomowego zakresu HR.',
     'no-data': 'BRAK DANYCH — wykonania intensywności nie można zweryfikować.',
-    'data-error': 'DATA ERROR — atomowe czasy Execution są niespójne.',
+    'data-error': executionIssueMessage(execution),
   };
   if (unavailable[execution.status]) {
     return <article className={`execution-card execution-${execution.status}`}><strong>{unavailable[execution.status]}</strong></article>;
@@ -803,6 +784,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const decisionStatusVerification = useMemo(() => verifyDecisionStatus({
     date: v(row, 'date', ''),
     status: v(row, 'status', ''),
+    lastSynced: v(row, 'lastSynced', ''),
   }, journalBase.entries), [row, journalBase]);
   const computedMetrics = useMemo(() => computeVerifierMetrics(
     verifierTrainingRecords(log), verifierWeightRecords(raw), verifierEndDate,
@@ -811,7 +793,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const verifierMismatches = useMemo(() =>
     [...crossValidate(computedMetrics, verifierFeedMetrics(row)), ...decisionStatusVerification.mismatches],
   [computedMetrics, row, decisionStatusVerification]);
-  const latestRunRow = useMemo(() => sortedRows(log, 'desc').find(isRunLogRow) || null, [log]);
+  const latestRunRow = useMemo(() => latestEpaRun(log.filter(isRunLogRow), now).row, [log, now]);
   const dataCompleteness = useMemo(() => {
     const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - 27);
@@ -825,7 +807,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
         feedbackComplete: feedback.complete,
         meaningfulRpe: parseMetric(v(logRow, 'logRpe', '')) > 0,
         tcxRequired: tcx.validTarget,
-        tcxComplete: tcx.complete,
+        tcxComplete: tcx.complete && ['ok', 'over', 'under'].includes(executionForLogRow(logRow, plan).status),
       };
     });
     return computeDataCompleteness({
@@ -835,13 +817,12 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
       sourceOk: validation.ok && freshnessState === 'fresh',
     });
   }, [daily, freshnessState, log, now, plan, validation.ok]);
-  const latestRunPlan = useMemo(() => planForLogRow(plan, latestRunRow), [plan, latestRunRow]);
-  const execution = useMemo(() => computeExecution(executionInput(latestRunRow, latestRunPlan)), [latestRunRow, latestRunPlan]);
+  const execution = useMemo(() => executionForLogRow(latestRunRow, plan), [latestRunRow, plan]);
   const weeklySnapshot = useMemo(() => computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now), [log, plan, now]);
   const easyExecutionPattern = useMemo(() => {
     const history = sortedRows(log, 'asc').filter(isRunLogRow).map((logRow) => {
       const planRow = planForLogRow(plan, logRow);
-      const result = computeExecution(executionInput(logRow, planRow));
+      const result = executionForLogRow(logRow, plan);
       return {
         date: v(logRow, 'date', ''),
         timestamp: logTimestamp(logRow),
@@ -858,7 +839,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
   const journal = useMemo(() => {
     const sessions = sortedRows(log, 'asc').map((logRow) => {
       const planRow = planForLogRow(plan, logRow);
-      const sessionExecution = isRunLogRow(logRow) ? computeExecution(executionInput(logRow, planRow)) : null;
+      const sessionExecution = isRunLogRow(logRow) ? executionForLogRow(logRow, plan) : null;
       return {
         date: v(logRow, 'date', ''),
         timestamp: logTimestamp(logRow),
@@ -947,7 +928,7 @@ function Dashboard({ feed, log, plan, raw, loading, freshnessState, verifierRead
     under: 'UNDER · poniżej planu',
     'no-target': 'brak celu HR',
     'no-data': 'brak danych atomowych',
-    'data-error': 'błąd danych Execution',
+    'data-error': executionIssueMessage(execution),
   }[execution.status] || 'brak oceny';
   const executionDisplaySummary = executionSummary;
   const staffMembers = staffPanel.core.length + staffPanel.specialists.length;
@@ -2083,7 +2064,7 @@ function App() {
 
       <main>
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />}
-        {tab === 'epa' && <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} />}
+        {tab === 'epa' && <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />}
         {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
       </main>

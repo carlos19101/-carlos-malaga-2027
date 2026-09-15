@@ -236,3 +236,17 @@ describe('attachDecisionOutcomes', () => {
     expect(result.entries[0].outcome.preDecisionSessions.map(({ name }) => name)).toEqual(['Za wcześnie']);
   });
 });
+
+describe('decision snapshot timestamps', () => {
+  it('reports a newer decision without choosing a status or relabelling measurements', () => {
+    const journal = buildDecisionJournal([
+      row('2026-08-25', '2026-08-25 20:00', { status: 'YELLOW', decision: 'Recovery' }, 'Head Coach'),
+    ]);
+    const feed = { date: '2026-08-25', status: 'GREEN', lastSynced: '2026-08-25 08:00' };
+    const result = verifyDecisionStatus(feed, journal.entries);
+    expect(result).toMatchObject({ state: 'mismatch', mismatches: [{ severity: 'error', newerDecision: true, fromFeed: 'GREEN', computed: 'YELLOW', fromFeedAt: '2026-08-25 08:00', fromRawAt: '2026-08-25 20:00' }] });
+    expect(feed.status).toBe('GREEN');
+    expect(verifyDecisionStatus({ ...feed, lastSynced: '2026-08-25 21:00' }, journal.entries).mismatches[0].newerDecision).toBe(false);
+    expect(verifyDecisionStatus({ ...feed, lastSynced: '' }, journal.entries).mismatches[0].newerDecision).toBe(false);
+  });
+});

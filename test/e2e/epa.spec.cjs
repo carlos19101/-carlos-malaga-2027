@@ -3,6 +3,42 @@ const { expect, test } = require('playwright/test');
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-08-26T12:00:00+02:00'));
 });
+test('dashboard i EPA blokują ten sam niejednoznaczny Plan bez utraty dystansu', async ({ page }) => {
+  const data = structuredClone(tables);
+  data.plan.push([...data.plan[1]]);
+  await openEpa(page, data);
+  await expect(page.locator('.epa-no-chart')).toContainText('Plan: 2 wpisy dla 2026-08-25');
+  await expect(page.locator('.epa-run h2')).toHaveText('6,80 km');
+  await expect(page.locator('.epa-execution-track')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Pokaż aktualną decyzję', exact: true }).click();
+  await expect(page.locator('.dashboard-last-session')).toContainText('Plan: 2 wpisy dla 2026-08-25');
+  await expect(page.locator('.dashboard-last-session')).toContainText('6,80 km');
+});
+
+test('EPA kieruje do sprawdzonej decyzji i nie powtarza niezgodnego GREEN z feedu', async ({ page }) => {
+  const data = structuredClone(tables);
+  data.feed[1][data.feed[0].indexOf('Status')] = 'GREEN';
+  data.feed[1][data.feed[0].indexOf('Decision')] = 'STARY WERDYKT GREEN — wykonaj trening';
+  data.raw[1][data.raw[0].indexOf('Coach_Status')] = 'YELLOW';
+  data.raw[1][data.raw[0].indexOf('Timestamp')] = '2026-08-26 20:00';
+  await openEpa(page, data);
+  await expect(page.locator('.epa-synthesis')).not.toContainText('STARY WERDYKT GREEN');
+  await page.getByRole('button', { name: 'Pokaż aktualną decyzję', exact: true }).click();
+  await expect(page.locator('.dashboard-compact-hero h1')).toHaveText('BRAK PEWNEJ DECYZJI');
+  await expect(page.locator('.verifier-error')).toContainText('STATUS DECYZJI');
+  await expect(page.locator('.verifier-error')).toContainText('DECYZJA WYMAGA SYNCHRONIZACJI');
+  await expect(page.locator('.verifier-error')).toContainText('2026-08-26 20:00');
+});
+
+test('dashboard nie podmienia celu zapisanej analizy celem z Planu', async ({ page }) => {
+  const data = structuredClone(tables);
+  data.plan[1][data.plan[0].indexOf('HR_Target_Max_bpm')] = '165';
+  await openEpa(page, data);
+  const message = 'Cel HR w Training Log różni się od Planu';
+  await expect(page.locator('.epa-no-chart')).toContainText(message);
+  await page.getByRole('button', { name: 'Pokaż aktualną decyzję', exact: true }).click();
+  await expect(page.locator('.dashboard-last-session')).toContainText(message);
+});
 
 function table(headers, values) {
   return [headers, headers.map((header) => values[header] ?? '')];

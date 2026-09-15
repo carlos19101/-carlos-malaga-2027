@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildEpaAnalysis } from './epa';
 import { epaExecutionFor, latestEpaRun, selectEpaActivity } from './epaData';
+import { executionIssueMessage } from './sessionExecution';
+import { latestFeedRow } from './feedSelection';
 import { exactValue, formatMetricNumber, normalize, parseDate, parseMetric, resolveLogSession } from './parse';
 import { A } from './schema';
 import { connectStrava, stravaActivities, stravaStatus } from './stravaApi';
@@ -163,7 +165,7 @@ function ZonesDisclosure({ feed, loading }) {
   );
 }
 
-export function EpaPanel({ feed = [], log = [], plan = [], loading = false, access = {}, now = new Date() }) {
+export function EpaPanel({ feed = [], log = [], plan = [], loading = false, access = {}, now = new Date(), onShowDecision }) {
   const reportDate = dateKey(now);
   const [group, setGroup] = useState('coaches');
   const [selectedId, setSelectedId] = useState('canova');
@@ -240,7 +242,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
     })),
   }), [plan, runRows, reportDate]);
   const comparableSessions = progressReport.execution.analyzed;
-  const feedRow = useMemo(() => newest(feed), [feed]);
+  const feedRow = useMemo(() => latestFeedRow(feed), [feed]);
   const nextDayAvailable = Boolean(session?.date && rowDate(feedRow)
     && progressDay(rowDate(feedRow)) === progressDay(session.date) + 1
     && (parseMetric(value(feedRow, 'hrv')) !== null || parseMetric(value(feedRow, 'rhr')) !== null));
@@ -266,14 +268,14 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
             : match.state === 'ambiguous' ? 'Ostatnia sesja: więcej niż jedna możliwa para'
               : `${strava.activities.length} aktywności · brak pewnej pary z ostatnią sesją`;
   const executionReady = analysis.sources.executionReady;
-  const decision = value(feedRow, 'decision', value(feedRow, 'status', 'Brak werdyktu'));
+  const executionIssue = executionIssueMessage(execution);
 
   return (
     <>
       <section className="epa-hero">
         <div><span className="eyebrow">ELITE PERFORMANCE ACADEMY</span><h1>EPA</h1></div>
         <p>Praktyka elity przechodzi przez dane CARLOS i kontrolę podstaw. Nazwisko bez źródła nie tworzy porady.</p>
-        <div className="epa-status-row"><span>FAZA · <strong>{analysis.phase}</strong></span><span>EXECUTION · <strong>{comparableSessions} SESJI</strong></span><span>STRAVA · <strong>{strava.connected ? 'POŁĄCZONA' : 'BRAK POŁĄCZENIA'}</strong></span></div>
+        <div className="epa-status-row"><span>FAZA · <strong>{analysis.phase}</strong></span><span>EXECUTION · <strong>{comparableSessions} SESJI</strong></span><span>STRAVA · <strong>{!strava.checked ? 'SPRAWDZAM' : strava.connected ? 'POŁĄCZONA' : 'BRAK POŁĄCZENIA'}</strong></span></div>
       </section>
 
       <section className="epa-surface epa-progress">
@@ -314,7 +316,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         </article>
         <article className="epa-surface epa-run">
           <div className="epa-run-head"><div><span className="eyebrow">OSTATNI BIEG</span><h2>{metric(analysis.brief.distanceKm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <small>km</small></h2></div><div><strong>{pct(execution.hrTargetPct)}</strong><span>czasu w celu HR</span></div></div>
-          {executionReady ? <><div className="epa-execution-track" aria-label={`${pct(execution.belowTargetPct)} poniżej, ${pct(execution.hrTargetPct)} w celu, ${pct(execution.aboveTargetPct)} powyżej`}><i style={{ width: `${execution.belowTargetPct}%` }} /><i style={{ width: `${execution.hrTargetPct}%` }} /><i style={{ width: `${execution.aboveTargetPct}%` }} /></div><div className="epa-track-legend"><span>poniżej {pct(execution.belowTargetPct)}</span><span>w celu {pct(execution.hrTargetPct)}</span><span>powyżej {pct(execution.aboveTargetPct)}</span></div></> : <p className="epa-no-chart">{execution.status === 'data-error' ? 'BŁĄD ANALIZY HR — sprawdź czasy i cel w Planie.' : session ? 'BIEG ZAPISANY · analiza celu HR do uzupełnienia.' : 'Brak jednoznacznie wskazanego ostatniego biegu.'}</p>}
+          {executionReady ? <><div className="epa-execution-track" aria-label={`${pct(execution.belowTargetPct)} poniżej, ${pct(execution.hrTargetPct)} w celu, ${pct(execution.aboveTargetPct)} powyżej`}><i style={{ width: `${execution.belowTargetPct}%` }} /><i style={{ width: `${execution.hrTargetPct}%` }} /><i style={{ width: `${execution.aboveTargetPct}%` }} /></div><div className="epa-track-legend"><span>poniżej {pct(execution.belowTargetPct)}</span><span>w celu {pct(execution.hrTargetPct)}</span><span>powyżej {pct(execution.aboveTargetPct)}</span></div></> : <p className="epa-no-chart">{execution.status === 'data-error' ? `BŁĄD ANALIZY HR — ${executionIssue}` : session ? 'BIEG ZAPISANY · analiza celu HR do uzupełnienia.' : 'Brak jednoznacznie wskazanego ostatniego biegu.'}</p>}
           <div className="epa-facts"><div><span>CEL HR</span><strong>{executionTargetLabel(execution)}</strong></div><div><span>RPE</span><strong>{metric(session?.rpe, { maximumFractionDigits: 1 })}/10</strong></div><div><span>NOGI</span><strong>{metric(session?.legFatigue, { maximumFractionDigits: 1 })}/10</strong></div></div>
         </article>
       </section>
@@ -323,7 +325,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
         <div><span className="eyebrow">DANE DO ANALIZY</span><h2>Strava + Training Log + TCX</h2><p>Najpierw sprawdzamy fakty. Brak pola kończy perspektywę jako „brak podstaw”.</p></div>
         <div className="epa-source-fields">
           <SourceField label="STRAVA" missing={!activity}>{stravaText}</SourceField>
-          <SourceField label="TCX / EXECUTION" missing={!executionReady}>{executionReady ? `${pct(execution.hrTargetPct)} w celu · ${executionTargetLabel(execution)}` : execution.status === 'data-error' ? 'błędna analiza lub konflikt celu z Planem' : 'brak kompletnej analizy atomowej'}</SourceField>
+          <SourceField label="TCX / EXECUTION" missing={!executionReady}>{executionReady ? `${pct(execution.hrTargetPct)} w celu · ${executionTargetLabel(execution)}` : execution.status === 'data-error' ? executionIssue : 'brak kompletnej analizy atomowej'}</SourceField>
           <SourceField label="OCENA ZAWODNIKA" missing={session?.rpe === null || session?.pain === null || session?.legFatigue === null}>RPE {metric(session?.rpe)} · nogi {metric(session?.legFatigue)} · ból {metric(session?.pain)}</SourceField>
           <SourceField label="BRAKUJE" missing>{analysis.sources.missing.join(' · ')}</SourceField>
         </div>
@@ -349,7 +351,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
       <section className="epa-synthesis">
         <div className="section-heading"><div><span className="eyebrow">SYNTEZA</span><h2>Główny Trener × Sztab × EPA</h2></div><span className="section-aside">bez fikcyjnego głosowania</span></div>
         <div className="epa-compare">
-          <article><span>GŁÓWNY TRENER</span><strong>{decision}</strong><p>To jedyne źródło operacyjnej decyzji dnia.</p></article>
+          <article><span>GŁÓWNY TRENER</span><strong>Decyzja dnia w zakładce Dziś</strong><p>Znajdziesz tam werdykt po sprawdzeniu zgodności źródeł, świeżości danych i regeneracji.</p><button type="button" onClick={onShowDecision}>Pokaż aktualną decyzję</button></article>
           <article><span>SZTAB</span><strong>Pełna ocena w zakładce Dziś</strong><p>EPA nie przelicza ani nie duplikuje głosów ról CORE.</p></article>
           <article><span>EPA</span><strong>{analysis.synthesis.state}</strong><p>{analysis.synthesis.conclusion}</p></article>
         </div>
