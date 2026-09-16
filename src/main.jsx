@@ -52,6 +52,7 @@ import { readFeedbackDraft, saveFeedbackDraft, clearFeedbackDraft } from './feed
 import { EpaPanel } from './EpaPanel';
 import { latestEpaRun } from './epaData';
 import { executionForLogRow, executionIssueMessage, planForLogRow } from './sessionExecution';
+import { ExecutionStages, hasObservedStages, stageTargetLabel } from './ExecutionStages';
 import './styles.css';
 
 const APPLICATION_TABLE_COUNT = 4;
@@ -214,7 +215,7 @@ function logTimestamp(row) {
 
 function executionTargetLabel(execution) {
   if (execution.status === 'data-error') return 'cel wymaga sprawdzenia';
-  if (execution.targetMode === 'staged') return `${execution.targetStages.length} etapów HR`;
+  if (execution.targetMode === 'staged') return stageTargetLabel(execution.targetStages);
   return execution.targetLo === null ? 'brak celu HR' : `${execution.targetLo}–${execution.targetHi} bpm`;
 }
 
@@ -524,7 +525,7 @@ function ExecutionCard({ execution }) {
     <article className={`execution-card execution-${execution.status}`}>
       <div className="execution-heading">
         <div><span>EXECUTION · CEL HR {executionTargetLabel(execution)}</span><strong>{verdict}</strong></div>
-        <small>Wyliczone z danych atomowych, nie ze średniego HR.</small>
+        <small>{hasObservedStages(execution.targetStages) ? 'Ocena HR dotyczy odcinków z zadanym celem, nie całej intensywności sesji.' : 'Wyliczone z danych atomowych, nie ze średniego HR.'}</small>
       </div>
       <div className="execution-grid">
         <p><b>W OKNIE</b><strong>{formatMetricNumber(execution.hrTargetPct, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(execution.timeInTarget)}</small></p>
@@ -532,6 +533,7 @@ function ExecutionCard({ execution }) {
         <p><b>PONIŻEJ CELU</b><strong>{formatMetricNumber(execution.belowTargetPct, { maximumFractionDigits: 2 })}%</strong><small>{executionDuration(execution.timeBelowTarget)}</small></p>
         <p><b>OBJĘTOŚĆ</b><strong>{execution.volumePct === null ? '—' : `${formatMetricNumber(execution.volumePct, { maximumFractionDigits: 1 })}%`}</strong><small>{volumeNote}</small></p>
       </div>
+      <ExecutionStages stages={execution.targetStages} analysis={execution.stageAnalysis} analyzedDuration={execution.analyzedDuration} />
     </article>
   );
 }
@@ -1468,7 +1470,7 @@ function TcxImportPanel({ rows, access, onSubmit }) {
                 const id = v(row, 'logSessionId', '');
                 const status = tcxStatusForRow(row);
                 const targetLabel = status.targetMode === 'staged'
-                  ? `${status.targetStages.length} etapów HR`
+                  ? stageTargetLabel(status.targetStages)
                   : `HR ${v(row, 'logHrTargetMin', '')}–${v(row, 'logHrTargetMax', '')}`;
                 return <option value={id} key={id}>{formatDate(v(row, 'date', ''))} · {v(row, 'logName', 'Bieg')} · {targetLabel}</option>;
               })}
@@ -1490,8 +1492,9 @@ function TcxImportPanel({ rows, access, onSubmit }) {
             <p><b>LUKI &gt; 5 S</b><strong>{preview.diagnostics.excludedGaps || 0}</strong><small>{executionDuration(preview.diagnostics.excludedDuration || 0)} wykluczone</small></p>
           </div>
         ) : null}
+        {preview ? <ExecutionStages stages={preview.targetStages} analysis={preview.stageAnalysis} analyzedDuration={preview.analyzedDuration} /> : null}
         <div className="feedback-actions">
-          <small>Granice są domknięte. Czas przypisujemy wcześniejszej próbce; luk powyżej 5 s nie analizujemy.</small>
+          <small>Cel zgodny z Planem, także granice otwarte. Czas przypisujemy wcześniejszej próbce; luk powyżej 5 s nie analizujemy. Odcinki obserwowane nie wchodzą do procentu w celu.</small>
           <button type="submit" disabled={state.busy || !envelope}>{state.busy ? 'Pracuję…' : 'Zapisz dane TCX'}</button>
         </div>
         {state.message ? <p className={`feedback-message ${state.tone ? `feedback-${state.tone}` : ''}`} role="status">{state.message}</p> : null}

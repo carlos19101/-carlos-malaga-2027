@@ -1,5 +1,6 @@
 import { normalize, parseDate, parseNumber } from './parse.js';
-import { tryParseHrTargetStages } from './hrTargetStages.js';
+import { tryParseHrTargetStages, HR_TARGET_OBSERVATION_SCHEMA } from './hrTargetStages.js';
+import { savedStageAnalysis } from './stageAnalysis.js';
 
 export const VERIFIER_FIELDS = [
   { field: 'km7', label: 'BIEG 7D', unit: 'km', tolerance: 0.05 },
@@ -182,6 +183,7 @@ function executionResult(overrides = {}) {
     targetHi: null,
     targetMode: 'none',
     targetStages: [],
+    stageAnalysis: null,
     hrTargetPct: null,
     aboveTargetPct: null,
     belowTargetPct: null,
@@ -220,6 +222,15 @@ export function computeExecution(session = {}) {
   const base = staged
     ? { targetLo: null, targetHi: null, targetMode: 'staged', targetStages: staged.stages }
     : { targetLo, targetHi, targetMode: 'single', targetStages: [] };
+  if (staged) {
+    try {
+      base.stageAnalysis = savedStageAnalysis(session.targetStages, {
+        Time_In_Target_s: timeInTarget, Time_Above_Target_s: timeAboveTarget,
+        Time_Below_Target_s: timeBelowTarget, HR_Analyzed_Duration_s: analyzedDuration,
+      });
+    } catch { return executionResult({ ...base, status: 'data-error' }); }
+    if (staged.schema === HR_TARGET_OBSERVATION_SCHEMA && !base.stageAnalysis) return executionResult({ ...base, status: 'no-data' });
+  }
 
   if ([timeInTarget, timeAboveTarget, timeBelowTarget, analyzedDuration].some((value) => value === null)
     || analyzedDuration === 0) {

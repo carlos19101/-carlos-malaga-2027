@@ -1,5 +1,6 @@
 import { parseNumber } from './parse.js';
-import { tryParseHrTargetStages } from './hrTargetStages.js';
+import { tryParseHrTargetStages, HR_TARGET_OBSERVATION_SCHEMA } from './hrTargetStages.js';
+import { savedStageAnalysis } from './stageAnalysis.js';
 
 function numeric(value) {
   return parseNumber(value);
@@ -36,8 +37,18 @@ export function tcxDataStatus(input = {}) {
   const validDuration = values.analyzedDuration !== null && values.analyzedDuration > 0
     && [values.timeInTarget, values.timeAboveTarget, values.timeBelowTarget, values.analyzedDuration].every((value) => Number.isFinite(value) && value >= 0)
     && durationSum !== null && Math.abs(durationSum - values.analyzedDuration) <= 1e-6;
+  let validStageAnalysis = true;
+  if (staged?.schema === HR_TARGET_OBSERVATION_SCHEMA) {
+    try {
+      validStageAnalysis = Boolean(savedStageAnalysis(input.targetStages, {
+        Time_In_Target_s: values.timeInTarget, Time_Above_Target_s: values.timeAboveTarget,
+        Time_Below_Target_s: values.timeBelowTarget, HR_Analyzed_Duration_s: values.analyzedDuration,
+      }));
+    } catch { validStageAnalysis = false; }
+    if (!validStageAnalysis) missing.push('stageAnalysis');
+  }
   return {
-    complete: missing.length === 0 && validTarget && validDuration,
+    complete: missing.length === 0 && validTarget && validDuration && validStageAnalysis,
     missing,
     values,
     targetMode: staged ? 'staged' : validTarget ? 'single' : 'none',

@@ -35,5 +35,7 @@ export function tcxImportPreview(envelope = {}) {
     pctAboveTarget: percent(atomic.Time_Above_Target_s),
     pctBelowTarget: percent(atomic.Time_Below_Target_s),
     diagnostics: envelope.diagnostics || {},
+    stageAnalysis: envelope.stageAnalysis || null,
+    targetStages: stages?.stages || [],
   };
 }

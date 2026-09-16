@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildEpaAnalysis } from './epa';
 import { epaExecutionFor, latestEpaRun, selectEpaActivity } from './epaData';
 import { executionIssueMessage } from './sessionExecution';
+import { ExecutionStages, stageTargetLabel } from './ExecutionStages';
 import { latestFeedRow } from './feedSelection';
 import { exactValue, formatMetricNumber, normalize, parseDate, parseMetric, resolveLogSession } from './parse';
 import { A } from './schema';
@@ -113,7 +114,7 @@ function ProgressCharts({ report }) {
 }
 
 function executionTargetLabel(execution) {
-  if (execution.targetMode === 'staged') return `${execution.targetStages.length} etapów HR`;
+  if (execution.targetMode === 'staged') return stageTargetLabel(execution.targetStages);
   return execution.targetLo === null ? '—' : `${execution.targetLo}–${execution.targetHi} bpm`;
 }
 
@@ -318,6 +319,7 @@ export function EpaPanel({ feed = [], log = [], plan = [], loading = false, acce
           <div className="epa-run-head"><div><span className="eyebrow">OSTATNI BIEG</span><h2>{metric(analysis.brief.distanceKm, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <small>km</small></h2></div><div><strong>{pct(execution.hrTargetPct)}</strong><span>czasu w celu HR</span></div></div>
           {executionReady ? <><div className="epa-execution-track" aria-label={`${pct(execution.belowTargetPct)} poniżej, ${pct(execution.hrTargetPct)} w celu, ${pct(execution.aboveTargetPct)} powyżej`}><i style={{ width: `${execution.belowTargetPct}%` }} /><i style={{ width: `${execution.hrTargetPct}%` }} /><i style={{ width: `${execution.aboveTargetPct}%` }} /></div><div className="epa-track-legend"><span>poniżej {pct(execution.belowTargetPct)}</span><span>w celu {pct(execution.hrTargetPct)}</span><span>powyżej {pct(execution.aboveTargetPct)}</span></div></> : <p className="epa-no-chart">{execution.status === 'data-error' ? `BŁĄD ANALIZY HR — ${executionIssue}` : session ? 'BIEG ZAPISANY · analiza celu HR do uzupełnienia.' : 'Brak jednoznacznie wskazanego ostatniego biegu.'}</p>}
           <div className="epa-facts"><div><span>CEL HR</span><strong>{executionTargetLabel(execution)}</strong></div><div><span>RPE</span><strong>{metric(session?.rpe, { maximumFractionDigits: 1 })}/10</strong></div><div><span>NOGI</span><strong>{metric(session?.legFatigue, { maximumFractionDigits: 1 })}/10</strong></div></div>
+          <ExecutionStages stages={execution.targetStages} analysis={execution.stageAnalysis} analyzedDuration={execution.analyzedDuration} />
         </article>
       </section>
 

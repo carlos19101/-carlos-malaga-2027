@@ -128,7 +128,7 @@ export function analyzeTcx(tcxText, options = {}) {
 
 function classifyHeartRate(heartRate, stage) {
   if (stage.min !== null && heartRate < stage.min) return 'below';
-  if (stage.max !== null && heartRate > stage.max) return 'above';
+  if (stage.max !== null && (heartRate > stage.max || (stage.maxExclusive && heartRate === stage.max))) return 'above';
   return 'in';
 }
 
@@ -154,7 +154,21 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
     ...(basis === 'time' ? { durationSeconds: stage.durationSeconds } : { distanceMeters: stage.distanceMeters }),
     min: stage.min, max: stage.max,
     timeInTarget: 0, timeAboveTarget: 0, timeBelowTarget: 0, analyzedDuration: 0,
+    observedDuration: 0, recordedDuration: 0, hrTimeSum: 0, hrMin: null, hrMax: null,
   }));
+  const accumulate = (index, hr, duration) => {
+    const result = results[index];
+    result.recordedDuration += duration;
+    result.hrTimeSum += hr * duration;
+    result.hrMin = result.hrMin === null ? hr : Math.min(hr, result.hrMin);
+    result.hrMax = result.hrMax === null ? hr : Math.max(hr, result.hrMax);
+    if (boundaries[index].mode === 'observe') { result.observedDuration += duration; return; }
+    result.analyzedDuration += duration;
+    const bucket = classifyHeartRate(hr, boundaries[index]);
+    if (bucket === 'below') result.timeBelowTarget += duration;
+    else if (bucket === 'above') result.timeAboveTarget += duration;
+    else result.timeInTarget += duration;
+  };
   let excludedDuration = 0;
   let unmappedDuration = 0;
   let analyzedIntervals = 0;
@@ -208,12 +222,7 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
         unmappedDuration += seconds;
         continue;
       }
-      const result = results[stageIndex];
-      result.analyzedDuration += seconds;
-      const bucket = classifyHeartRate(current.heartRate, boundaries[stageIndex]);
-      if (bucket === 'below') result.timeBelowTarget += seconds;
-      else if (bucket === 'above') result.timeAboveTarget += seconds;
-      else result.timeInTarget += seconds;
+      accumulate(stageIndex, current.heartRate, seconds);
       continue;
     }
     while (cursor < end) {
@@ -229,12 +238,7 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
       const stage = boundaries[stageIndex];
       const span = Math.min(end, stage.end) - cursor;
       const duration = basis === 'time' ? span : fullSpan === 0 ? seconds : seconds * (span / fullSpan);
-      const result = results[stageIndex];
-      result.analyzedDuration += duration;
-      const bucket = classifyHeartRate(current.heartRate, stage);
-      if (bucket === 'below') result.timeBelowTarget += duration;
-      else if (bucket === 'above') result.timeAboveTarget += duration;
-      else result.timeInTarget += duration;
+      accumulate(stageIndex, current.heartRate, duration);
       cursor += span;
     }
   }
@@ -261,7 +265,8 @@ export function analyzeTcxStages(tcxText, stageInput, options = {}) {
     excludedGaps,
     nonPositiveIntervals,
     ...(basis === 'distance' ? { missingDistanceIntervals, nonMonotonicDistanceIntervals } : {}),
-    stageResults: results,
+    observedDuration: results.reduce((sum, result) => sum + result.observedDuration, 0),
+    stageResults: results.map(({ hrTimeSum, ...result }) => ({ ...result, hrAvg: result.recordedDuration > 0 ? hrTimeSum / result.recordedDuration : null })),
   };
 }
 

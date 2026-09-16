@@ -1,5 +1,39 @@
 const { expect, test } = require('playwright/test');
 
+test('obserwowane HR przetrwa odświeżenie i nie zostaje przedstawione jako ocena celu', async ({ page }) => {
+  const { createTcxImport } = await import('../../src/tcxImport.js');
+  const data = structuredClone(tables);
+  const stages = {schema:'carlos.hr-target-stages.v3',stages:[
+    {name:'Baza',durationSeconds:2,min:150,max:165},
+    {name:'Przebieżka',durationSeconds:2,mode:'observe'},
+    {name:'CD',durationSeconds:2,max:150,maxExclusive:true},
+  ]};
+  const source=`<Lap>${[150,165,190,192,150,140,145].map((hr,i)=>`<Trackpoint><Time>2026-08-25T16:55:0${i}Z</Time><HeartRateBpm><Value>${hr}</Value></HeartRateBpm></Trackpoint>`).join('')}</Lap>`;
+  const e=createTcxImport(source,{sessionId:'2026-08-25-run-01',targetStages:stages,sourceSha256:'A'.repeat(64)});
+  const set=(table,key,v)=>table[1][table[0].indexOf(key)]=v;
+  for(const table of [data.log,data.plan]) {
+    set(table,'HR_Target_Min_bpm','');set(table,'HR_Target_Max_bpm','');
+    set(table,'HR_Target_Stages_JSON',e.targetStages);
+  }
+  set(data.log,'HR_Target_Stages_JSON',JSON.stringify({...JSON.parse(e.targetStages),analysis:e.stageAnalysis}));
+  for(const [key,v] of Object.entries(e.atomic))set(data.log,key,v);
+  await page.setViewportSize({width:390,height:844});
+  await openEpa(page,data);
+  await expect(page.locator('.epa-run')).toContainText('75%');
+  await expect(page.locator('.epa-run')).toContainText('Procent dotyczy tylko odcinków z celem HR');
+  await page.getByText('HR poszczególnych odcinków',{exact:true}).click();
+  const observation=page.locator('.execution-stage-scope article').filter({hasText:'Przebieżka'});
+  await expect(observation).toContainText('HR średnie 191');
+  await expect(observation).toContainText('max 192');
+  await expect(observation).not.toContainText('%');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+  await page.reload();await page.getByRole('button',{name:'EPA',exact:true}).click();
+  await expect(page.locator('.epa-run')).toContainText('obserwacja HR: 0:02');
+  await page.getByRole('button',{name:'Pokaż aktualną decyzję',exact:true}).click();
+  await page.locator('.dashboard-last-session').click();
+  await expect(page.getByRole('dialog')).toContainText('Procent dotyczy tylko odcinków z celem HR');
+});
+
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-08-26T12:00:00+02:00'));
 });

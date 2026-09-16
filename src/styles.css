@@ -1427,3 +1427,7 @@ tbody tr:last-child td { border-bottom: 0; }
   .dashboard-detail-grid { grid-template-columns: 1fr; }
   .execution-split-legend { display: grid; grid-template-columns: 1fr; gap: 3px; }
 }
+.execution-stage-scope { margin-top: 14px; font-size: .85rem; line-height: 1.55; overflow-wrap: anywhere; }
+.execution-stage-scope p { margin: 8px 0; }
+.execution-stage-scope summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
+.execution-stage-scope article { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid rgba(255,255,255,.12); }
