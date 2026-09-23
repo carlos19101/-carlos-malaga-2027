@@ -53,6 +53,9 @@ import { EpaPanel } from './EpaPanel';
 import { latestEpaRun } from './epaData';
 import { executionForLogRow, executionIssueMessage, planForLogRow } from './sessionExecution';
 import { ExecutionStages, hasObservedStages, stageTargetLabel } from './ExecutionStages';
+import { JointPlanner } from './JointPlanner.jsx';
+import { RunnaHub } from './RunnaHub.jsx';
+import { RUNNA_REFERENCE_KEY } from './runnaReference.js';
 import './styles.css';
 
 const APPLICATION_TABLE_COUNT = 4;
@@ -1732,15 +1735,16 @@ function PlanCard({ row, now }) {
   );
 }
 
-function Plan({ rows, loading, now }) {
+function Plan({ rows, logRows, loading, now, dataReady, onShowLog }) {
   const dated = useMemo(() => sortedRows(rows.filter((r) => rowDate(r)), 'desc'), [rows]);
   const undated = useMemo(() => rows.filter((r) => !rowDate(r)), [rows]);
   return (
     <>
-      <section className="section-hero"><span className="eyebrow">DROGA DO CELU</span><h1>Plan</h1><p>Mikrocykl jest adaptacyjny. Werdykt Głównego Trenera i regeneracja mogą zmienić wykonanie jednostki bez zmiany celu całego bloku.</p></section>
-      <section className="section-block plan-list">
+      <RunnaHub now={now} onShowLog={onShowLog} />
+      <details className="joint-source-archive"><summary>Plan w arkuszu · układ i propozycje</summary><JointPlanner planRows={rows} logRows={logRows} now={now} dataReady={dataReady} /></details>
+      <details className="joint-source-archive"><summary>Wszystkie wpisy źródłowe Planu</summary><section className="section-block plan-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : dated.map((row, i) => <PlanCard row={row} now={now} key={`${v(row, 'date', '')}-${i}`} />)}
-      </section>
+      </section></details>
       {undated.length ? <section className="section-block"><div className="section-heading"><div><span className="eyebrow">DALEJ</span><h2>Do ustalenia</h2></div></div><div className="plan-list">{undated.map((row, i) => <PlanCard row={row} now={now} key={`u-${i}`} />)}</div></section> : null}
     </>
   );
@@ -1882,6 +1886,7 @@ function App() {
     }
     setLogoutState({ busy: false, error: '' });
     try { localStorage.removeItem(SNAPSHOT_KEY); } catch { /* optional */ }
+    try { localStorage.removeItem(RUNNA_REFERENCE_KEY); } catch { /* optional */ }
     if (inFlight.current) inFlight.current.abort();
     dataRef.current = EMPTY_DATA;
     setData(EMPTY_DATA);
@@ -2069,7 +2074,7 @@ function App() {
         {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />}
         {tab === 'epa' && <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />}
         {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
-        {tab === 'plan' && <Plan rows={data.plan} loading={loading} now={calendarNow} />}
+        {tab === 'plan' && <Plan rows={data.plan} logRows={data.log} loading={loading} now={calendarNow} dataReady={!loading && !errorCount && !fromCache} onShowLog={() => setTab('log')} />}
       </main>
 
       <footer className="app-footer"><span>{APP_VERSION}</span><span>{networkSyncedAt ? `sieć: ${formatDate(new Date(networkSyncedAt), true)}` : 'brak synchronizacji sieciowej'}</span></footer>
