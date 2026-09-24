@@ -13,6 +13,8 @@ async function open(page) {
 test('current Runna dashboard does not fall back to old decision and keeps data warnings',async({page})=>{
   const {errors,writes}=await open(page);
   await expect(page.getByRole('heading',{name:'SPRAWDŹ RUNNĘ',exact:true})).toBeVisible();
+  await expect(page.getByText('DZIŚ BOKS · 20:00–22:00',{exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Stały plan boksu'})).toContainText('Brak kopii Runny');
   await expect(page.getByText('Nie potwierdzono kompletnych, aktualnych danych regeneracji.',{exact:true})).toBeVisible();
   await expect(page.getByText('WERDYKT GŁÓWNEGO TRENERA',{exact:true})).toHaveCount(0);
   await page.getByLabel('Plik kopii planu Runna').setInputFiles({name:'plan.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(copy))});
@@ -25,7 +27,20 @@ test('current Runna dashboard does not fall back to old decision and keeps data 
   await page.getByText('Źródło i ustawienia kopii',{exact:true}).click();
   await page.getByRole('button',{name:'Usuń lokalną kopię'}).click();
   await expect(page.getByRole('heading',{name:'SPRAWDŹ RUNNĘ',exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Stały plan boksu'})).toContainText('Wtorek');
+  await page.getByText('Wykonanie · ostatnie 7 dni',{exact:true}).click();
+  await expect(page.getByText('Brak zapisanych aktywności z ostatnich 7 dni. Snapshot nie zastępuje braku danych zerem.',{exact:true})).toBeVisible();
   expect(errors).toEqual([]);expect(writes).toEqual([]);
+});
+test('same-day Runna and boxing stay separate without automatic rescheduling',async({page})=>{
+  const {writes}=await open(page);
+  const shared=structuredClone(copy);shared.weeks[0].sessions[0].day=3;
+  await page.getByLabel('Plik kopii planu Runna').setInputFiles({name:'plan.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(shared))});
+  await expect(page.getByRole('region',{name:'Stały plan boksu'})).toContainText('Tego dnia także Runna: Bieg tempowy, 8 km');
+  await expect(page.getByRole('article',{name:'Plan Runna 2026-09-24'}).getByRole('button')).toHaveCount(2);
+  await page.getByText('Źródło i ustawienia kopii',{exact:true}).click();
+  await expect(page.getByRole('checkbox',{name:/Pokaż terminy boksu/})).toHaveCount(0);
+  expect(writes).toEqual([]);
 });
 test('old prescriptions remain archived rather than current',async({page})=>{
   await open(page);

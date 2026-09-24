@@ -5,6 +5,7 @@ import { plannerDay } from './jointPlanner.js';
 import { loadRunnaReference, MAX_REFERENCE_BYTES, parseRunnaReference, referenceDays, referencePlanContext, referenceWeekIndex, RUNNA_REFERENCE_KEY, RUNNA_TYPES, serializeRunnaReference } from './runnaReference.js';
 import './runnaHub.css';
 import { isRunnaDate } from './runnaPolicy.js';
+import { BoxingSchedule } from './BoxingSchedule.jsx';
 
 const shortDate = (date, options = { day: 'numeric', month: 'short' }) => new Intl.DateTimeFormat('pl-PL', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 const km = (n) => formatMetricNumber(n, { maximumFractionDigits: 2 });
@@ -52,7 +53,9 @@ export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady
   };
   const index = reference ? Math.max(0, selectedStart ? reference.weeks.findIndex((w) => w.start === selectedStart) : referenceWeekIndex(reference, now)) : 0;
   const week = reference?.weeks[index];
-  const days = week ? referenceDays(week, boxing) : [];
+  const runnaMode = isRunnaDate(now);
+  const showBoxing = runnaMode || boxing;
+  const days = week ? referenceDays(week, showBoxing) : [];
   const next = reference?.weeks.flatMap((w) => w.sessions).find((s) => s.date >= today);
   const changeWeek = (offset) => setSelectedStart(reference.weeks[index + offset].start);
   const snapshotControls = <>
@@ -64,6 +67,7 @@ export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady
     <header className="runna-heading"><div><span className="eyebrow">CARLOS / CENTRUM STEROWANIA</span><h1 id="runna-hub-title">Twój plan.<br /><span>Cały tydzień.</span></h1></div><span className="runna-goal">MÁLAGA 2027<small>7 marca · półmaraton</small></span></header>
     {error ? <p className="runna-message runna-error" role="alert">{error}</p> : null}
     <p className="runna-message" role="status" aria-live="polite">{message}</p>
+    {runnaMode ? <BoxingSchedule day={week?.start || today} reference={reference} /> : null}
     {!reference ? <div className="runna-empty"><span className="eyebrow">RUNNA + BOKS + WYKONANIE</span><h2>Twój plan biegowy<br />ma tutaj swoje miejsce.</h2><p>Wczytaj przygotowany plik JSON z rozpiską. Zobaczysz tygodnie, dystanse i terminy klubu — bez przepisywania treningów.</p>{snapshotControls}<small>Kopia lokalna, nie połączenie z kontem Runna. Nie przyjmujemy tu FIT ani TCX — to pliki wykonania.</small></div> : <>
       <div className="runna-source"><span className="runna-source-dot" />Kopia Runna · {shortDate(reference.capturedOn)}<span>Bez automatycznej synchronizacji</span></div>
       <PlanContext session={next} planRows={planRows} dataReady={dataReady} />
@@ -73,7 +77,7 @@ export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady
           <strong>{next ? title(next) : 'Koniec dostępnej rozpiski'}</strong>
           {next ? <><span className="runna-distance">{km(next.km)}<small>km</small></span><span className="runna-next-footer">{shortDate(next.date, { weekday: 'long', day: 'numeric', month: 'long' })}<b aria-hidden="true">↗</b></span></> : <span>Wczytaj aktualną kopię, aby zobaczyć kolejne sesje.</span>}
         </button>
-        <div className="runna-week-total"><span className="eyebrow">WYBRANY TYDZIEŃ · PLAN, NIE WYKONANIE</span><strong>{km(week.totalKm)}<small> km</small></strong><p>{week.sessions.length} {week.sessions.length === 1 ? 'bieg' : 'sesji biegowych'}{boxing ? ' + 2 terminy boksu' : ''}</p><span>Kilometry biegowe i boks pozostają osobno. Ten układ nie jest oceną gotowości.</span></div>
+        <div className="runna-week-total"><span className="eyebrow">WYBRANY TYDZIEŃ · PLAN, NIE WYKONANIE</span><strong>{km(week.totalKm)}<small> km</small></strong><p>{week.sessions.length} {week.sessions.length === 1 ? 'bieg' : 'sesji biegowych'}{showBoxing ? ' + 2 terminy boksu' : ''}</p><span>Kilometry biegowe i boks pozostają osobno. Ten układ nie jest oceną gotowości.</span></div>
       </div>
       <nav className="runna-week-nav" aria-label="Tygodnie kopii Runna"><button type="button" disabled={index === 0} onClick={() => changeWeek(-1)} aria-label="Poprzedni tydzień Runna">←</button><div><label htmlFor="runna-week">Tydzień</label><select id="runna-week" value={week.start} onChange={(e) => setSelectedStart(e.target.value)}>{reference.weeks.map((w) => <option key={w.start} value={w.start}>{w.number} · {shortDate(w.start)} — {shortDate(w.end)}</option>)}</select></div><button type="button" disabled={index === reference.weeks.length - 1} onClick={() => changeWeek(1)} aria-label="Następny tydzień Runna">→</button></nav>
       {!(week.start <= today && today <= week.end) ? <div className="runna-away"><span>{today > week.end ? 'Przeglądasz wcześniejszy tydzień.' : 'Przeglądasz przyszły tydzień.'}</span><button type="button" onClick={() => setSelectedStart(null)}>Wróć do bieżącej daty</button></div> : null}
@@ -82,7 +86,7 @@ export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady
         <div>{day.sessions.map((session) => <button type="button" key={session.id} className={`runna-session runna-kind-${session.type}`} onClick={() => setSelected(session)}><span className="runna-session-source">{session.source === 'reference' ? 'RUNNA · KOPIA' : 'STAŁY TERMIN'}</span><strong>{title(session)}</strong><span>{session.type === 'boxing' ? `${session.start}–${session.end}` : `${km(session.km)} km`}</span><i aria-hidden="true">↗</i></button>)}{!day.sessions.length ? <p className="runna-no-session">Brak sesji w kopii</p> : null}</div>
       </article>)}</div>
       <details className="runna-roadmap"><summary>Droga do startu <span>{reference.weeks.length} dostępnych tygodni</span></summary><p>Planowane kilometry · kliknij słupek, aby wybrać tydzień. Brakujących tygodni nie zastępujemy zerem.</p><div className="runna-bars">{reference.weeks.map((w) => <button key={w.start} type="button" aria-label={`Tydzień ${w.number}, ${km(w.totalKm)} km`} aria-pressed={w.start === week.start} onClick={() => setSelectedStart(w.start)}><span className="runna-bar-track"><i style={{ height: `${w.totalKm / Math.max(...reference.weeks.map((x) => x.totalKm)) * 100}%` }} /></span><small>{w.number}</small></button>)}</div></details>
-      <details className="runna-settings"><summary>Źródło i ustawienia kopii</summary><p>{reference.title} · {reference.sourceLabel} · data kopii {reference.capturedOn}. Zmiana planu w Runna nie zmieni tego widoku, dopóki nie wczytasz nowszej kopii.</p><label><input type="checkbox" checked={boxing} onChange={(e) => setBoxing(e.target.checked)} /> Pokaż terminy boksu we wtorki i czwartki 20:00–22:00</label><p>Stały termin nie potwierdza obecności. Wykonanie sprawdzaj w Logu. Nie łączymy automatycznie aktywności z treningiem tylko na podstawie daty.</p><p>Ta kopia jest przechowywana wyłącznie w przeglądarce. Wylogowanie usuwa ją z tego urządzenia. Zachowaj plik do ponownego wczytania.</p><div className="runna-settings-actions">{snapshotControls}<button type="button" onClick={remove}>Usuń lokalną kopię</button></div></details>
+      <details className="runna-settings"><summary>Źródło i ustawienia kopii</summary><p>{reference.title} · {reference.sourceLabel} · data kopii {reference.capturedOn}. Zmiana planu w Runna nie zmieni tego widoku, dopóki nie wczytasz nowszej kopii.</p>{runnaMode ? <p>Stały boks: każdy wtorek i czwartek 20:00–22:00. Zmiana kopii Runny nie usuwa terminów klubu.</p> : <label><input type="checkbox" checked={boxing} onChange={(e) => setBoxing(e.target.checked)} /> Pokaż terminy boksu we wtorki i czwartki 20:00–22:00</label>}<p>Stały termin nie potwierdza obecności. Wykonanie sprawdzaj w Logu. Nie łączymy automatycznie aktywności z treningiem tylko na podstawie daty.</p><p>Ta kopia jest przechowywana wyłącznie w przeglądarce. Wylogowanie usuwa ją z tego urządzenia. Zachowaj plik do ponownego wczytania.</p><div className="runna-settings-actions">{snapshotControls}<button type="button" onClick={remove}>Usuń lokalną kopię</button></div></details>
     </>}
     {onShowLog ? <button type="button" className="runna-log-link" onClick={onShowLog}><span>WYKONANIE I FEEDBACK<strong>Sprawdź zapisane treningi</strong></span><span aria-hidden="true">↗</span></button> : null}
     <DashboardDrawer open={!!selected} onClose={() => setSelected(null)} id="runna-session-title" eyebrow={selected?.source === 'appointment' ? 'TERMIN KLUBU · NIE POTWIERDZENIE OBECNOŚCI' : 'RUNNA · SZCZEGÓŁY KOPII'} title={selected ? title(selected) : ''} className="runna-detail">

@@ -1,4 +1,16 @@
 .runna-hub { --rh-accent:#c9f466; --rh-muted:#aeb4be; margin-bottom:28px; color:#f5f6f8; }
+.runna-boxing { margin:18px 0; padding:20px; border:1px solid #635262; border-radius:20px; background:#211e25; }
+.runna-boxing h2 { margin:8px 0; font-size:1.4rem; }
+.runna-boxing p, .runna-boxing small { color:#c2bac6; font-size:.8rem; line-height:1.6; }
+.runna-boxing-slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.runna-boxing-slots article { padding:14px; border:1px solid #594a59; border-radius:12px; min-width:0; }
+.runna-boxing-slots strong, .runna-boxing-slots span { display:block; line-height:1.6; }
+.runna-boxing-slots span { font-size:.8rem; color:#e0c7dc; }
+.runna-boxing-today { margin:18px auto 8px; padding:16px; max-width:520px; border:1px solid #635262; border-radius:16px; background:#211e25; }
+.runna-boxing-today b, .runna-boxing-today span { display:block; line-height:1.6; }
+.runna-boxing-today b { color:#efd7ec; font-size:1rem; }
+.runna-boxing-today span { font-size:.8rem; color:#c2bac6; }
+@media(max-width:640px) { .runna-boxing-slots { grid-template-columns:1fr; } }
 .runna-hub *, .runna-detail * { box-sizing:border-box; }
 .runna-hub button, .runna-hub select { font:inherit; }
 .runna-hub button { cursor:pointer; }

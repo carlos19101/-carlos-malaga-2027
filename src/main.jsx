@@ -1753,13 +1753,14 @@ function Plan({ rows, logRows, loading, now, dataReady, onShowLog }) {
   );
 }
 
-function RunnaDashboard({ feed, log, raw, now, ...props }) {
+function RunnaDashboard({ feed, log, raw, plan, now, ...props }) {
   const row = latestRow(feed);
   const validation = validateFeed(row, resolveWeight(row, raw, now)?.value || '');
   const endDate = v(row, 'date', '') || now;
   const mismatches = crossValidate(computeVerifierMetrics(verifierTrainingRecords(log), verifierWeightRecords(raw), endDate), verifierFeedMetrics(row));
   const issues = auditTrainingLogTimes(log.map(r => ({ date: v(r, 'date', ''), time: v(r, 'logTime', ''), name: v(r, 'logName', ''), requiresTimestamp: isRunLogRow(r) })));
-  return <RunnaToday {...props} feed={feed} now={now} validation={validation} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} />;
+  const snapshot = computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now);
+  return <RunnaToday {...props} feed={feed} now={now} validation={validation} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} activitySummary={<details className="joint-source-archive"><summary>Wykonanie · ostatnie 7 dni</summary><p className="method-note">Źródło: zapisany Training Log, nie terminy kalendarza ani sama lista pobrana ze Stravy. Nowe cele Runny nie są jeszcze powiązane z wykonaniem.</p><WeeklySnapshot snapshot={snapshot} /></details>} />;
 }
 
 function App() {
@@ -2083,7 +2084,7 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} now={calendarNow} freshnessState={freshness.state} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
+        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} plan={data.plan} now={calendarNow} freshnessState={freshness.state} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
         {tab === 'epa' && (isRunnaDate(calendarNow) ? <><section className="section-hero"><span className="eyebrow">EPA · ARCHIWUM</span><h1>Jeden plan. Runna.</h1><p>Sztab CARLOS nie wydaje konkurencyjnych zaleceń biegowych. Bieżące wykonanie, feedback i porównanie Stravy znajdziesz w Logu.</p><button type="button" onClick={() => setTab('log')}>Pokaż wykonanie</button></section><details className="joint-source-archive"><summary>Analizy historyczne do 23.09 — nie zalecenia na dziś</summary><EpaPanel feed={data.feed.filter(r => !isRunnaSession(r))} log={data.log.filter(r => !isRunnaSession(r))} plan={data.plan.filter(r => !isRunnaSession(r))} loading={loading} access={feedbackAccess} now={new Date('2026-09-23T12:00:00+02:00')} onShowDecision={() => setTab('dashboard')} /></details></> : <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />)}
         {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} logRows={data.log} loading={loading} now={calendarNow} dataReady={!loading && !errorCount && !fromCache} onShowLog={() => setTab('log')} />}
