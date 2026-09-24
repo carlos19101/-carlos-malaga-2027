@@ -1,5 +1,7 @@
 # Centrum sterowania — kopia planu Runna V1
 
+Aktualizacja 24.09: dla nowych biegów obowiązuje [Runna mode](runna-mode-v1.md). Opisana niżej nadrzędność arkusza i propozycje JointPlanner dotyczą wyłącznie trybu historycznego sprzed 24.09; nie są już bieżącą polityką.
+
 Zakładka Plan pokazuje tygodniowy kalendarz biegów z kopii dostarczonej przez użytkownika, stałe terminy boksu i przejście do istniejącego Logu. Pełna instrukcja jednostki nadal znajduje się w Runna. Nie jest to integracja z kontem ani importer FIT/TCX.
 
 ## Granice danych

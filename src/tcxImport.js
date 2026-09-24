@@ -2,8 +2,21 @@ import { isNullish, normalize, parseDate, parseNumber } from './parse.js';
 import { stringifyHrTargetStages, tryParseHrTargetStages, HR_TARGET_OBSERVATION_SCHEMA } from './hrTargetStages.js';
 import { createStageAnalysis, validateStageAnalysis } from './stageAnalysis.js';
 import { analyzeTcx, analyzeTcxStages, formatTcxActivityTiming } from './tcx.js';
+import { isRunnaDate, RUNNA_TARGET_PENDING } from './runnaPolicy.js';
 
 export const TCX_IMPORT_SCHEMA = 'carlos.tcx-import.v1';
+
+// Target-scored running imports require a server-verifiable Runna target after cutover.
+// A client label or a same-day legacy Plan row cannot grant that provenance.
+export function runnaTcxConflict(table = {}, sessionId = '') {
+  const headers = table.headers || [];
+  const idIndex = headers.findIndex(h => normalize(h).replace(/[_\s]/g, '') === 'sessionid');
+  const dateIndex = headers.findIndex(h => ['date','data'].includes(normalize(h)));
+  if (idIndex < 0 || dateIndex < 0) return null;
+  const matches = (table.rows || []).filter(r => String(r.values?.[idIndex] ?? '').trim() === String(sessionId).trim());
+  return matches.some(r => isRunnaDate(r.values?.[dateIndex]))
+    ? { action: 'conflict', sessionId, reason: RUNNA_TARGET_PENDING, conflicts: [] } : null;
+}
 export const TCX_STAGED_IMPORT_SCHEMA = 'carlos.tcx-import.v2';
 export const TCX_DISTANCE_STAGED_IMPORT_SCHEMA = 'carlos.tcx-import.v3';
 export const TCX_OBSERVATION_IMPORT_SCHEMA = 'carlos.tcx-import.v4';
@@ -296,6 +309,8 @@ function resolveTimingUpdate(headers, row, timing) {
 }
 
 export function resolveTcxTarget(table = {}, sessionIdValue = '') {
+  const policyConflict = runnaTcxConflict(table, sessionIdValue);
+  if (policyConflict) return policyConflict;
   const sessionId = String(sessionIdValue ?? '').trim();
   const headers = Array.isArray(table.headers) ? table.headers : [];
   const rows = Array.isArray(table.rows) ? table.rows : [];
@@ -328,6 +343,8 @@ export function resolveTcxTarget(table = {}, sessionIdValue = '') {
 }
 
 export function resolvePlanStagedTarget(logTable = {}, planTable = {}, sessionIdValue = '') {
+  const policyConflict = runnaTcxConflict(logTable, sessionIdValue);
+  if (policyConflict) return policyConflict;
   const sessionId = String(sessionIdValue ?? '').trim();
   const logHeaders = Array.isArray(logTable.headers) ? logTable.headers : [];
   const logRows = Array.isArray(logTable.rows) ? logTable.rows : [];
@@ -376,6 +393,8 @@ export function resolvePlanStagedTarget(logTable = {}, planTable = {}, sessionId
 }
 
 export function reconcileTcxImport(table = {}, envelope = {}, options = {}) {
+  const policyConflict = runnaTcxConflict(table, envelope.sessionId);
+  if (policyConflict) return policyConflict;
   const validation = validateTcxImportEnvelope(envelope);
   if (validation.action !== 'valid') return validation;
   const staged = isStagedTcxImportSchema(validation.envelope.schema);

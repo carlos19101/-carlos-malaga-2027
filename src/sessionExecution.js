@@ -3,10 +3,12 @@ import { A } from './schema.js';
 import { computeExecution } from './metrics.js';
 import { tryParseHrTargetStages } from './hrTargetStages.js';
 import { progressDay, progressNumber } from './progressReport.js';
+import { isRunnaSession, RUNNA_TARGET_PENDING } from './runnaPolicy.js';
 
 const epaValue = (row, field) => exactValue(row || {}, A[field] || [], '');
 
 export function planCandidatesForLogRow(plan = [], row) {
+  if (isRunnaSession(row)) return [];
   const day = row ? progressDay(epaValue(row, 'date')) : null;
   return day === null ? [] : plan.filter((entry) => progressDay(epaValue(entry, 'date')) === day);
 }
@@ -17,6 +19,7 @@ export function planForLogRow(plan = [], row) {
 }
 
 export function executionIssueMessage(execution = {}) {
+  if (execution.planState === 'runna-target-pending') return RUNNA_TARGET_PENDING;
   if (execution.planState === 'ambiguous') return `Plan: ${execution.planMatchCount} wpisy dla ${execution.planDate}. Ustal jeden cel tej sesji przed analizą TCX.`;
   if (execution.planState === 'target-conflict') return 'Cel HR w Training Log różni się od Planu. Wyjaśnij cel użyty do analizy przed ponownym importem TCX.';
   if (execution.planState === 'invalid-target') return `${execution.targetSource}: nieprawidłowy zakres lub zapis etapów HR.`;
@@ -38,6 +41,7 @@ function target(row, prefix) {
 
 export function executionForLogRow(row, plan = []) {
   if (!row) return { ...computeExecution(), planState: 'missing' };
+  if (isRunnaSession(row)) return { ...computeExecution(), status: 'no-target', planState: 'runna-target-pending' };
   const matches = planCandidatesForLogRow(plan, row);
   const planDate = String(epaValue(row, 'date'));
   if (matches.length > 1) return { ...computeExecution(), status: 'data-error', planState: 'ambiguous', planDate, planMatchCount: matches.length };

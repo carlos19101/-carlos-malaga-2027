@@ -55,6 +55,8 @@ import { executionForLogRow, executionIssueMessage, planForLogRow } from './sess
 import { ExecutionStages, hasObservedStages, stageTargetLabel } from './ExecutionStages';
 import { JointPlanner } from './JointPlanner.jsx';
 import { RunnaHub } from './RunnaHub.jsx';
+import { RunnaToday } from './RunnaToday.jsx';
+import { isRunnaDate, isRunnaSession, RUNNA_TARGET_PENDING } from './runnaPolicy.js';
 import { RUNNA_REFERENCE_KEY } from './runnaReference.js';
 import './styles.css';
 
@@ -1379,6 +1381,7 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
 function TcxImportPanel({ rows, access, onSubmit }) {
   const eligible = useMemo(() => sortedRows(rows, 'desc').filter((row) => (
     isRunLogRow(row)
+    && !isRunnaSession(row)
     && v(row, 'logSessionId', '')
     && tcxStatusForRow(row).validTarget
     && (!tcxStatusForRow(row).complete || !v(row, 'logTime', ''))
@@ -1672,14 +1675,14 @@ function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFe
   return (
     <>
       <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, mobilizacja, recovery i boks są liczone osobno jako realne obciążenie systemu.</p></section>
-      <PostRunCompletionPanel
+      {isRunnaSession(feedbackTarget) ? <div className="data-quality-banner"><strong>Wykonanie Runna · zapis i ocena celu to osobne rzeczy</strong><span>{RUNNA_TARGET_PENDING}</span><span>Feedback: {feedbackStatus.complete ? 'zapisany' : 'do uzupełnienia'}. Nie oznaczamy sesji jako w pełni rozliczonej z planem.</span>{feedbackStatus.complete ? <button type="button" onClick={() => setEditingFeedback(current => !current)}>{editingFeedback ? 'Zamknij edycję' : 'Popraw ocenę'}</button> : null}</div> : <PostRunCompletionPanel
         target={feedbackTarget}
         feedbackStatus={feedbackStatus}
         tcxStatus={tcxStatus}
         tcxRequired={tcxRequired}
         editingFeedback={editingFeedback}
         onEditFeedback={() => setEditingFeedback((current) => !current)}
-      />
+      />}
       {feedbackTarget && (!feedbackStatus.complete || editingFeedback) ? (
         <FeedbackPanel
           target={feedbackTarget}
@@ -1741,13 +1744,22 @@ function Plan({ rows, logRows, loading, now, dataReady, onShowLog }) {
   return (
     <>
       <RunnaHub now={now} onShowLog={onShowLog} planRows={rows} dataReady={dataReady} />
-      <details className="joint-source-archive"><summary>Plan w arkuszu · układ i propozycje</summary><JointPlanner planRows={rows} logRows={logRows} now={now} dataReady={dataReady} /></details>
+      {!isRunnaDate(now) ? <details className="joint-source-archive"><summary>Plan w arkuszu · układ i propozycje</summary><JointPlanner planRows={rows} logRows={logRows} now={now} dataReady={dataReady} /></details> : <p className="muted-copy">Runna ustala biegi od 24.09. Poniższy arkusz jest archiwum i kontekstem boksu — nie alternatywnym planem biegowym.</p>}
       <details className="joint-source-archive"><summary>Wszystkie wpisy źródłowe Planu</summary><section className="section-block plan-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : dated.map((row, i) => <PlanCard row={row} now={now} key={`${v(row, 'date', '')}-${i}`} />)}
       </section></details>
       {undated.length ? <section className="section-block"><div className="section-heading"><div><span className="eyebrow">DALEJ</span><h2>Do ustalenia</h2></div></div><div className="plan-list">{undated.map((row, i) => <PlanCard row={row} now={now} key={`u-${i}`} />)}</div></section> : null}
     </>
   );
+}
+
+function RunnaDashboard({ feed, log, raw, now, ...props }) {
+  const row = latestRow(feed);
+  const validation = validateFeed(row, resolveWeight(row, raw, now)?.value || '');
+  const endDate = v(row, 'date', '') || now;
+  const mismatches = crossValidate(computeVerifierMetrics(verifierTrainingRecords(log), verifierWeightRecords(raw), endDate), verifierFeedMetrics(row));
+  const issues = auditTrainingLogTimes(log.map(r => ({ date: v(r, 'date', ''), time: v(r, 'logTime', ''), name: v(r, 'logName', ''), requiresTimestamp: isRunLogRow(r) })));
+  return <RunnaToday {...props} feed={feed} now={now} validation={validation} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} />;
 }
 
 function App() {
@@ -2071,8 +2083,8 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />}
-        {tab === 'epa' && <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />}
+        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} now={calendarNow} freshnessState={freshness.state} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
+        {tab === 'epa' && (isRunnaDate(calendarNow) ? <><section className="section-hero"><span className="eyebrow">EPA · ARCHIWUM</span><h1>Jeden plan. Runna.</h1><p>Sztab CARLOS nie wydaje konkurencyjnych zaleceń biegowych. Bieżące wykonanie, feedback i porównanie Stravy znajdziesz w Logu.</p><button type="button" onClick={() => setTab('log')}>Pokaż wykonanie</button></section><details className="joint-source-archive"><summary>Analizy historyczne do 23.09 — nie zalecenia na dziś</summary><EpaPanel feed={data.feed.filter(r => !isRunnaSession(r))} log={data.log.filter(r => !isRunnaSession(r))} plan={data.plan.filter(r => !isRunnaSession(r))} loading={loading} access={feedbackAccess} now={new Date('2026-09-23T12:00:00+02:00')} onShowDecision={() => setTab('dashboard')} /></details></> : <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />)}
         {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} logRows={data.log} loading={loading} now={calendarNow} dataReady={!loading && !errorCount && !fromCache} onShowLog={() => setTab('log')} />}
       </main>

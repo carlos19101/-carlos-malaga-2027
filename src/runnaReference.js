@@ -9,7 +9,8 @@ export const MAX_REFERENCE_BYTES = 100000;
 const fail = (message) => { throw new Error(message); };
 const cleanText = (value, max = 100) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 
-// A reference is neither an API connection nor the canonical training Plan.
+// A local snapshot is not an API connection. Runna's authority is prospective;
+// this snapshot alone does not provide full targets or server-verifiable linking.
 // Rebuild the accepted object: never retain unknown fields from an imported file.
 export function parseRunnaReference(input) {
   if (typeof input !== 'string' || input.length > MAX_REFERENCE_BYTES) fail('Plik jest za duży lub nie zawiera tekstu JSON.');

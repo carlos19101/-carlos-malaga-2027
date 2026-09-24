@@ -4,12 +4,14 @@ import { formatMetricNumber } from './parse.js';
 import { plannerDay } from './jointPlanner.js';
 import { loadRunnaReference, MAX_REFERENCE_BYTES, parseRunnaReference, referenceDays, referencePlanContext, referenceWeekIndex, RUNNA_REFERENCE_KEY, RUNNA_TYPES, serializeRunnaReference } from './runnaReference.js';
 import './runnaHub.css';
+import { isRunnaDate } from './runnaPolicy.js';
 
 const shortDate = (date, options = { day: 'numeric', month: 'short' }) => new Intl.DateTimeFormat('pl-PL', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 const km = (n) => formatMetricNumber(n, { maximumFractionDigits: 2 });
 const title = (session) => session.type === 'boxing' ? 'Boks klubowy' : RUNNA_TYPES[session.type];
 
 function PlanContext({ session, planRows, dataReady }) {
+  if (session?.source === 'reference' && isRunnaDate(session.date)) return <aside className="runna-plan-context" aria-label="Źródło planu Runna"><strong>Runna jest źródłem planu biegowego</strong><p>Od 24.09 stary Plan CARLOS nie zmienia tej jednostki. Kopia zawiera typ, datę i dystans — pełne tempo, odcinki i przerwy sprawdź w Runna.</p><p>Nie oceniamy wykonania względem dawnych celów HR lub dystansu z arkusza. Powiązanie pełnego celu Runny z importem wykonania jest jeszcze niedostępne.</p></aside>;
   const context = referencePlanContext(session, planRows, dataReady);
   if (!context) return null;
   const headings = { unavailable: 'Nie potwierdzono aktualnego Planu', ambiguous: `Plan do wyjaśnienia · ${context.entries.length} wpisy na ten dzień`, unlinked: 'Porównaj z aktualnym Planem', missing: 'Brak powiązanego celu w Planie', unknown: 'Nie można potwierdzić celu w Planie' };
@@ -21,7 +23,7 @@ function PlanContext({ session, planRows, dataReady }) {
   </aside>;
 }
 
-export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady = false }) {
+export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady = false, onReferenceChange }) {
   const [initial] = useState(() => { try { return loadRunnaReference(window.localStorage); } catch { return { reference: null, error: 'Lokalna pamięć jest niedostępna w tej przeglądarce.' }; } });
   const [reference, setReference] = useState(initial.reference);
   const [error, setError] = useState(initial.error);
@@ -40,12 +42,12 @@ export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady
       const next = parseRunnaReference(await file.text());
       // Commit only after validation and successful persistence. Keep previous copy on failure.
       localStorage.setItem(RUNNA_REFERENCE_KEY, serializeRunnaReference(next));
-      setReference(next); setSelectedStart(null); setSelected(null); setError('');
+      setReference(next); onReferenceChange?.(next); setSelectedStart(null); setSelected(null); setError('');
       setMessage('Wczytano kopię na tym urządzeniu. Arkusz i Runna pozostają bez zmian.');
     } catch (e) { setError(e.name === 'QuotaExceededError' || e.name === 'SecurityError' ? 'Przeglądarka nie pozwala zapisać kopii. Poprzedni plan pozostaje bez zmian.' : e.message); }
   };
   const remove = () => {
-    try { localStorage.removeItem(RUNNA_REFERENCE_KEY); setReference(null); setSelected(null); setSelectedStart(null); setError(''); setMessage('Usunięto tylko lokalną kopię planu.'); }
+    try { localStorage.removeItem(RUNNA_REFERENCE_KEY); setReference(null); onReferenceChange?.(null); setSelected(null); setSelectedStart(null); setError(''); setMessage('Usunięto tylko lokalną kopię planu.'); }
     catch { setError('Nie udało się usunąć lokalnej kopii.'); }
   };
   const index = reference ? Math.max(0, selectedStart ? reference.weeks.findIndex((w) => w.start === selectedStart) : referenceWeekIndex(reference, now)) : 0;
@@ -85,7 +87,7 @@ export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady
     {onShowLog ? <button type="button" className="runna-log-link" onClick={onShowLog}><span>WYKONANIE I FEEDBACK<strong>Sprawdź zapisane treningi</strong></span><span aria-hidden="true">↗</span></button> : null}
     <DashboardDrawer open={!!selected} onClose={() => setSelected(null)} id="runna-session-title" eyebrow={selected?.source === 'appointment' ? 'TERMIN KLUBU · NIE POTWIERDZENIE OBECNOŚCI' : 'RUNNA · SZCZEGÓŁY KOPII'} title={selected ? title(selected) : ''} className="runna-detail">
       <PlanContext session={selected} planRows={planRows} dataReady={dataReady} />
-      {selected ? <><p>{shortDate(selected.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><div className="runna-detail-value">{selected.type === 'boxing' ? `${selected.start}–${selected.end}` : `${km(selected.km)} km`}</div>{selected.type === 'boxing' ? <p>Godziny planowane, nie zarejestrowany czas treningu. Aktywność z pasa i krótki feedback potwierdzą wykonanie; tętno nie określa rodzaju ćwiczeń ani sparingu.</p> : <><h3>Pełna instrukcja: w Runna</h3><p>W przesłanej rozpisce jest typ i dystans. Nie ma tempa, powtórzeń, przerw ani etapów HR. Nie wyznaczamy ich ze zrzutu tygodnia.</p><div className="runna-missing"><span>Tempo <b>Brak w kopii</b></span><span>Etapy i przerwy <b>Brak w kopii</b></span><span>Cel HR <b>Brak w kopii</b></span></div><p>Przed treningiem otwórz jego pełną instrukcję w Runna. Ten podgląd nie zmienia zatwierdzonego Planu w arkuszu ani celu używanego przez analizę TCX.</p></>}<p className="runna-detail-note">Status wykonania nie jest przypisany do tej kopii. Sam upływ daty nie oznacza ukończenia treningu.</p></> : null}
+      {selected ? <><p>{shortDate(selected.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><div className="runna-detail-value">{selected.type === 'boxing' ? `${selected.start}–${selected.end}` : `${km(selected.km)} km`}</div>{selected.type === 'boxing' ? <p>Godziny planowane, nie zarejestrowany czas treningu. Aktywność z pasa i krótki feedback potwierdzą wykonanie; tętno nie określa rodzaju ćwiczeń ani sparingu.</p> : <><h3>Pełna instrukcja: w Runna</h3><p>W przesłanej rozpisce jest typ i dystans. Nie ma tempa, powtórzeń, przerw ani etapów HR. Nie wyznaczamy ich ze zrzutu tygodnia.</p><div className="runna-missing"><span>Tempo <b>Brak w kopii</b></span><span>Etapy i przerwy <b>Brak w kopii</b></span><span>Cel HR <b>Brak w kopii</b></span></div><p>Przed treningiem otwórz jego pełną instrukcję w Runna. {isRunnaDate(selected.date) ? 'Od 24.09 Runna jest źródłem celu. Nie używamy dawnych celów z arkusza do oceny tego biegu. Pełny cel Runny nie jest jeszcze powiązany z importem TCX.' : 'Ten podgląd nie zmienia historycznego celu używanego przez analizę TCX.'}</p></>}<p className="runna-detail-note">Status wykonania nie jest przypisany do tej kopii. Sam upływ daty nie oznacza ukończenia treningu.</p></> : null}
     </DashboardDrawer>
   </section>;
 }
