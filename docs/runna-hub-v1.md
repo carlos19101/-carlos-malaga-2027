@@ -16,6 +16,8 @@ Zakładka Plan pokazuje tygodniowy kalendarz biegów z kopii dostarczonej przez 
 
 ## Interakcje i dostępność
 
+Porównanie źródeł: nad najbliższą jednostką i w jej panelu pokazujemy wszystkie wpisy Planu na tę datę. Dwa lub więcej wierszy daje jawny stan niejednoznaczności. Jedna data ani zgodny tytuł nie tworzą automatycznego powiązania. Kopia Runny nie jest decyzją dnia i nie zastępuje późniejszej korekty z arkusza. Błąd odczytu/kopia cache blokuje przedstawianie źródła jako aktualnego; brak dopasowania i nieczytelne daty są osobnymi stanami.
+
 Wybór tygodnia, wykres kilometrażu, klikane sesje i panel szczegółów. Na telefonie dni są pionową listą, na szerokim ekranie siedmioma kolumnami. Panel wykorzystuje istniejący DashboardDrawer. Przewidziano focus-visible, Escape, etykiety i reduced-motion. Kolory oznaczają typy treningów, nie ocenę stanu zdrowia.
 
 ## Weryfikacja

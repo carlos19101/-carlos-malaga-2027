@@ -2,14 +2,26 @@ import React, { useRef, useState } from 'react';
 import { DashboardDrawer } from './dashboardUi.jsx';
 import { formatMetricNumber } from './parse.js';
 import { plannerDay } from './jointPlanner.js';
-import { loadRunnaReference, MAX_REFERENCE_BYTES, parseRunnaReference, referenceDays, referenceWeekIndex, RUNNA_REFERENCE_KEY, RUNNA_TYPES, serializeRunnaReference } from './runnaReference.js';
+import { loadRunnaReference, MAX_REFERENCE_BYTES, parseRunnaReference, referenceDays, referencePlanContext, referenceWeekIndex, RUNNA_REFERENCE_KEY, RUNNA_TYPES, serializeRunnaReference } from './runnaReference.js';
 import './runnaHub.css';
 
 const shortDate = (date, options = { day: 'numeric', month: 'short' }) => new Intl.DateTimeFormat('pl-PL', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
 const km = (n) => formatMetricNumber(n, { maximumFractionDigits: 2 });
 const title = (session) => session.type === 'boxing' ? 'Boks klubowy' : RUNNA_TYPES[session.type];
 
-export function RunnaHub({ now = new Date(), onShowLog }) {
+function PlanContext({ session, planRows, dataReady }) {
+  const context = referencePlanContext(session, planRows, dataReady);
+  if (!context) return null;
+  const headings = { unavailable: 'Nie potwierdzono aktualnego Planu', ambiguous: `Plan do wyjaśnienia · ${context.entries.length} wpisy na ten dzień`, unlinked: 'Porównaj z aktualnym Planem', missing: 'Brak powiązanego celu w Planie', unknown: 'Nie można potwierdzić celu w Planie' };
+  return <aside className="runna-plan-context" aria-label="Porównanie Runna z Planem">
+    <strong>{headings[context.state]}</strong>
+    <p>{shortDate(session.date)} · kopia Runny nie jest decyzją dnia. Plan w arkuszu może zawierać późniejsze korekty.</p>
+    {context.entries.map((entry) => <div key={entry.row}><small>PLAN · WIERSZ {entry.row}{entry.status ? ` · ${entry.status}` : ''}</small>{entry.titles.length ? entry.titles.map((name, i) => <p key={i}>{name}</p>) : <p>Brak nazwy jednostki</p>}{entry.hr ? <small>Cel HR z Planu: {entry.hr}</small> : null}</div>)}
+    <p>{context.state === 'unavailable' ? 'Odśwież źródło przed porównaniem.' : context.state === 'ambiguous' ? 'Nie wybieramy jednego wpisu ani nie zastępujemy go rozpiską Runny. Najpierw wyjaśnij, który cel obowiązuje.' : context.state === 'missing' ? 'Nie przeniesiono celu z Runny do arkusza. Nie oceniaj wykonania względem domyślnego celu.' : context.state === 'unknown' ? 'Część wierszy nie ma czytelnej daty. Nie oznacza to pustego planu.' : 'Wspólna data nie potwierdza zgodności. To porównanie, nie automatyczne powiązanie sesji.'}</p>
+  </aside>;
+}
+
+export function RunnaHub({ now = new Date(), onShowLog, planRows = [], dataReady = false }) {
   const [initial] = useState(() => { try { return loadRunnaReference(window.localStorage); } catch { return { reference: null, error: 'Lokalna pamięć jest niedostępna w tej przeglądarce.' }; } });
   const [reference, setReference] = useState(initial.reference);
   const [error, setError] = useState(initial.error);
@@ -52,6 +64,7 @@ export function RunnaHub({ now = new Date(), onShowLog }) {
     <p className="runna-message" role="status" aria-live="polite">{message}</p>
     {!reference ? <div className="runna-empty"><span className="eyebrow">RUNNA + BOKS + WYKONANIE</span><h2>Twój plan biegowy<br />ma tutaj swoje miejsce.</h2><p>Wczytaj przygotowany plik JSON z rozpiską. Zobaczysz tygodnie, dystanse i terminy klubu — bez przepisywania treningów.</p>{snapshotControls}<small>Kopia lokalna, nie połączenie z kontem Runna. Nie przyjmujemy tu FIT ani TCX — to pliki wykonania.</small></div> : <>
       <div className="runna-source"><span className="runna-source-dot" />Kopia Runna · {shortDate(reference.capturedOn)}<span>Bez automatycznej synchronizacji</span></div>
+      <PlanContext session={next} planRows={planRows} dataReady={dataReady} />
       <div className="runna-overview">
         <button type="button" className={`runna-next runna-kind-${next?.type || 'none'}`} onClick={() => { if (next) setSelected(next); }} disabled={!next}>
           <span className="eyebrow">{next?.date === today ? 'DZISIAJ W KOPII PLANU' : 'NAJBLIŻSZY BIEG W KOPII'}</span>
@@ -71,6 +84,7 @@ export function RunnaHub({ now = new Date(), onShowLog }) {
     </>}
     {onShowLog ? <button type="button" className="runna-log-link" onClick={onShowLog}><span>WYKONANIE I FEEDBACK<strong>Sprawdź zapisane treningi</strong></span><span aria-hidden="true">↗</span></button> : null}
     <DashboardDrawer open={!!selected} onClose={() => setSelected(null)} id="runna-session-title" eyebrow={selected?.source === 'appointment' ? 'TERMIN KLUBU · NIE POTWIERDZENIE OBECNOŚCI' : 'RUNNA · SZCZEGÓŁY KOPII'} title={selected ? title(selected) : ''} className="runna-detail">
+      <PlanContext session={selected} planRows={planRows} dataReady={dataReady} />
       {selected ? <><p>{shortDate(selected.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p><div className="runna-detail-value">{selected.type === 'boxing' ? `${selected.start}–${selected.end}` : `${km(selected.km)} km`}</div>{selected.type === 'boxing' ? <p>Godziny planowane, nie zarejestrowany czas treningu. Aktywność z pasa i krótki feedback potwierdzą wykonanie; tętno nie określa rodzaju ćwiczeń ani sparingu.</p> : <><h3>Pełna instrukcja: w Runna</h3><p>W przesłanej rozpisce jest typ i dystans. Nie ma tempa, powtórzeń, przerw ani etapów HR. Nie wyznaczamy ich ze zrzutu tygodnia.</p><div className="runna-missing"><span>Tempo <b>Brak w kopii</b></span><span>Etapy i przerwy <b>Brak w kopii</b></span><span>Cel HR <b>Brak w kopii</b></span></div><p>Przed treningiem otwórz jego pełną instrukcję w Runna. Ten podgląd nie zmienia zatwierdzonego Planu w arkuszu ani celu używanego przez analizę TCX.</p></>}<p className="runna-detail-note">Status wykonania nie jest przypisany do tej kopii. Sam upływ daty nie oznacza ukończenia treningu.</p></> : null}
     </DashboardDrawer>
   </section>;

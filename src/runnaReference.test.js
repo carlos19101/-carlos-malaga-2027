@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadRunnaReference, parseRunnaReference, referenceDays, referenceWeekIndex, serializeRunnaReference, RUNNA_REFERENCE_VERSION } from './runnaReference.js';
+import { loadRunnaReference, parseRunnaReference, referenceDays, referencePlanContext, referenceWeekIndex, serializeRunnaReference, RUNNA_REFERENCE_VERSION } from './runnaReference.js';
 
 const fixture = () => ({ version: RUNNA_REFERENCE_VERSION, title: 'Plan testowy', sourceLabel: 'Dane syntetyczne', capturedOn: '2026-09-23', weeks: [
   { number: 3, start: '2026-09-21', totalKm: 12, sessions: [{ day: 0, type: 'easy', km: 5 }, { day: 4, type: 'tempo', km: 7 }] },
@@ -8,6 +8,31 @@ const fixture = () => ({ version: RUNNA_REFERENCE_VERSION, title: 'Plan testowy'
 const parse = (v) => parseRunnaReference(JSON.stringify(v));
 
 describe('Runna reference boundary', () => {
+  const sourceSession = { date: '2026-09-23', source: 'reference', type: 'intervals', km: 8.1 };
+  it('does not silently replace an amended easy plan with reference intervals', () => {
+    const rows = [{Data:'2026-09-23', Rano:'Easy 9 km', Status:'PLANNED', 'Cel HR':'145–158'}];
+    const result = referencePlanContext(sourceSession, rows, true);
+    expect(result.state).toBe('unlinked'); expect(result.entries[0]).toMatchObject({titles:['Easy 9 km'],hr:'145–158'});
+    expect(sourceSession.type).toBe('intervals'); expect(rows[0].Rano).toBe('Easy 9 km');
+  });
+  it('keeps duplicate source rows visible instead of choosing a target', () => {
+    const result = referencePlanContext(sourceSession, [{Data:'2026-09-23',Rano:'Easy A'},{Data:'2026-09-23',Rano:'Easy B'}], true);
+    expect(result.state).toBe('ambiguous'); expect(result.entries).toHaveLength(2);
+  });
+  it('does not treat matching date and title as proof of linkage', () => {
+    expect(referencePlanContext(sourceSession, [{Data:'2026-09-23',Rano:'Interwały 8,1 km'}], true).state).toBe('unlinked');
+  });
+  it('does not declare cached source current', () => {
+    expect(referencePlanContext(sourceSession, [{Data:'2026-09-23',Rano:'Easy'}], false)).toEqual({state:'unavailable',entries:[],undated:0});
+  });
+  it('distinguishes missing date from a genuinely absent date match', () => {
+    expect(referencePlanContext(sourceSession, [{Data:'25–30.09',Rano:'Easy'}], true).state).toBe('unknown');
+    expect(referencePlanContext(sourceSession, [], true).state).toBe('missing');
+  });
+  it('does not attach running targets to recurring club appointments', () => {
+    expect(referencePlanContext({date:'2026-09-23',source:'appointment'}, [], true)).toBe(null);
+    expect(referencePlanContext(null)).toBe(null);
+  });
   it('normalizes dates, identifiers and reference provenance without performance assumptions', () => {
     const p = parse(fixture());
     expect(p.weeks[0].sessions[0]).toEqual({ day: 0, date: '2026-09-21', type: 'easy', km: 5, id: 'runna:2026-09-21:easy', source: 'reference' });

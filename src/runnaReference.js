@@ -1,4 +1,6 @@
 import { plannerDay, plannerWeek, shiftPlannerDay, BOXING_SLOTS } from './jointPlanner.js';
+import { exactValue } from './parse.js';
+import { A } from './schema.js';
 
 export const RUNNA_REFERENCE_KEY = 'carlos:runna-reference:v1';
 export const RUNNA_REFERENCE_VERSION = 'carlos.runna-reference.v1';
@@ -59,4 +61,19 @@ export function referenceDays(week, boxing = true) {
   return plannerWeek(week.start).map((date, day) => ({ date,
     sessions: [...week.sessions.filter((s) => s.date === date), ...(boxing ? BOXING_SLOTS.filter((s) => s.weekday === day + 1).map((s) => ({ ...s, id: `club:${date}`, date, type: 'boxing', source: 'appointment' })) : [])],
   }));
+}
+
+// A shared date is a comparison aid, never an identity or authority transfer.
+export function referencePlanContext(session, planRows = [], dataReady = false) {
+  if (!session || session.source !== 'reference') return null;
+  if (!dataReady) return { state: 'unavailable', entries: [], undated: 0 };
+  const rows = planRows.map((row, index) => ({ row, index, date: plannerDay(exactValue(row, A.date, '')) }));
+  const undated = rows.filter((r) => !r.date).length;
+  const entries = rows.filter((r) => r.date === session.date).map(({ row, index }) => ({
+    row: index + 2,
+    titles: [...new Set([exactValue(row, A.planMorning, ''), exactValue(row, A.planSession, '')].filter(Boolean))],
+    hr: exactValue(row, A.planHr, ''),
+    status: exactValue(row, A.planStatus, ''),
+  }));
+  return { state: entries.length > 1 ? 'ambiguous' : entries.length ? 'unlinked' : undated ? 'unknown' : 'missing', entries, undated };
 }

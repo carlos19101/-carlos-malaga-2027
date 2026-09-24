@@ -81,6 +81,12 @@
 .runna-message { font-size:.78rem; line-height:1.5; color:#c7cdd5; }
 .runna-message:empty { display:none; }
 .runna-error { padding:14px; background:#392926; border:1px solid #795044; border-radius:12px; color:#ffc4b8; }
+.runna-plan-context { border:1px solid #746044; border-left:3px solid #e3ba70; border-radius:13px; background:#27241f; padding:16px 18px; margin:0 0 16px; overflow-wrap:anywhere; }
+.runna-plan-context>strong { font-size:.87rem; color:#f4d49c; }
+.runna-plan-context p,.runna-detail .runna-plan-context p { font-size:.77rem; line-height:1.55; color:#d5cbbd; margin:8px 0; }
+.runna-plan-context>div { padding:10px 0; border-top:1px solid #534a3d; }
+.runna-plan-context>div p { color:#f4efe7; font-weight:650; }
+.runna-plan-context small { color:#c3b9a9; font-size:.65rem; }
 .runna-detail-value { color:#c9f466; font-size:2.7rem; font-weight:800; letter-spacing:-.04em; margin:20px 0 28px; }
 .runna-detail p { color:#b7bec9; font-size:.9rem; line-height:1.7; }
 .runna-detail h3 { margin-top:26px; }

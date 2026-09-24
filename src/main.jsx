@@ -1740,7 +1740,7 @@ function Plan({ rows, logRows, loading, now, dataReady, onShowLog }) {
   const undated = useMemo(() => rows.filter((r) => !rowDate(r)), [rows]);
   return (
     <>
-      <RunnaHub now={now} onShowLog={onShowLog} />
+      <RunnaHub now={now} onShowLog={onShowLog} planRows={rows} dataReady={dataReady} />
       <details className="joint-source-archive"><summary>Plan w arkuszu · układ i propozycje</summary><JointPlanner planRows={rows} logRows={logRows} now={now} dataReady={dataReady} /></details>
       <details className="joint-source-archive"><summary>Wszystkie wpisy źródłowe Planu</summary><section className="section-block plan-list">
         {loading && !rows.length ? <div className="skeleton-grid"><i /><i /></div> : dated.map((row, i) => <PlanCard row={row} now={now} key={`${v(row, 'date', '')}-${i}`} />)}

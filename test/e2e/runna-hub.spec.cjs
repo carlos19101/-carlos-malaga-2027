@@ -3,13 +3,13 @@ const snapshot = () => ({ version: 'carlos.runna-reference.v1', title: 'Przykła
   {number:3,start:'2026-09-21',totalKm:25,sessions:[{day:0,type:'easy',km:5},{day:2,type:'intervals',km:6},{day:4,type:'tempo',km:5},{day:6,type:'long',km:9}]},
   {number:4,start:'2026-09-28',totalKm:6,sessions:[{day:2,type:'easy',km:6}]},
 ] });
-async function openHub(page) {
+async function openHub(page, tables = {feed:[],raw:[],log:[],plan:[]}) {
   const writes=[], errors=[];
   page.on('request',r=>{ if(r.url().includes('/api/') && r.method()!=='GET') writes.push(r.url()); });
   page.on('pageerror',e=>errors.push(e.message));
   await page.clock.setFixedTime(new Date('2026-09-23T12:00:00+02:00'));
   await page.route('**/api/session',r=>r.fulfill({json:{ok:true,configured:true,authenticated:true}}));
-  await page.route('**/api/data',r=>r.fulfill({json:{ok:true,tables:{feed:[],raw:[],log:[],plan:[]}}}));
+  await page.route('**/api/data',r=>r.fulfill({json:{ok:true,tables}}));
   await page.goto('/');
   await page.getByRole('button',{name:'Plan',exact:true}).filter({visible:true}).click();
   return {writes,errors};
@@ -74,4 +74,24 @@ test('confirmed logout clears local Runna copy',async({page})=>{
   await page.route('**/api/session',r=>r.fulfill({json:r.request().method()==='DELETE'?{ok:true}:{ok:true,configured:true,authenticated:true}}));
   await page.getByRole('button',{name:'Wyloguj',exact:true}).filter({visible:true}).click();
   await expect.poll(()=>page.evaluate(()=>localStorage.getItem('carlos:runna-reference:v1'))).toBe(null);
+});
+
+test('amended duplicate Plan remains visible above Runna and source failure removes confidence',async({page})=>{
+  const headers=['Data','Dzień','Rano','Później','Cel HR','RPE max','Status','Uwagi','HR_Target_Min_bpm','HR_Target_Max_bpm','Distance_Target_Min_km','Distance_Target_Max_km','HR_Target_Stages_JSON'];
+  const row=title=>headers.map(key=>({Data:'2026-09-23',Rano:title,Status:'PLANNED','Cel HR':'145–158'})[key]||'');
+  const {writes,errors}=await openHub(page,{feed:[],raw:[],log:[],plan:[headers,row('Easy 9 km — korekta'),row('Spokojny powrót 9 km')]});
+  await upload(page);
+  const context=page.getByLabel('Porównanie Runna z Planem');
+  await expect(context).toContainText('2 wpisy na ten dzień');
+  await expect(context).toContainText('Easy 9 km — korekta');
+  await expect(context).toContainText('Spokojny powrót 9 km');
+  await expect(page.locator('.runna-next')).toContainText('Interwały');
+  await page.locator('.runna-next').click();
+  await expect(page.getByRole('dialog').getByLabel('Porównanie Runna z Planem')).toContainText('Nie wybieramy jednego wpisu');
+  await page.getByRole('button',{name:'Zamknij panel',exact:true}).click();
+  await page.route('**/api/data',r=>r.fulfill({status:503,json:{ok:false,error:'test-unavailable'}}));
+  await page.getByRole('button',{name:'Odśwież dane',exact:true}).click();
+  await expect(context).toContainText('Nie potwierdzono aktualnego Planu');
+  await expect(context).not.toContainText('Easy 9 km — korekta');
+  expect(writes).toEqual([]);expect(errors).toEqual([]);
 });
