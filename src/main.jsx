@@ -646,8 +646,8 @@ function WeeklySnapshot({ snapshot }) {
         <span>To podsumowanie wykonania i jakości danych, a nie nowy werdykt treningowy.</span>
       </div>
       <div className="load-grid weekly-snapshot-grid">
-        <StatCard label="BIEGANIE" value={activity.runningDistanceState === 'missing' ? '' : formatMetricNumber(activity.runningKm, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatRunCount(activity.runningSessions)} · ${activity.runningDistanceState === 'partial' ? 'część dystansów nieuzupełniona' : 'komplet dystansów'}`} />
-        <StatCard label="CZAS BIEGU" value={activity.runningDurationState === 'ready' ? snapshotDuration(activity.runningMinutes) : ''} note={activity.runningDurationState === 'partial' ? 'część czasów nieuzupełniona' : `${activity.activeDays}/7 dni z aktywnością`} />
+        <StatCard label="BIEGANIE" value={activity.runningDistanceState === 'missing' ? '' : formatMetricNumber(activity.runningKm, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} unit="km" note={`${formatRunCount(activity.runningSessions)} · ${activity.runningDistanceState === 'partial' ? 'suma częściowa — brak części dystansów' : activity.runningDistanceState === 'missing' ? 'brak poprawnych dystansów' : 'komplet dystansów w zapisanych biegach'}`} />
+        <StatCard label="CZAS BIEGU" value={activity.runningDurationState === 'missing' ? '' : snapshotDuration(activity.runningMinutes)} note={activity.runningDurationState === 'partial' ? 'suma częściowa — brak części czasów' : activity.runningDurationState === 'missing' ? 'brak poprawnych czasów biegu' : 'komplet czasów w zapisanych biegach'} />
         <StatCard label="AKTYWNOŚĆ" value={`${activity.activeDays}/7`} unit="dni" note={`${activity.sessions} zapisanych aktywności`} />
         <StatCard label="BOKS / SIŁA / MOB." value={`${activity.boxingSessions} / ${activity.strengthSessions} / ${activity.mobilitySessions}`} note="liczone osobno, bez przeliczenia na kilometry" />
         <StatCard label="EXECUTION" value={executionValue} note={executionNote} tone={execution.state === 'data-error' ? 'red' : execution.state === 'partial' ? 'yellow' : ''} />
