@@ -26,6 +26,7 @@ import {
 import { computeEasyExecutionPattern, computeLoad, computeVerifierMetrics, crossValidate } from './metrics';
 import { computeLoadMap, parseSessionMinutes } from './loadMap';
 import { computeWeeklySnapshot } from './weeklySnapshot';
+import { feedbackCandidates, selectFeedbackCandidate } from './feedbackSelection.js';
 import { computePerformanceResponse } from './performanceResponse';
 import { computeDailyMetrics } from './dailyMetrics';
 import { computeDataCompleteness } from './dataCompleteness';
@@ -620,7 +621,7 @@ function snapshotDuration(minutes) {
 
 function WeeklySnapshot({ snapshot }) {
   if (snapshot.state === 'missing') {
-    return <p className="method-note">Brak zapisanych aktywności z ostatnich 7 dni. Snapshot nie zastępuje braku danych zerem.</p>;
+    return <><p className="method-note">Brak zapisanych aktywności z ostatnich 7 dni. Snapshot nie zastępuje braku danych zerem.</p>{snapshot.dataQuality.undatedRows ? <p role="alert">Wiersze bez czytelnej daty: {snapshot.dataQuality.undatedRows}. Nie można ustalić, czy należą do tego tygodnia.</p> : null}</>;
   }
   const { activity, execution, internal, dataQuality } = snapshot;
   const executionValue = execution.state === 'data-error' ? 'BŁĄD DANYCH'
@@ -637,7 +638,7 @@ function WeeklySnapshot({ snapshot }) {
     : internal.state === 'unreliable' ? 'NIEPEŁNE' : '';
   const internalNote = internal.state === 'ready'
     ? `${internal.activeSessions} aktywnych sesji z RPE i sRPE`
-    : `RPE 0: ${internal.rpeZero} · brak RPE: ${internal.missingRpe} · brak sRPE: ${internal.missingSrpe}`;
+    : `brak RPE: ${internal.missingRpe} · RPE poza 1–10: ${internal.invalidRpe} · brak sRPE: ${internal.missingSrpe} · niespójne sRPE: ${internal.inconsistentSrpe}`;
   return (
     <>
       <div className="load-map-intro weekly-snapshot-intro">
@@ -652,7 +653,10 @@ function WeeklySnapshot({ snapshot }) {
         <StatCard label="EXECUTION" value={executionValue} note={executionNote} tone={execution.state === 'data-error' ? 'red' : execution.state === 'partial' ? 'yellow' : ''} />
         <StatCard label="WYNIK EXECUTION" value={outcomeValue} note={execution.observedRuns ? 'wynik tylko dla sesji z danymi atomowymi' : 'brak oceny wykonania'} />
         <StatCard label="RPE / sRPE" value={internalValue} note={internalNote} tone={internal.state === 'unreliable' ? 'yellow' : ''} />
-        <StatCard label="INTEGRALNOŚĆ" value={dataQuality.undatedRows || dataQuality.runsWithoutDistance ? 'SPRAWDŹ' : 'OK'} note={dataQuality.undatedRows ? `bez daty: ${dataQuality.undatedRows}` : dataQuality.runsWithoutDistance ? `biegi bez dystansu: ${dataQuality.runsWithoutDistance}` : 'wszystkie uwzględnione wiersze mają datę i dystans'} tone={dataQuality.undatedRows || dataQuality.runsWithoutDistance ? 'yellow' : 'green'} />
+        <StatCard label="CZAS BOKSU" value={activity.boxingMinutes === null ? '' : snapshotDuration(activity.boxingMinutes)} note={`${activity.boxingDurationSessions}/${activity.boxingSessions} sesji z czasem · ${activity.boxingDurationState === 'partial' ? 'suma częściowa' : 'czas zapisany, nie planowane 120 minut'}`} />
+        <StatCard label="POKRYCIE RPE" value={`${internal.rpeSessions}/${internal.activeSessions}`} note={`Średnie RPE: ${formatMetricNumber(internal.averageRpe, { maximumFractionDigits: 1, fallback: '—' })} · tylko sesje z RPE 1–10`} />
+        <StatCard label="SUMA sRPE" value={formatMetricNumber(internal.srpeTotal, { maximumFractionDigits: 0, fallback: '—' })} note={`${internal.srpeSessions}/${internal.activeSessions} sesji · ${internal.srpeState === 'ready' ? 'komplet w zapisanych sesjach' : internal.srpeState === 'partial' ? 'SUMA CZĘŚCIOWA — nie pełne obciążenie tygodnia' : 'brak wiarygodnej sumy'}`} tone={internal.srpeState === 'partial' ? 'yellow' : ''} />
+        <StatCard label="INTEGRALNOŚĆ" value={dataQuality.undatedRows || dataQuality.runsWithoutDistance || dataQuality.runsWithoutDuration ? 'SPRAWDŹ' : 'OK'} note={`bez daty: ${dataQuality.undatedRows} · biegi bez dodatniego dystansu: ${dataQuality.runsWithoutDistance} · bez dodatniego czasu: ${dataQuality.runsWithoutDuration}`} tone={dataQuality.undatedRows || dataQuality.runsWithoutDistance || dataQuality.runsWithoutDuration ? 'yellow' : ''} />
       </div>
       <p className="method-note">Snapshot nie pokazuje średniej realizacji ani trendu „formy”, dopóki próbka nie jest reprezentatywna. Session Execution opisuje tylko biegi z pełnymi atomowymi czasami HR.</p>
     </>
@@ -1272,12 +1276,13 @@ function PostRunCompletionPanel({ target, feedbackStatus, tcxStatus, tcxRequired
   );
 }
 
-function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel, onSaved }) {
+function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel, onSaved, onBusy }) {
   const [passcode, setPasscode] = useState('');
   const [values, setValues] = useState({ rpe: '', pain: '', legFatigue: '', notes: '' });
   const [state, setState] = useState({ busy: false, message: '' });
   const sessionId = v(target, 'logSessionId', '');
   const initializedSession = useRef(null);
+  useEffect(() => { onBusy?.(state.busy); return () => onBusy?.(false); }, [state.busy, onBusy]);
 
   useEffect(() => {
     if (initializedSession.current === sessionId) return;
@@ -1669,7 +1674,10 @@ function StravaPanel({ access, rows, onImport }) {
 function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFeedbackLogin, onFeedbackSubmit, onTcxImport, onStravaImport }) {
   const rowsWithPlanStageTargets = useMemo(() => withPlanStageTargets(rows, planRows), [rows, planRows]);
   const sorted = useMemo(() => sortedRows(rowsWithPlanStageTargets, 'desc').slice(0, 30), [rowsWithPlanStageTargets]);
-  const feedbackTarget = useMemo(() => sorted.find((row) => isRunLogRow(row) && v(row, 'logSessionId', '')) || null, [sorted]);
+  const candidates = useMemo(() => feedbackCandidates(sortedRows(rowsWithPlanStageTargets, 'desc').map(row => ({ id: v(row, 'logSessionId', ''), running: isRunLogRow(row), row }))), [rowsWithPlanStageTargets]);
+  const [selectedFeedbackId, setSelectedFeedbackId] = useState('');
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const feedbackTarget = selectFeedbackCandidate(candidates, selectedFeedbackId)?.row || null;
   const [editingFeedback, setEditingFeedback] = useState(false);
   const feedbackStatus = useMemo(() => feedbackStatusForRow(feedbackTarget), [feedbackTarget]);
   const tcxStatus = useMemo(() => tcxStatusForRow(feedbackTarget), [feedbackTarget]);
@@ -1681,6 +1689,7 @@ function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFe
   return (
     <>
       <section className="section-hero"><span className="eyebrow">HISTORIA</span><h1>Training Log</h1><p>Ostatnie 30 wpisów. Bieg, siła, mobilizacja, recovery i boks są liczone osobno jako realne obciążenie systemu.</p></section>
+      {candidates.length ? <div className="strava-import-controls"><label>Bieg do oceny<select value={feedbackSessionId} disabled={feedbackBusy} onChange={event => { setSelectedFeedbackId(event.target.value); setEditingFeedback(false); }}>{candidates.map(({ id, row }) => <option key={id} value={id}>{formatDate(v(row, 'date', ''))} · {v(row, 'logName', 'Bieg')} · {feedbackStatusForRow(row).complete ? 'ocena zapisana' : 'do uzupełnienia'}</option>)}</select></label><span>Wybór obejmuje wszystkie wczytane biegi z jednoznacznym Session_ID, nie tylko 30 widocznych wpisów. Szkice ocen są osobne dla każdej sesji.</span></div> : null}
       {isRunnaSession(feedbackTarget) ? <div className="data-quality-banner"><strong>Wykonanie Runna · zapis i ocena celu to osobne rzeczy</strong><span>{RUNNA_TARGET_PENDING}</span><span>Feedback: {feedbackStatus.complete ? 'zapisany' : 'do uzupełnienia'}. Nie oznaczamy sesji jako w pełni rozliczonej z planem.</span>{feedbackStatus.complete ? <button type="button" onClick={() => setEditingFeedback(current => !current)}>{editingFeedback ? 'Zamknij edycję' : 'Popraw ocenę'}</button> : null}</div> : <PostRunCompletionPanel
         target={feedbackTarget}
         feedbackStatus={feedbackStatus}
@@ -1691,6 +1700,7 @@ function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFe
       />}
       {feedbackTarget && (!feedbackStatus.complete || editingFeedback) ? (
         <FeedbackPanel
+          key={feedbackSessionId}
           target={feedbackTarget}
           access={feedbackAccess}
           queueCount={feedbackQueueCount}
@@ -1698,6 +1708,7 @@ function Log({ rows, planRows, loading, feedbackAccess, feedbackQueueCount, onFe
           onSubmit={onFeedbackSubmit}
           onCancel={feedbackStatus.complete ? () => setEditingFeedback(false) : null}
           onSaved={() => setEditingFeedback(false)}
+          onBusy={setFeedbackBusy}
         />
       ) : null}
       <TcxImportPanel rows={rowsWithPlanStageTargets} access={feedbackAccess} onSubmit={onTcxImport} />
