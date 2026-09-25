@@ -41,7 +41,7 @@ export default async function handler(request, response) {
     }
     const result = await appendStravaActivity(prepared.record);
     const status = {
-      append: 201, noop: 200, 'duplicate-session': 409, 'contract-error': 409,
+      append: 201, noop: 200, 'duplicate-session': 409, 'possible-duplicate': 409, 'contract-error': 409,
     }[result.action] || 500;
     sendJson(response, status, {
       ok: status < 300,
@@ -51,6 +51,7 @@ export default async function handler(request, response) {
       category: prepared.record.category,
       rowNumber: result.rowNumber,
       missingHeaders: result.missingHeaders,
+      reason: result.reason,
     }, source.refreshed ? { 'Set-Cookie': stravaTokenCookie(source.credentials, process.env.STRAVA_TOKEN_SECRET) } : {});
   } catch (error) {
     console.error('strava-import', error.message);

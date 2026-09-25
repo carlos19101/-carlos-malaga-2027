@@ -16,7 +16,8 @@ function activity(overrides = {}) {
 describe('kontrolowany import Stravy', () => {
   it('akceptuje wyłącznie świadomie wybraną kategorię i RPE', () => {
     expect(validateStravaImportRequest({ activityId: '123456789', category: 'Mobilizacja', rpe: 1 })).toMatchObject({ action: 'valid' });
-    expect(validateStravaImportRequest({ activityId: '123', category: 'Bieg', rpe: 0 })).toMatchObject({ action: 'invalid', errors: { category: expect.any(String), rpe: expect.any(String) } });
+    expect(validateStravaImportRequest({ activityId: '123', category: 'Bieg', rpe: 0 })).toMatchObject({ action: 'invalid', errors: { rpe: expect.any(String) } });
+    expect(validateStravaImportRequest({ activityId:'123',category:'Boks',rpe:2 }).action).toBe('invalid');
   });
 
   it('tworzy deterministyczny wpis mobilizacji z pełnym czasem Stravy i sRPE', () => {

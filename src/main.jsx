@@ -37,7 +37,7 @@ import { fetchPrivateApplicationData, parsePrivateApplicationSnapshot } from './
 import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendStravaImport, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
 import { connectStrava, disconnectStrava, stravaActivities, stravaStatus } from './stravaApi';
 import { reconcileStravaActivities } from './stravaReconcile';
-import { STRAVA_IMPORT_CATEGORIES } from './stravaImport';
+import { STRAVA_IMPORT_CATEGORIES, isStravaRun } from './stravaImport';
 import {
   createTrainingFeedback,
   enqueueTrainingFeedback,
@@ -1538,6 +1538,7 @@ function stravaMatchLabel(entry) {
 function StravaPanel({ access, rows, onImport }) {
   const [state, setState] = useState({ checked: false, busy: false, importingId: '', status: null, activities: [], message: '' });
   const [importValues, setImportValues] = useState({});
+  const importInFlight = useRef(false);
 
   const checkStatus = useCallback(async () => {
     const result = await stravaStatus();
@@ -1580,7 +1581,7 @@ function StravaPanel({ access, rows, onImport }) {
     setState((current) => ({
       ...current,
       busy: false,
-      activities: result.ok ? result.activities || [] : current.activities,
+      activities: result.ok ? result.activities || [] : [],
       message: result.ok ? `Odczytano ${result.activities?.length || 0} ostatnich aktywności. Nic nie zapisano w Training Log.` : result.status === 409 ? 'Najpierw połącz Stravę.' : 'Strava chwilowo nie zwróciła aktywności.',
     }));
   };
@@ -1595,17 +1596,22 @@ function StravaPanel({ access, rows, onImport }) {
     setState({ checked: true, busy: false, importingId: '', status: { configured: true, connected: false }, activities: [], message: 'Strava odłączona od tej przeglądarki.' });
   };
 
-  const importFields = (activityId) => importValues[activityId] || { category: 'Mobilizacja', rpe: '1' };
+  const importFields = (activityId) => importValues[activityId] || (isStravaRun(state.activities.find(a => a.id === activityId)) ? { category:'Bieg', rpe:'' } : { category: 'Mobilizacja', rpe: '1' });
   const updateImportField = (activityId, field, value) => {
     setImportValues((current) => ({ ...current, [activityId]: { ...importFields(activityId), [field]: value } }));
   };
   const importActivity = async (activity) => {
+    if (importInFlight.current) return;
     const fields = importFields(activity.id);
-    const rpe = Number(fields.rpe);
-    const summary = `${fields.category}, RPE ${fields.rpe}`;
-    if (!window.confirm(`Zapisać w Training Log aktywność „${activity.name || activity.id}” jako ${summary}? Zapis jest jednorazowy i chroniony ID Stravy.`)) return;
+    const rpe = fields.rpe === '' ? null : Number(fields.rpe);
+    const summary = `${fields.category}, ${rpe === null ? 'RPE i sRPE do uzupełnienia' : `RPE ${fields.rpe}`}`;
+    if (!window.confirm(`Zapisać w Training Log aktywność „${activity.name || activity.id}” jako ${summary}? Serwer ponownie pobierze dane ze Stravy i sprawdzi istniejące wpisy. Nie zmieniamy planu Runna.`)) return;
+    importInFlight.current = true;
     setState((current) => ({ ...current, importingId: activity.id, message: '' }));
-    const result = await onImport({ activityId: activity.id, category: fields.category, rpe });
+    let result;
+    try { result = await onImport({ activityId: activity.id, category: fields.category, rpe }); }
+    catch { result = {ok:false,status:0}; }
+    finally { importInFlight.current = false; }
     setState((current) => ({
       ...current,
       importingId: '',
@@ -1613,7 +1619,7 @@ function StravaPanel({ access, rows, onImport }) {
         ? result.action === 'noop' ? 'Ten wpis Stravy jest już zapisany w Training Log.' : 'Aktywność została zapisana w Training Log.'
         : result.status === 401 || result.status === 403 ? 'Sesja zapisu wygasła.'
           : result.error === 'strava-not-connected' ? 'Najpierw połącz Stravę.'
-            : 'Nie udało się zapisać aktywności. Nic nie zostało zmienione.',
+            : result.reason || (result.missingHeaders?.length ? `Brak kolumn: ${result.missingHeaders.join(', ')}. Nie zapisano aktywności.` : result.fields ? Object.values(result.fields).join(' ') : 'Nie potwierdzono zapisu. Odśwież dziennik przed ponowieniem — odpowiedź mogła zaginąć po zapisie.'),
     }));
   };
 
@@ -1628,13 +1634,13 @@ function StravaPanel({ access, rows, onImport }) {
   const coverageStartDate = useMemo(() => reconciliationSessions.map((session) => session.date).filter(Boolean).sort()[0] || '', [reconciliationSessions]);
   const reconciliation = useMemo(() => reconcileStravaActivities(state.activities, reconciliationSessions, { coverageStartDate }), [coverageStartDate, reconciliationSessions, state.activities]);
   const currentReviewCount = reconciliation.summary.review + reconciliation.summary.ambiguous + reconciliation.summary.unmatched;
-  const importable = (entry) => entry.state === 'unmatched' && /weighttraining/.test(normalize(`${entry.activity.sportType} ${entry.activity.type}`).replace(/\s+/g, ''));
+  const importable = (entry) => entry.state === 'unmatched' && (isStravaRun(entry.activity) || /weighttraining/.test(normalize(`${entry.activity.sportType} ${entry.activity.type}`).replace(/\s+/g, '')));
   const currentEntries = reconciliation.entries.filter((entry) => entry.state !== 'historical');
   const historicalEntries = reconciliation.entries.filter((entry) => entry.state === 'historical');
   const renderEntry = (entry) => {
     const { activity } = entry;
     const fields = importFields(activity.id);
-    return <article key={activity.id} className="strava-activity"><div><strong>{activity.name || 'Aktywność'}</strong><small>{activity.startLocal ? formatDate(activity.startLocal, true) : 'brak czasu lokalnego'} · {activity.type || '—'}</small><em className={`strava-match strava-match-${entry.state}`}>{stravaMatchLabel(entry)}</em>{importable(entry) ? <div className="strava-import-controls"><label>Kategoria<select value={fields.category} onChange={(event) => updateImportField(activity.id, 'category', event.target.value)}>{STRAVA_IMPORT_CATEGORIES.map((category) => <option value={category} key={category}>{category}</option>)}</select></label><label>RPE<input type="number" min="1" max="10" step="1" value={fields.rpe} onChange={(event) => updateImportField(activity.id, 'rpe', event.target.value)} /></label><button type="button" onClick={() => importActivity(activity)} disabled={state.busy || state.importingId === activity.id}>{state.importingId === activity.id ? 'Zapisuję…' : 'Dodaj do Training Log'}</button></div> : null}</div><div><b>{activity.distanceMeters === null ? '—' : `${formatMetricNumber(activity.distanceMeters / 1000, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`}</b><small>{stravaActivityDuration(activity.movingSeconds)} · HR {formatMetricNumber(activity.averageHeartRate, { maximumFractionDigits: 0, fallback: '—' })} / {formatMetricNumber(activity.maxHeartRate, { maximumFractionDigits: 0, fallback: '—' })}</small></div></article>;
+    return <article key={activity.id} className="strava-activity"><div><strong>{activity.name || 'Aktywność'}</strong><small>{activity.startLocal ? formatDate(activity.startLocal, true) : 'brak czasu lokalnego'} · {activity.type || '—'}</small><em className={`strava-match strava-match-${entry.state}`}>{stravaMatchLabel(entry)}</em>{importable(entry) ? <div className="strava-import-controls"><label>Kategoria<select value={fields.category} onChange={(event) => updateImportField(activity.id, 'category', event.target.value)}>{(isStravaRun(activity) ? ['Bieg'] : STRAVA_IMPORT_CATEGORIES.filter(c => c !== 'Bieg')).map((category) => <option value={category} key={category}>{category}</option>)}</select></label><label>{isStravaRun(activity) ? 'RPE (opcjonalnie)' : 'RPE'}<input type="number" min="1" max="10" step="1" value={fields.rpe} onChange={(event) => updateImportField(activity.id, 'rpe', event.target.value)} /></label><button type="button" onClick={() => importActivity(activity)} disabled={state.busy || Boolean(state.importingId)}>{state.importingId === activity.id ? 'Zapisuję…' : 'Dodaj do Training Log'}</button></div> : null}</div><div><b>{activity.distanceMeters === null ? '—' : `${formatMetricNumber(activity.distanceMeters / 1000, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} km`}</b><small>Ruch {stravaActivityDuration(activity.movingSeconds)} · cały zapis {stravaActivityDuration(activity.elapsedSeconds)} · HR {formatMetricNumber(activity.averageHeartRate, { maximumFractionDigits: 0, fallback: '—' })} / {formatMetricNumber(activity.maxHeartRate, { maximumFractionDigits: 0, fallback: '—' })}</small></div></article>;
   };
   if (!access.authenticated) return null;
   const configured = Boolean(state.status?.configured);
