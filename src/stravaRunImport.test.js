@@ -35,12 +35,19 @@ describe('running import keeps objective evidence separate from feedback and tar
     expect(planStravaActivityAppend([aliasHeaders,prior],record).action).toBe('noop');
     expect(prior[headers.indexOf('RPE')]).toBe(4);
   });
-  it('blocks same-day legacy TCX and undated runs, but not a boxing session',()=>{
+  it('blocks same-day legacy TCX and only plausibly matching undated runs',()=>{
     const record=prepare().record;
     const row=Array(headers.length).fill('');
     row[headers.indexOf('Date')]='2026-09-25';row[headers.indexOf('Type')]='Bieg';row[headers.indexOf('Session_ID')]='old-tcx';
     expect(planStravaActivityAppend([headers,row],record).action).toBe('possible-duplicate');
-    row[headers.indexOf('Date')]='???';expect(planStravaActivityAppend([headers,row],record).action).toBe('possible-duplicate');
+    row[headers.indexOf('Date')]='???';
+    expect(planStravaActivityAppend([headers,row],record).action).toBe('append');
+    row[headers.indexOf('Distance_km')]=8.01;
+    expect(planStravaActivityAppend([headers,row],record).action).toBe('append');
+    row[headers.indexOf('Duration_min')]=61;
+    expect(planStravaActivityAppend([headers,row],record).action).toBe('possible-duplicate');
+    row[headers.indexOf('Distance_km')]=6.36;row[headers.indexOf('Duration_min')]=38.4;row[headers.indexOf('Name')]='Inny bieg';
+    expect(planStravaActivityAppend([headers,row],record).action).toBe('append');
     row[headers.indexOf('Type')]='Boks';expect(planStravaActivityAppend([headers,row],record).action).toBe('append');
   });
   it('requires unambiguous HR columns for runs',()=>{
@@ -48,3 +55,4 @@ describe('running import keeps objective evidence separate from feedback and tar
     expect(planStravaActivityAppend([[...headers,'HR_avg']],prepare().record).action).toBe('contract-error');
   });
 });
+

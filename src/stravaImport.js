@@ -52,6 +52,22 @@ function durationText(seconds) {
   return `${Math.floor(roundedSeconds / 60)}:${String(roundedSeconds % 60).padStart(2, '0')}`;
 }
 
+function nearlyEqual(left, right, tolerance) {
+  const a = parseNumber(left);
+  const b = parseNumber(right);
+  return a !== null && b !== null && Math.abs(a - b) <= tolerance;
+}
+
+function resemblesUndatedRun(row, indexes, values) {
+  const evidence = [
+    nearlyEqual(row[indexes.distance], values.distance, 0.05),
+    nearlyEqual(row[indexes.duration], values.duration, 0.1),
+    normalize(row[indexes.name]) !== '' && normalize(row[indexes.name]) === normalize(values.name),
+    String(row[indexes.time] ?? '').trim() !== '' && String(row[indexes.time] ?? '').trim().slice(0, 5) === String(values.time ?? '').slice(0, 5),
+  ];
+  return evidence.filter(Boolean).length >= 2;
+}
+
 export function validateStravaImportRequest(input = {}) {
   const activityId = String(input.activityId ?? '').trim();
   const category = String(input.category ?? '').trim();
@@ -142,9 +158,9 @@ export function planStravaActivityAppend(table = [], record = {}) {
       const type = normalize(row[indexes.type]).replace(/\s/g,'');
       const run = ['run','running','bieg','trailrun','virtualrun'].includes(type);
       const date = plannerDay(row[indexes.date]);
-      return run && (!date || date === record.values.date);
+      return run && (date === record.values.date || (!date && resemblesUndatedRun(row, indexes, record.values)));
     });
-    if (candidates.length) return result('possible-duplicate', { sessionId, rowNumbers:candidates.map(c=>c.rowNumber), reason:'W dzienniku istnieje już bieg z tego dnia lub bieg bez czytelnej daty. Sprawdź go przed importem — nie nadpisujemy TCX ani feedbacku.' });
+    if (candidates.length) return result('possible-duplicate', { sessionId, rowNumbers:candidates.map(c=>c.rowNumber), reason:'W dzienniku istnieje już bieg z tego dnia albo niedatowany bieg zgodny z co najmniej dwiema cechami aktywności. Sprawdź go przed importem — nie nadpisujemy TCX ani feedbacku.' });
   }
 
   const rowValues = Array(headers.length).fill('');
@@ -153,3 +169,4 @@ export function planStravaActivityAppend(table = [], record = {}) {
   });
   return result('append', { sessionId, activityId: record.activityId, rowValues, headers });
 }
+
