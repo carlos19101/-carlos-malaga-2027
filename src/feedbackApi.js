@@ -66,6 +66,10 @@ export function sendTrainingFeedback(feedback, fetchImpl) {
   return jsonRequest('/api/training-feedback', { method: 'POST', body: JSON.stringify(feedback) }, fetchImpl);
 }
 
+export function sendDailyCheckin(checkin, fetchImpl) {
+  return jsonRequest('/api/daily-checkin', { method: 'POST', body: JSON.stringify(checkin) }, fetchImpl);
+}
+
 export function sendTcxImport(envelope, fetchImpl) {
   return jsonRequest('/api/tcx-import', { method: 'POST', body: JSON.stringify(envelope) }, fetchImpl);
 }

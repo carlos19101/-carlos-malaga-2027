@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { feedbackLogin, feedbackLogout, feedbackSessionStatus, retryAfterSeconds, sendTcxImport, sendTrainingFeedback } from './feedbackApi.js';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, retryAfterSeconds, sendDailyCheckin, sendTcxImport, sendTrainingFeedback } from './feedbackApi.js';
 import { createTrainingFeedback, enqueueTrainingFeedback, flushTrainingFeedbackQueue, readFeedbackQueue } from './trainingFeedback.js';
 
 function response(status, body) {
@@ -92,6 +92,15 @@ describe('feedbackApi', () => {
     expect(await sendTcxImport(envelope, fetchImpl)).toMatchObject({ ok: true, action: 'noop' });
     expect(fetchImpl).toHaveBeenCalledWith('/api/tcx-import', expect.objectContaining({
       method: 'POST', body: JSON.stringify(envelope), credentials: 'same-origin', cache: 'no-store',
+    }));
+  });
+
+  it('wysyła check-in do chronionego endpointu bez lokalnego cache', async () => {
+    const checkin = { date: '2026-11-17', hrvOrthostatic: '56', symptomsConfirmed: true };
+    const fetchImpl = vi.fn().mockResolvedValue(response(200, { ok: true, action: 'update' }));
+    expect(await sendDailyCheckin(checkin, fetchImpl)).toMatchObject({ ok: true, action: 'update' });
+    expect(fetchImpl).toHaveBeenCalledWith('/api/daily-checkin', expect.objectContaining({
+      method: 'POST', body: JSON.stringify(checkin), credentials: 'same-origin', cache: 'no-store',
     }));
   });
 

@@ -8,8 +8,9 @@ import { loadRunnaReference, RUNNA_TYPES } from './runnaReference.js';
 import { plannerDay } from './jointPlanner.js';
 import { runnaDayState } from './runnaPolicy.js';
 import { boxingToday } from './boxingSchedule.js';
+import { DailyCheckin } from './DailyCheckin.jsx';
 
-export function RunnaToday({ feed, now, freshnessState, onShowLog, onShowPlan, validation, integrity, activitySummary }) {
+export function RunnaToday({ feed, raw, now, freshnessState, onShowLog, onShowPlan, onCheckinSubmit, validation, integrity, activitySummary }) {
   const [local, setLocal] = useState(() => { try { return loadRunnaReference(localStorage); } catch { return { reference: null }; } });
   const { state, session } = runnaDayState(local.reference, plannerDay(now));
   const boxing = boxingToday(now);
@@ -30,6 +31,7 @@ export function RunnaToday({ feed, now, freshnessState, onShowLog, onShowPlan, v
       <p className="muted-copy">Plan nie jest potwierdzeniem gotowości. Regeneracja i jakość danych pozostają widoczne. Boks i feedback zapisujemy osobno; nie wyznacza ich Runna.</p>
       {freshnessState !== 'fresh' || !validation.ok ? <div className="data-quality-banner" role="alert"><strong>Nie potwierdzono kompletnych, aktualnych danych regeneracji.</strong><span>Data źródła: {read('date') || 'brak danych'}. Brak check-inu nie oznacza automatycznie odpoczynku ani zgody na trening.</span>{validation.missing?.length ? <span>Brak: {validation.missing.join(', ')}</span> : null}{validation.suspicious?.map((issue, i) => <span key={i}>{issue}</span>)}</div> : null}
     </div>
+    <DailyCheckin rows={raw} onSubmit={onCheckinSubmit} />
     <section className="section-block dashboard-signals-section"><div className="compact-section-heading"><span>DANE REGENERACJI · NIE NOWY PLAN</span></div><div className="dashboard-contributors">
       {[['readiness','GOTOWOŚĆ TRENINGOWA GARMINA','/100'],['sleep','SEN','/100'],['bodyBattery','BODY BATTERY','/100'],['hrv','HRV','ms'],['rhr','RHR','bpm']].map(([field,label,unit]) => <DashboardSignal key={field} label={label} value={formatMetricNumber(read(field), { maximumFractionDigits: 0, fallback: '—' })} unit={unit} tone="" note={`Odczyt z ${read('date') || 'nieznanej daty'}. Brak wartości nie jest zerem. To dane pomocnicze, nie polecenie zmiany Runny.`} />)}
     </div></section>

@@ -35,7 +35,7 @@ import { attachDecisionOutcomes, buildDecisionJournal, verifyDecisionStatus } fr
 import { auditTrainingLogTimes, parseTrainingLogTimestamp } from './trainingLogTiming';
 import { buildStaffPanel } from './staffPanel';
 import { fetchPrivateApplicationData, parsePrivateApplicationSnapshot } from './appDataApi';
-import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendStravaImport, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
+import { feedbackLogin, feedbackLogout, feedbackSessionStatus, sendDailyCheckin, sendStravaImport, sendTcxImport, sendTrainingFeedback } from './feedbackApi';
 import { connectStrava, disconnectStrava, stravaActivities, stravaStatus } from './stravaApi';
 import { reconcileStravaActivities } from './stravaReconcile';
 import { STRAVA_IMPORT_CATEGORIES, isStravaRun } from './stravaImport';
@@ -50,6 +50,7 @@ import { tcxDataStatus, trainingFeedbackStatus } from './postRunStatus';
 import { A } from './schema';
 import { latestFeedRow } from './feedSelection';
 import { readFeedbackDraft, saveFeedbackDraft, clearFeedbackDraft } from './feedbackDraft';
+import { warsawDate } from './dailyCheckin.js';
 import { EpaPanel } from './EpaPanel';
 import { latestEpaRun } from './epaData';
 import { executionForLogRow, executionIssueMessage, planForLogRow } from './sessionExecution';
@@ -1777,7 +1778,7 @@ function RunnaDashboard({ feed, log, raw, plan, now, ...props }) {
   const mismatches = crossValidate(computeVerifierMetrics(verifierTrainingRecords(log), verifierWeightRecords(raw), endDate), verifierFeedMetrics(row));
   const issues = auditTrainingLogTimes(log.map(r => ({ date: v(r, 'date', ''), time: v(r, 'logTime', ''), name: v(r, 'logName', ''), requiresTimestamp: isRunLogRow(r) })));
   const snapshot = computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now);
-  return <RunnaToday {...props} feed={feed} now={now} validation={validation} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} activitySummary={<details className="joint-source-archive"><summary>Wykonanie · ostatnie 7 dni</summary><p className="method-note">Źródło: zapisany Training Log, nie terminy kalendarza ani sama lista pobrana ze Stravy. Nowe cele Runny nie są jeszcze powiązane z wykonaniem.</p><WeeklySnapshot snapshot={snapshot} /></details>} />;
+  return <RunnaToday {...props} feed={feed} raw={raw} now={now} validation={validation} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} activitySummary={<details className="joint-source-archive"><summary>Wykonanie · ostatnie 7 dni</summary><p className="method-note">Źródło: zapisany Training Log, nie terminy kalendarza ani sama lista pobrana ze Stravy. Nowe cele Runny nie są jeszcze powiązane z wykonaniem.</p><WeeklySnapshot snapshot={snapshot} /></details>} />;
 }
 
 function App() {
@@ -1936,6 +1937,16 @@ function App() {
     return syncFeedback();
   }, [syncFeedback]);
 
+  const submitDailyCheckin = useCallback(async (input) => {
+    const result = await sendDailyCheckin(input);
+    if (result.status === 401 || result.status === 403) {
+      commitAccess({ ...accessRef.current, authenticated: false, error: 'session-expired' });
+      return result;
+    }
+    if (result.ok) await refresh({ force: true });
+    return result;
+  }, [commitAccess, refresh]);
+
   const submitTcxImport = useCallback(async (envelope) => {
     const result = await sendTcxImport(envelope);
     if (result.status === 401 || result.status === 403) {
@@ -2065,13 +2076,16 @@ function App() {
     requireCurrentDay: true,
     contentDate: v(feedRow, 'date', ''),
   });
+  const hasTodayCheckin = data.raw.some((rawRow) => String(v(rawRow, 'date', '')).slice(0, 10) === warsawDate(calendarNow)
+    && Boolean(v(rawRow, 'rawCheckinSavedAt', '')));
   const errorCount = Object.keys(errors).length;
   const offline = Boolean(errors.private) || errorCount === APPLICATION_TABLE_COUNT;
   const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'previous-day' || freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
   const statusLabel = {
     live: 'Dane aktualne',
-    partial: freshness.state === 'previous-day' ? 'Brak dzisiejszego check-inu' : 'Dane częściowe',
-    stale: 'Dane źródłowe są stare', offline: 'Offline — lokalna kopia',
+    partial: hasTodayCheckin ? 'Check-in zapisany · APP_FEED starszy' : freshness.state === 'previous-day' ? 'Brak dzisiejszego check-inu' : 'Dane częściowe',
+    stale: hasTodayCheckin ? 'Check-in zapisany · APP_FEED starszy' : 'Dane źródłowe są stare',
+    offline: 'Offline — lokalna kopia',
   }[status];
 
   return (
@@ -2101,7 +2115,7 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} plan={data.plan} now={calendarNow} freshnessState={freshness.state} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
+        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} plan={data.plan} now={calendarNow} freshnessState={freshness.state} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} onCheckinSubmit={submitDailyCheckin} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
         {tab === 'epa' && (isRunnaDate(calendarNow) ? <><section className="section-hero"><span className="eyebrow">EPA · ARCHIWUM</span><h1>Jeden plan. Runna.</h1><p>Sztab CARLOS nie wydaje konkurencyjnych zaleceń biegowych. Bieżące wykonanie, feedback i porównanie Stravy znajdziesz w Logu.</p><button type="button" onClick={() => setTab('log')}>Pokaż wykonanie</button></section><details className="joint-source-archive"><summary>Analizy historyczne do 23.09 — nie zalecenia na dziś</summary><EpaPanel feed={data.feed.filter(r => !isRunnaSession(r))} log={data.log.filter(r => !isRunnaSession(r))} plan={data.plan.filter(r => !isRunnaSession(r))} loading={loading} access={feedbackAccess} now={new Date('2026-09-23T12:00:00+02:00')} onShowDecision={() => setTab('dashboard')} /></details></> : <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />)}
         {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} logRows={data.log} loading={loading} now={calendarNow} dataReady={!loading && !errorCount && !fromCache} onShowLog={() => setTab('log')} />}

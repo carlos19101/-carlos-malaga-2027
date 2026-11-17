@@ -8,9 +8,27 @@ export const APPLICATION_SHEET_NAMES = {
   raw: 'Raw_Data',
 };
 
+const CHECKIN_SNAPSHOT_FIELDS = [
+  'HRV_orthostatic_rMSSD_ms', 'HR_lying_bpm', 'HR_standing_bpm', 'Wellbeing',
+  'Symptom_Dizziness', 'Symptom_Palpitations', 'Symptom_Chest_Pain', 'Symptom_Illness',
+  'Checkin_Saved_At', 'Checkin_Source',
+];
+
+function upgradePrivateSnapshotData(data) {
+  if (!Array.isArray(data?.raw)) return data;
+  return {
+    ...data,
+    raw: data.raw.map((row) => Object.fromEntries([
+      ...Object.entries(row || {}),
+      ...CHECKIN_SNAPSHOT_FIELDS.filter((field) => !Object.hasOwn(row || {}, field)).map((field) => [field, '']),
+    ])),
+  };
+}
+
 export function parsePrivateApplicationSnapshot(raw) {
   try {
-    const snapshot = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const snapshot = parsed?.data ? { ...parsed, data: upgradePrivateSnapshotData(parsed.data) } : parsed;
     if (!snapshot?.data || snapshot.mode !== 'private') return null;
     validateApplicationData(snapshot.data);
     return snapshot;

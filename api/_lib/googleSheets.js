@@ -2,6 +2,7 @@ import { createHash, createSign } from 'node:crypto';
 import { feedbackBatchData, planTrainingFeedbackUpdate } from '../../src/trainingFeedbackServer.js';
 import { isStagedTcxImportSchema, reconcileTcxImport, resolvePlanStagedTarget } from '../../src/tcxImport.js';
 import { stringifyHrTargetStages } from '../../src/hrTargetStages.js';
+import { planDailyCheckinUpsert } from '../../src/dailyCheckin.js';
 import { planStravaActivityAppend } from '../../src/stravaImport.js';
 
 let tokenCache = null;
@@ -19,6 +20,8 @@ const TRAINING_LOG_APPEND_RANGE = "'Training Log'!A:A";
 const LOGIN_LIMIT_SHEET = 'Auth_Limits';
 const LOGIN_LIMIT_RANGE = "'Auth_Limits'!A1:E2000";
 const LOGIN_LIMIT_HEADER = ['Client_Key_HMAC', 'Window_Started_At', 'Failures', 'Blocked_Until', 'Updated_At'];
+const DAILY_CHECKIN_TABLE_RANGE = "'Raw_Data'!A1:BI1000";
+const DAILY_CHECKIN_APPEND_RANGE = "'Raw_Data'!A:BI";
 
 async function responseJsonObject(response, errorCode) {
   let body;
@@ -219,6 +222,67 @@ export async function updateTrainingFeedback(feedback, options = {}) {
   return { ...plan, updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [] };
 }
 
+function columnLetters(index) {
+  let value = index + 1;
+  let result = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+export async function updateDailyCheckin(checkin, options = {}) {
+  const env = options.env || process.env;
+  const fetchImpl = options.fetchImpl || fetch;
+  const token = await accessToken(env, fetchImpl);
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const tableResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, DAILY_CHECKIN_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!tableResponse.ok) throw new Error(`google-read-${tableResponse.status}`);
+  const table = await responseValues(tableResponse, 'google-read-invalid-response');
+  const sheetHeaders = Array.isArray(table[0]) ? table[0].map((value) => String(value ?? '')) : [];
+  const rows = table.slice(1).map((values, index) => ({ rowNumber: index + 2, values }));
+  const plan = planDailyCheckinUpsert(sheetHeaders, rows, checkin, { now: options.now || new Date() });
+  if (plan.action === 'contract-error') return plan;
+
+  if (plan.action === 'append') {
+    const appendResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, DAILY_CHECKIN_APPEND_RANGE)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS&includeValuesInResponse=true`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ majorDimension: 'ROWS', values: [plan.row] }),
+    });
+    if (!appendResponse.ok) throw new Error(`google-write-${appendResponse.status}`);
+    const result = await responseJsonObject(appendResponse, 'google-write-invalid-response');
+    const updatedRange = result.updates?.updatedRange || null;
+    return {
+      ...plan,
+      updatedRange,
+      rowNumber: updatedRange?.match(/!(?:[A-Z]+)(\d+)(?::[A-Z]+\d+)?$/)?.[1]
+        ? Number(updatedRange.match(/!(?:[A-Z]+)(\d+)(?::[A-Z]+\d+)?$/)[1]) : null,
+    };
+  }
+
+  const rowData = {
+    ...plan,
+    updates: plan.updates.map(({ header, value, columnIndex }) => ({
+      range: `'Raw_Data'!${columnLetters(columnIndex)}${plan.rowNumber}`,
+      values: [[value]],
+    })),
+  };
+  const updateResponse = await fetchImpl(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(env.GOOGLE_SHEET_ID)}/values:batchUpdate`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ valueInputOption: 'RAW', includeValuesInResponse: true, data: rowData.updates }),
+  });
+  if (!updateResponse.ok) throw new Error(`google-write-${updateResponse.status}`);
+  const result = await responseJsonObject(updateResponse, 'google-write-invalid-response');
+  return {
+    ...plan,
+    updatedRanges: result.responses?.map(({ updatedRange }) => updatedRange).filter(Boolean) || [],
+  };
+}
+
 export async function updateTcxImport(envelope, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || fetch;
@@ -307,4 +371,3 @@ export async function appendStravaActivity(record, options = {}) {
       ? Number(response.updates.updatedRange.match(/!(?:[A-Z]+)(\d+)(?::[A-Z]+\d+)?$/)[1]) : null,
   };
 }
-

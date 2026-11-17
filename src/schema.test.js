@@ -27,6 +27,9 @@ const LIVE_HEADERS = {
     'Date', 'Timestamp', 'Weight_kg', 'RHR_bpm', 'HRV_night_ms', 'Sleep_min', 'Sleep_score',
     'BodyBattery_gain', 'Readiness_Garmin', 'Pain_0_10', 'DOMS_0_10', 'Fatigue_0_10',
     'Coach_Status', 'Coach_Decision', 'Source', 'BodyBattery_current',
+    'HRV_orthostatic_rMSSD_ms', 'HR_lying_bpm', 'HR_standing_bpm', 'Wellbeing',
+    'Symptom_Dizziness', 'Symptom_Palpitations', 'Symptom_Chest_Pain', 'Symptom_Illness',
+    'Checkin_Saved_At', 'Checkin_Source',
   ],
 };
 

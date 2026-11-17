@@ -1487,3 +1487,50 @@ main { width: min(1080px, 100%); padding-top: 20px; }
   .runna-day { grid-template-columns: 50px minmax(0,1fr); }
   .runna-session { min-height: 88px; }
 }
+
+.morning-checkin { margin-top: 18px; }
+.morning-checkin .compact-section-heading { align-items: flex-start; gap: 12px; }
+.morning-checkin .compact-section-heading h2 { margin: 5px 0 0; font-size: clamp(1.2rem, 4vw, 1.55rem); letter-spacing: -.025em; }
+.morning-checkin .compact-section-heading > small { color: var(--muted); text-align: right; }
+.morning-checkin-form { display: grid; gap: 16px; }
+.checkin-date { max-width: 260px; }
+.checkin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.checkin-field { display: grid; gap: 7px; color: #e6e6eb; font-size: .82rem; font-weight: 750; }
+.checkin-field > span { color: var(--muted); font-size: .7rem; font-weight: 500; }
+.checkin-field input, .checkin-field select {
+  width: 100%; min-height: 52px; padding: 0 14px; border: 1px solid rgba(255,255,255,.13);
+  border-radius: 13px; background: #1c1c20; color: #f5f7fb; font-size: 1.05rem; font-weight: 650;
+}
+.checkin-field input::placeholder { color: #777780; }
+.checkin-derived { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 11px 13px; border-radius: 12px; background: rgba(255,255,255,.035); color: var(--muted-2); font-size: .82rem; }
+.checkin-derived strong { color: #fff; font-size: 1rem; }
+.checkin-derived small { flex-basis: 100%; color: var(--muted); }
+.checkin-symptoms { min-width: 0; margin: 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 14px; }
+.checkin-symptoms legend { padding: 0 5px; color: #e6e6eb; font-size: .8rem; font-weight: 750; }
+.checkin-symptoms > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.checkin-symptoms label { min-height: 44px; display: flex; align-items: center; gap: 10px; color: var(--muted-2); font-size: .8rem; }
+.checkin-symptoms input { width: 20px; height: 20px; accent-color: var(--orange); }
+.checkin-optional { border-top: 1px solid var(--line); }
+.checkin-optional summary { min-height: 46px; display: flex; align-items: center; color: var(--muted-2); font-size: .82rem; font-weight: 750; cursor: pointer; }
+.checkin-optional .checkin-grid { padding: 3px 0 6px; }
+.checkin-submit-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.checkin-submit-row > small { max-width: 56ch; color: var(--muted); line-height: 1.5; }
+.checkin-submit-row button { min-height: 48px; padding: 0 18px; border: 0; border-radius: 13px; background: var(--orange); color: #16110b; font-weight: 850; cursor: pointer; white-space: nowrap; }
+.checkin-submit-row button:disabled { opacity: .6; cursor: wait; }
+.checkin-error { color: #ff7c85 !important; font-size: .75rem; }
+.checkin-success { margin: 0; color: #71e9b1; font-size: .82rem; }
+
+@media (max-width: 640px) {
+  .morning-checkin { padding: 16px; }
+  .morning-checkin .compact-section-heading > small { max-width: 40%; font-size: .68rem; }
+  .checkin-grid { gap: 10px; }
+  .checkin-field { font-size: .76rem; }
+  .checkin-field input, .checkin-field select { min-height: 54px; padding-inline: 11px; }
+  .checkin-symptoms > div { grid-template-columns: 1fr; }
+  .checkin-submit-row { align-items: stretch; flex-direction: column; }
+  .checkin-submit-row button { min-height: 52px; width: 100%; }
+}
+
+@media (max-width: 360px) {
+  .checkin-grid { grid-template-columns: 1fr; }
+}
