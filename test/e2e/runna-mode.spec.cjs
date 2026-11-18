@@ -1,4 +1,5 @@
 const {expect,test}=require('playwright/test');
+const {openArchive,openSourceDetails,openRunnaCopy}=require('./glass-navigation.cjs');
 const copy={version:'carlos.runna-reference.v1',title:'Test plan',sourceLabel:'Synthetic',capturedOn:'2026-09-23',weeks:[{number:3,start:'2026-09-21',totalKm:8,sessions:[{day:4,type:'tempo',km:8}]}]};
 async function open(page) {
   const errors=[],writes=[];
@@ -12,13 +13,15 @@ async function open(page) {
 }
 test('current Runna dashboard does not fall back to old decision and keeps data warnings',async({page})=>{
   const {errors,writes}=await open(page);
-  await expect(page.getByRole('heading',{name:'SPRAWDŹ RUNNĘ',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Sprawdź Runnę',exact:true})).toBeVisible();
   await expect(page.getByText('DZIŚ BOKS · 20:00–22:00',{exact:true})).toBeVisible();
+  await openRunnaCopy(page);
   await expect(page.getByRole('region',{name:'Stały plan boksu'})).toContainText('Brak kopii Runny');
+  await openSourceDetails(page);
   await expect(page.getByText('Nie potwierdzono kompletnych, aktualnych danych regeneracji.',{exact:true})).toBeVisible();
   await expect(page.getByText('WERDYKT GŁÓWNEGO TRENERA',{exact:true})).toHaveCount(0);
   await page.getByLabel('Plik kopii planu Runna').setInputFiles({name:'plan.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(copy))});
-  await expect(page.getByRole('heading',{name:'BEZ BIEGU W KOPII',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Bez biegu w kopii',exact:true})).toBeVisible();
   await expect(page.locator('.runna-next')).toContainText('Bieg tempowy');
   await page.locator('.runna-next').click();
   await expect(page.getByRole('dialog')).toContainText('Runna jest źródłem planu biegowego');
@@ -26,7 +29,7 @@ test('current Runna dashboard does not fall back to old decision and keeps data 
   await page.keyboard.press('Escape');
   await page.getByText('Źródło i ustawienia kopii',{exact:true}).click();
   await page.getByRole('button',{name:'Usuń lokalną kopię'}).click();
-  await expect(page.getByRole('heading',{name:'SPRAWDŹ RUNNĘ',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Sprawdź Runnę',exact:true})).toBeVisible();
   await expect(page.getByRole('region',{name:'Stały plan boksu'})).toContainText('Wtorek');
   await page.getByText('Wykonanie · ostatnie 7 dni',{exact:true}).click();
   await expect(page.getByText('Brak zapisanych aktywności z ostatnich 7 dni. Snapshot nie zastępuje braku danych zerem.',{exact:true})).toBeVisible();
@@ -34,6 +37,7 @@ test('current Runna dashboard does not fall back to old decision and keeps data 
 });
 test('same-day Runna and boxing stay separate without automatic rescheduling',async({page})=>{
   const {writes}=await open(page);
+  await openRunnaCopy(page);
   const shared=structuredClone(copy);shared.weeks[0].sessions[0].day=3;
   await page.getByLabel('Plik kopii planu Runna').setInputFiles({name:'plan.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(shared))});
   await expect(page.getByRole('region',{name:'Stały plan boksu'})).toContainText('Tego dnia także Runna: Bieg tempowy, 8 km');
@@ -44,18 +48,19 @@ test('same-day Runna and boxing stay separate without automatic rescheduling',as
 });
 test('old prescriptions remain archived rather than current',async({page})=>{
   await open(page);
-  await page.getByRole('button',{name:'EPA',exact:true}).filter({visible:true}).click();
+  await openArchive(page);
   await expect(page.getByRole('heading',{name:'Jeden plan. Runna.'})).toBeVisible();
   await expect(page.locator('details.joint-source-archive')).not.toHaveAttribute('open','');
-  await page.getByRole('button',{name:'Plan',exact:true}).filter({visible:true}).click();
+  await page.getByRole('button',{name:'Tydzień',exact:true}).filter({visible:true}).click();
   await expect(page.getByText('Plan w arkuszu · układ i propozycje',{exact:true})).toHaveCount(0);
   await expect(page.getByText(/Poniższy arkusz jest archiwum/)).toBeVisible();
 });
 for(const width of [320,390])test(`Runna current view at ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:844});
   const {errors}=await open(page);
+  await openRunnaCopy(page);
   await page.getByLabel('Plik kopii planu Runna').setInputFiles({name:'plan.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(copy))});
-  await expect(page.getByRole('heading',{name:'BEZ BIEGU W KOPII'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Bez biegu w kopii'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   if(width===390)await page.screenshot({path:'test-results/runna-mode-mobile.png',fullPage:true});
   expect(errors).toEqual([]);

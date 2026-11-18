@@ -1,4 +1,5 @@
 const {test,expect}=require('playwright/test');
+const {openSourceDetails}=require('./glass-navigation.cjs');
 const run = (id,date,name,extra={}) => ({Session_ID:id,Date:date,Time:'10:00',Type:'Bieg',Name:name,Distance:'8',Duration:'60:00',Status:'DONE',...extra});
 async function open(page,log){
   const { SHEET_CONTRACTS } = await import('../../src/schema.js');
@@ -14,6 +15,7 @@ async function open(page,log){
 test('weekly view shows partial load, evidence boxing duration and missing RPE on mobile',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await open(page,[run('strava-101','2026-09-25','Bieg bez oceny'),run('strava-102','2026-09-24','Bieg z oceną',{RPE:'2',sRPE:'120'}),{Date:'2026-09-23',Type:'Boks',Duration:'1:25:50',RPE:'',sRPE:''}]);
+  await openSourceDetails(page);
   await page.getByText('Wykonanie · ostatnie 7 dni',{exact:true}).click();
   const summary=page.locator('.weekly-snapshot-grid');
   await expect(summary).toContainText('SUMA CZĘŚCIOWA');
@@ -43,6 +45,7 @@ test('switching between older runs keeps drafts separate and does not write',asy
 });
 test('undated rows do not silently become an empty week',async({page})=>{
   await open(page,[run('strava-101','invalid','Brak daty'),run('strava-102','2026-08-01','Poza oknem')]);
+  await openSourceDetails(page);
   await page.getByText('Wykonanie · ostatnie 7 dni',{exact:true}).click();
   await expect(page.getByText(/Wiersze bez czytelnej daty: 1/)).toBeVisible();
 });

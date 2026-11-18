@@ -11,7 +11,7 @@ async function openHub(page, tables = {feed:[],raw:[],log:[],plan:[]}) {
   await page.route('**/api/session',r=>r.fulfill({json:{ok:true,configured:true,authenticated:true}}));
   await page.route('**/api/data',r=>r.fulfill({json:{ok:true,tables}}));
   await page.goto('/');
-  await page.getByRole('button',{name:'Plan',exact:true}).filter({visible:true}).click();
+  await page.getByRole('button',{name:'Tydzień',exact:true}).filter({visible:true}).click();
   return {writes,errors};
 }
 async function upload(page, data=snapshot()) {
@@ -42,7 +42,7 @@ test('invalid replacement preserves previous copy and reload restores it',async(
   const broken=snapshot();broken.weeks[0].totalKm=100;await upload(page,broken);
   await expect(page.locator('.runna-error')).toContainText('suma sesji');
   await expect(page.locator('.runna-week-total')).toContainText('25');
-  await page.reload();await page.getByRole('button',{name:'Plan',exact:true}).filter({visible:true}).click();
+  await page.reload();await page.getByRole('button',{name:'Tydzień',exact:true}).filter({visible:true}).click();
   await expect(page.locator('.runna-week-total')).toContainText('25');
 });
 test('week navigation, calendar selection and disabling club anchors work',async({page})=>{

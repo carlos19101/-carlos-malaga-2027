@@ -21,7 +21,7 @@ async function openPlanner(page, tables=initialTables()) {
   await page.route('**/api/session', route=>route.fulfill({json:{ok:true,configured:true,authenticated:true}}));
   await page.route('**/api/data', route=>route.fulfill({json:{ok:true,transport:'test',tables}}));
   await page.goto('/');
-  await page.getByRole('button',{name:'Plan',exact:true}).filter({visible:true}).click();
+  await page.getByRole('button',{name:'Tydzień',exact:true}).filter({visible:true}).click();
   await page.getByText('Plan w arkuszu · układ i propozycje', {exact:true}).click();
   await expect(page.getByRole('heading',{name:'Jeden wspólny tydzień'})).toBeVisible();
   return {writes,errors};

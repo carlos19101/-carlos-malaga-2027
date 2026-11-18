@@ -1,3 +1,4 @@
+const { openArchive } = require('./glass-navigation.cjs');
 const { expect, test } = require('playwright/test');
 
 test('obserwowane HR przetrwa odświeżenie i nie zostaje przedstawione jako ocena celu', async ({ page }) => {
@@ -27,7 +28,7 @@ test('obserwowane HR przetrwa odświeżenie i nie zostaje przedstawione jako oce
   await expect(observation).toContainText('max 192');
   await expect(observation).not.toContainText('%');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
-  await page.reload();await page.getByRole('button',{name:'EPA',exact:true}).click();
+  await page.reload();await openArchive(page);
   await expect(page.locator('.epa-run')).toContainText('obserwacja HR: 0:02');
   await page.getByRole('button',{name:'Pokaż aktualną decyzję',exact:true}).click();
   await page.locator('.dashboard-last-session').click();
@@ -116,6 +117,9 @@ const tables = {
     'Date', 'Timestamp', 'Weight_kg', 'RHR_bpm', 'HRV_night_ms', 'Sleep_min', 'Sleep_score',
     'BodyBattery_gain', 'Readiness_Garmin', 'Pain_0_10', 'DOMS_0_10', 'Fatigue_0_10',
     'Coach_Status', 'Coach_Decision', 'Source', 'BodyBattery_current',
+    'HRV_orthostatic_rMSSD_ms', 'HR_lying_bpm', 'HR_standing_bpm', 'Wellbeing',
+    'Symptom_Dizziness', 'Symptom_Palpitations', 'Symptom_Chest_Pain', 'Symptom_Illness',
+    'Checkin_Saved_At', 'Checkin_Source',
   ], {
     Date: '2026-08-26', Timestamp: '2026-08-26 08:00', Weight_kg: '89', RHR_bpm: '46',
     HRV_night_ms: '56', Coach_Status: 'MODIFY', Coach_Decision: 'Kontroluj obciążenie', Source: 'Garmin',
@@ -167,14 +171,14 @@ test('szkic oceny przetrwa odświeżenie danych i przeładowanie strony', async 
   await page.route('**/api/session', route => route.fulfill({ json: { ok: true, configured: true, authenticated: true } }));
   await page.route('**/api/data', route => route.fulfill({ json: { ok: true, transport: 'test', tables: draftTables } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Log', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Log', exact: true }).filter({visible:true}).click();
   const note = page.locator('.feedback-notes textarea');
   await note.fill('Mój niewysłany szkic');
   await page.getByRole('button', { name: 'Odśwież dane', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Odśwież dane', exact: true })).toBeEnabled();
   await expect(note).toHaveValue('Mój niewysłany szkic');
   await page.reload();
-  await page.getByRole('button', { name: 'Log', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Log', exact: true }).filter({visible:true}).click();
   await expect(note).toHaveValue('Mój niewysłany szkic');
 });
 
@@ -249,7 +253,7 @@ test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', asy
   }));
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'EPA', exact: true }).first().click();
+  await openArchive(page);
   await expect(page.getByRole('heading', { name: 'EPA', exact: true })).toBeVisible();
   await expect(page.getByText('6,80 km · 51:39 · HR 151/161')).toBeVisible();
   await expect(page.getByText('90,1% w celu · 145–158 bpm', { exact: true })).toBeVisible();
@@ -263,7 +267,7 @@ test('EPA pokazuje fakty, pełną akademię i nie rysuje braków jako zera', asy
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await page.locator('.mobile-nav button').filter({ hasText: 'EPA' }).click();
+  await openArchive(page);
   await expect(page.getByRole('heading', { name: 'EPA', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('epa-mobile.png'), fullPage: true });
@@ -275,7 +279,7 @@ async function openEpa(page, data, activities = []) {
   await page.route('**/api/strava/status', route => route.fulfill({ json: { ok: true, configured: true, connected: true } }));
   await page.route('**/api/strava/activities**', route => route.fulfill({ json: { ok: true, activities } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'EPA', exact: true }).first().click();
+  await openArchive(page);
 }
 
 test('EPA nie podstawia starszej Stravy pod nowy bieg bez TCX', async ({ page }) => {

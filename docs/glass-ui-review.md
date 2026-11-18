@@ -2,7 +2,7 @@
 
 ## Status
 
-Gałąź: `feat/glass-ui`. Bez scalenia, push i wdrożenia. Bez zapisów do produkcyjnego arkusza.
+Gałąź robocza: `feat/glass-ui`. Użytkownik zatwierdził wdrożenie 18.11.2026. Bez zapisów do produkcyjnego arkusza.
 
 Krok B jest osobnym commitem `3e518ef`: czysta reguła dnia i 20 testów. Redesign korzysta z jej wyniku; nie dodaje nowych endpointów ani kolumn arkusza.
 
@@ -36,7 +36,17 @@ Krok B jest osobnym commitem `3e518ef`: czysta reguła dnia i 20 testów. Redesi
 - Zrzuty 390 px: Dziś, Postęp, oba stany puste, dół formularza. Testy sprawdzają brak poziomego przepełnienia i dostęp do przycisku zapisu nad nawigacją.
 - Sprawdzone Chromium; nie deklarujemy testu na fizycznym iPhonie ani pełnego audytu WCAG.
 
-## Przed scaleniem
+## Historia przeglądu przed zatwierdzeniem
+
+### Korekta Postępu — 18.11.2026
+
+- Wyjaśniono pochodzenie dwóch liczb ze zrzutów: 14 km z 17.11 i Sleep_score 84 były syntetycznymi danymi w `test/e2e/glass-ui.spec.cjs`, nie odczytem produkcji. Odczyt referencyjnego Google Sheet wykonano bez zapisów; konkretne wiersze przekazano użytkownikowi, bez kopiowania historii zdrowotnej do repo.
+- Wykres ma wysokość 180 px, zakres osi z danych i celu, trzy etykiety oraz podpisaną przerywaną linię celu. Data punktu pozostaje datą biegu, nie początkiem tygodnia. Bieżący, nieukończony tydzień może mieć krótsze maksimum — to nie automatycznie regres formy.
+- Uproszczono odliczanie i podpis celu. Metodologia dostępna po rozwinięciu.
+- „Ostatnie dane” pokazuje najnowszą nieprzyszłą datę z Raw_Data / Training Log / APP_FEED, oddzielnie od czasu sprawdzenia. Nie jest to zapewnienie kompletności wszystkich tabel. Plan nie wyznacza świeżości.
+- Zrzuty do przeglądu: viewport 390 × 844 px, z widocznym oznaczeniem danych testowych. Brak zapisu do arkusza. Wartości 76/53 w scenariuszu regresyjnym są oczekiwaniami podanymi przez użytkownika, nie deklaracją synchronizacji Garmina.
+- Test nawigacji potwierdza `fixed` i dolną krawędź na 830 px w viewport 844 px (14 px odstępu) przed i po przewijaniu. Ostatni przycisk nie jest zasłonięty. Zachowano istniejący odstęp treści i safe area; nie wykonano testu na fizycznym iPhonie.
+- Aktualny wynik: **662/662 Vitest**, **17/17 wybranych E2E**, build PASS (`index-Dc_qIGbX.js`, `index-_Jqrl7xO.css`). Nie oznacza to pełnego zielonego przebiegu starszej nawigacji E2E opisanej powyżej. Bez scalenia, push ani wdrożenia.
 
 1. Po zgodzie: dostosować wyłącznie ścieżki UI w dotychczasowych E2E, zachowując asercje danych.
 2. Zrobione po zgodzie: zamrożono zegar w istniejącym teście API check-inu; pełne 658 testów przechodzi.
@@ -44,3 +54,11 @@ Krok B jest osobnym commitem `3e518ef`: czysta reguła dnia i 20 testów. Redesi
 4. Dopiero po odrębnej zgodzie użytkownika scalić i wdrożyć. Teraz produkcja pozostaje bez zmian.
 
 Lokalny QA bez uruchamiania drugiego serwera: ustaw `CARLOS_E2E_PORT` na port działającego Vite preview, uruchom Playwright z `--config=test/glass-playwright.config.cjs`. Konfiguracja ta nie zmienia zwykłego `playwright.config.cjs` i nie kieruje testów na produkcję.
+
+## Bramka wdrożenia po zgodzie użytkownika — 18.11.2026
+
+- Dostosowano starsze E2E do zakładki Tydzień, ścieżki Postęp → EPA oraz rozwijanych szczegółów. Zachowano asercje danych, braków, konfliktów, Stravy, szkiców i zapisu.
+- Fixture Raw_Data w testach EPA uzupełniono o dziesięć pustych nagłówków obecnego kontraktu check-inu. Bez nich odpowiedź testowa była odrzucana jako DATA ERROR. Nie dodano pomiarów ani wartości domyślnych.
+- Pełny przebieg E2E: **56/56 PASS**; wcześniejsze czerwone wyniki powyżej są historyczne, nie stanem tej bramki.
+- Vitest **662/662 PASS**, build PASS. Origin/main zweryfikowany przed scaleniem; bez force push.
+- Testy przeglądarkowe używają atrap API. Kontrola produkcji po wdrożeniu ma obejmować tylko odczyt i nawigację, bez próbnego check-inu.

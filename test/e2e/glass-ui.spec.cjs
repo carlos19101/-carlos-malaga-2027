@@ -3,7 +3,7 @@ const { test, expect } = require('playwright/test');
 const morning = date => ({ Date: date, HRV_orthostatic_rMSSD_ms: '60', HR_lying_bpm: '52', HR_standing_bpm: '70', Sleep_min: '465', Wellbeing: 'GOOD', Symptom_Dizziness: 'NO', Symptom_Palpitations: 'NO', Symptom_Chest_Pain: 'NO', Symptom_Illness: 'NO', Checkin_Saved_At: `${date}T07:00:00Z`, RHR_bpm: '49', Sleep_score: '84' });
 const run = (date, km, duration) => ({ Date: date, Time: '10:00', Session_ID: `test-run-${date}`, Type: 'Bieg', Name: 'Bieg testowy', Distance: String(km), Duration: duration, Status: 'DONE', RPE: '3', sRPE: '150', HR_avg: '150', HR_max: '165' });
 const fixture = { raw: [13,14,15,16,17].map(day => morning(`2026-11-${day}`)), log: [run('2026-10-01',10,'55:00'),run('2026-10-15',10,'53:00'),run('2026-10-28',12,'70:00'),run('2026-11-10',10,'51:00'),run('2026-11-17',14,'82:00')] };
-async function open(page, data = fixture) {
+async function open(page, data = fixture, date = '2026-11-17') {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { SHEET_CONTRACTS } = await import('../../src/schema.js');
   const names = {feed:'APP_FEED',raw:'Raw_Data',log:'Training Log',plan:'Plan'};
@@ -11,7 +11,7 @@ async function open(page, data = fixture) {
   const errors=[], writes=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('request',r=>{ if(r.url().includes('/api/')&&r.method()!=='GET')writes.push(r.url()); });
-  await page.clock.setFixedTime(new Date('2026-11-17T09:00:00+01:00'));
+  await page.clock.setFixedTime(new Date(`${date}T09:00:00+01:00`));
   await page.route('**/api/session',r=>r.fulfill({json:{ok:true,configured:true,authenticated:true}}));
   await page.route('**/api/data',r=>r.fulfill({json:{ok:true,tables}}));
   await page.route('**/api/strava/status',r=>r.fulfill({json:{ok:true,configured:true,connected:false}}));
@@ -19,6 +19,13 @@ async function open(page, data = fixture) {
   await expect(page.getByRole('heading',{name:'Dziś',exact:true})).toBeVisible();
   await expect(page.getByRole('heading',{name:data.raw?.length ? 'Poznajemy Twoją normę' : 'Zacznij od pomiaru'})).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
+  // Visible on every QA screenshot: these are routed test values, never live readings.
+  await page.evaluate(() => {
+    const label=document.createElement('div');
+    label.textContent='PODGLĄD · DANE TESTOWE';
+    label.style.cssText='position:fixed;top:0;left:0;right:0;z-index:1000;text-align:center;font:10px sans-serif;background:#26354c;color:white;padding:3px;pointer-events:none';
+    document.body.append(label);
+  });
   return {errors,writes};
 }
 test.use({ viewport:{width:390,height:844}, reducedMotion:'reduce', serviceWorkers:'block' });
@@ -50,7 +57,52 @@ test('empty data never displays a zero score, forecast or false load',async({pag
   await expect(page.getByRole('heading',{name:'Jeszcze bez wykresu'})).toBeVisible();
   await expect(page.locator('.glass-gauge strong')).toHaveText('—');
   await expect(page.locator('.chart-line')).toHaveCount(0);
-  await page.screenshot({path:'test-results/glass-progress-empty-390.png',fullPage:true});
+  await page.screenshot({path:'test-results/glass-progress-empty-viewport-390.png'});
+  expect(errors).toEqual([]);expect(writes).toEqual([]);
+});
+
+test('progress preserves run dates, exact distance and sleep source; fixed nav in viewport',async({page})=>{
+  const {errors,writes}=await open(page,{
+    raw:[{...morning('2026-11-17'),Sleep_score:'76'},{...morning('2026-11-18'),Sleep_score:'53'}],
+    log:[run('2026-11-10',10,'51:00'),run('2026-11-15',15.01,'1:24:34'),run('2026-11-16',7.51,'45:04')],
+    plan:[{Data:'2027-02-01',Type:'Bieg',Session:'Przyszły trening testowy'}],
+  },'2026-11-18');
+  await expect(page.locator('.sync-strip')).toContainText('Ostatnie dane: 18');
+  await expect(page.locator('.sync-strip')).not.toContainText('2027');
+  const nav=page.getByRole('navigation',{name:'Dolna nawigacja'});
+  await nav.getByRole('button',{name:'Postęp'}).click();
+  await expect(page.locator('.glass-race-card')).toContainText('Tydzień 1 z 16');
+  await expect(page.locator('.glass-race-card')).not.toContainText('numer tygodnia Runny');
+  await expect(page.locator('.chart-goal-label')).toHaveText('cel 47:30');
+  await page.getByRole('button',{name:'Długi bieg',exact:true}).click();
+  // Sunday stays Sunday, not the Monday grouping key. Monday's shorter run is separate.
+  const choice=page.locator('.glass-chart-picker button').filter({hasText:'15 lis'});
+  await expect(page.locator('.glass-chart-picker button')).toHaveCount(2);
+  await choice.click();
+  await expect(page.locator('.glass-chart-readout')).toContainText('15,01 km');
+  await expect(page.locator('.glass-chart-readout')).toContainText('15 lis');
+  await expect(page.locator('.chart-goal-label')).toHaveText('cel 18 km');
+  await expect(page.locator('.chart-y-label')).toHaveCount(3);
+  expect(await page.locator('.glass-chart').evaluate(el=>el.getBoundingClientRect().height)).toBeCloseTo(180,0);
+  expect(await page.locator('.chart-goal').evaluate(el=>getComputedStyle(el).strokeDasharray)).not.toBe('none');
+  const chart=page.locator('.glass-progress-chart');
+  await chart.evaluate(el=>window.scrollTo(0,el.getBoundingClientRect().top+window.scrollY-24));
+  await page.screenshot({path:'test-results/glass-progress-chart-viewport-390.png'});
+  const recovery=page.locator('.glass-card').filter({has:page.getByRole('heading',{name:'Regeneracja · odczyty'})});
+  const sleep=recovery.locator('.glass-metric-grid > div').filter({hasText:'Jakość snu'});
+  await expect(sleep).toContainText('53');await expect(sleep).toContainText('18 lis');
+  await expect(sleep).not.toContainText('84');
+  await recovery.scrollIntoViewIfNeeded();
+  await page.screenshot({path:'test-results/glass-progress-readings-viewport-390.png'});
+  for(const y of [0,500,100000]){
+    await page.evaluate(y=>window.scrollTo(0,y),y);
+    expect(await nav.evaluate(el=>getComputedStyle(el).position)).toBe('fixed');
+    const box=await nav.boundingBox();
+    expect(box.y+box.height).toBeCloseTo(830,0);
+  }
+  const lastButton=page.getByRole('button',{name:'EPA · analizy historyczne →'});
+  const buttonBox=await lastButton.boundingBox(),navBox=await nav.boundingBox();
+  expect(buttonBox.y+buttonBox.height).toBeLessThan(navBox.y);
   expect(errors).toEqual([]);expect(writes).toEqual([]);
 });
 test('existing check-in contract, comma, no default wellbeing and no obscured submit',async({page})=>{

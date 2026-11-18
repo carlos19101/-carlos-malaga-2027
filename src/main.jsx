@@ -2084,6 +2084,9 @@ function App() {
 
   const feedRow = latestRow(data.feed);
   const sourceAt = sourceTime(feedRow);
+  // Content date, not fetch time; future plan entries must not imply fresh data.
+  const lastContentDay = [...data.raw, ...data.log, ...data.feed].map(glassDay)
+    .filter(day => day && day <= warsawDate(calendarNow)).sort().at(-1);
   const freshness = sourceFreshness(sourceAt, calendarNow, STALE_AFTER_HOURS, {
     requireCurrentDay: true,
     contentDate: v(feedRow, 'date', ''),
@@ -2122,7 +2125,7 @@ function App() {
       <div className={`sync-strip sync-${status}`} aria-live="polite">
         <span className="live-dot" />
         <strong>{statusLabel}</strong>
-        <span>Dane z: {sourceAt ? formatDate(sourceAt, true) : '—'} · Sprawdzono: {checkedAt ? formatDate(new Date(checkedAt), true) : '—'}</span>
+        <span>Ostatnie dane: {lastContentDay ? formatDate(new Date(`${lastContentDay}T12:00:00Z`)) : 'brak danych'} · Sprawdzono: {checkedAt ? formatDate(new Date(checkedAt), true) : '—'}</span>
       </div>
 
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
