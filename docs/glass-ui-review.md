@@ -29,7 +29,7 @@ Krok B jest osobnym commitem `3e518ef`: czysta reguła dnia i 20 testów. Redesi
 ## Weryfikacja
 
 - Krok B: 20/20 testów.
-- Vitest 17.11: 658/658. Ponowny pełny przebieg 18.11: 657/658. Istniejący `test/api/dailyCheckin.test.js:95` traktuje stałą datę 18.11 jako przyszłą, nie zamraża zegara i oczekuje błędu daty. Po zmianie dnia oczekiwanie jest nieaktualne. Kod API nie został zmieniony. Zapytano o zgodę na ustabilizowanie zegara testu.
+- Vitest: **658/658 PASS** po zatwierdzonej przez użytkownika stabilizacji zegara testowego. Podczas pierwszego przebiegu 18.11 istniejący test traktował 18.11 jako przyszłość i nie zamrażał zegara. W `test/api/dailyCheckin.test.js` ustawiono stały czas 17.11 oraz przywracanie prawdziwego zegara po teście. Asercje i kod API nie zostały zmienione.
 - Nowy widok + istniejące testy dostępu i importu Stravy: 16/16 PASS, bez rzeczywistych zapisów. Test zapisu check-inu przechwytuje POST lokalną atrapą odpowiedzi.
 - Pełny przebieg starszych scenariuszy E2E: 20/54 PASS, 34 błędy. Dawne scenariusze szukają `Plan`, `EPA`, wielkich nagłówków oraz sekcji obecnie zwiniętych. Nie usunięto ani nie osłabiono tych testów. Potrzebna zgoda na migrację ścieżek klikania, następnie ponowny pełny przebieg; nie traktować tego jako pełnej zielonej regresji.
 - Build PASS: JS 435,12 kB / gzip 138,43 kB; CSS 118,67 kB / gzip 23,14 kB. Fonty lokalne, bez nowej biblioteki wykresów/animacji.
@@ -39,7 +39,7 @@ Krok B jest osobnym commitem `3e518ef`: czysta reguła dnia i 20 testów. Redesi
 ## Przed scaleniem
 
 1. Po zgodzie: dostosować wyłącznie ścieżki UI w dotychczasowych E2E, zachowując asercje danych.
-2. Po zgodzie: zamrozić zegar w istniejącym teście API check-inu.
+2. Zrobione po zgodzie: zamrożono zegar w istniejącym teście API check-inu; pełne 658 testów przechodzi.
 3. Powtórzyć pełne testy i build oraz pokazać wyniki.
 4. Dopiero po odrębnej zgodzie użytkownika scalić i wdrożyć. Teraz produkcja pozostaje bez zmian.
 

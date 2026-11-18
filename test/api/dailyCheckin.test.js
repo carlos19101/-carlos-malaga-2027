@@ -38,6 +38,9 @@ function request(overrides = {}) {
 }
 
 beforeEach(() => {
+  // Fixed calendar: 18 November must remain tomorrow regardless of the run date.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-17T10:00:00+01:00'));
   vi.clearAllMocks();
   vi.stubEnv('APP_PASSCODE_SCRYPT', 'configured');
   vi.stubEnv('SESSION_SECRET', 'session-secret');
@@ -51,7 +54,10 @@ beforeEach(() => {
   mocks.updateDailyCheckin.mockResolvedValue({ action: 'update', date: '2026-11-17', rowNumber: 108 });
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 describe('/api/daily-checkin', () => {
   it('wymaga POST, dozwolonego Origin, konfiguracji i aktywnej sesji', async () => {
