@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { parseNumber } from './parse.js';
-import { parseSessionMinutes, computeLoadMap } from './loadMap.js';
-import { summarizeLoad } from './performance.js';
+import { parseSessionMinutes } from './loadMap.js';
+import { summarizeHrLoad, HR_LOAD_CONFIG } from './hrLoad.js';
 import { latestFeedRow } from './feedSelection.js';
 import { plannerDay, plannerWeek } from './jointPlanner.js';
 import { progressDomain } from './progressChart.js';
@@ -32,10 +32,7 @@ export function GlassProgress({ log = [], raw = [], feed = [], now = new Date(),
   const xy = p => [44 + (dayDistance(start, end) ? dayDistance(start, p.date) / dayDistance(start, end) * 236 : 118), y(p.value)];
   const path = points.map((p,i) => `${i ? 'L' : 'M'} ${xy(p).join(' ')}`).join(' ');
   const focus = points[selected] || points.at(-1), format = p => mode === '10k' ? timeLabel(p.value) : `${num(p.value, 2)} km`;
-  const records = done.map(row => ({ date: glassDay(row), type: read(row,'logType'), name: read(row,'logName'), duration: read(row,'logDuration'), km: read(row,'logDistance'), rpe: read(row,'logRpe'), srpe: read(row,'logSrpe') }));
-  const load = summarizeLoad(records, now), quality = computeLoadMap(records, now);
-  const history = records.length ? dayDistance(records[0].date, today) + 1 : 0;
-  const ratio = history >= 28 && quality.internal.state28 === 'ready' && load.enoughForRatio ? load.ratio : null;
+  const load = summarizeHrLoad(done, raw, now), ratio = load.ratio;
   const left = Math.max(0, dayDistance(today, '2027-03-07')), countdownWeek = left <= 112 && left > 0 ? Math.min(16, Math.floor((112 - left) / 7) + 1) : null;
   const rawRow = raw.filter(r => glassDay(r) && glassDay(r) <= today).sort((a,b) => glassDay(a).localeCompare(glassDay(b))).at(-1);
   const feedRow = latestFeedRow(feed.filter(r => glassDay(r) && glassDay(r) <= today));
@@ -53,17 +50,26 @@ export function GlassProgress({ log = [], raw = [], feed = [], now = new Date(),
     </GlassCard>
     <GlassCard><span className="glass-eyebrow">STABILNOŚĆ WYSIŁKU</span><h2>Tempo przy stałym tętnie</h2><div className="glass-empty compact"><strong>—</strong><p>Brak porównywalnej analizy odcinków TCX.</p></div><p className="glass-caption">Zapisane średnie HR i tempo nie wystarczą do wiarygodnego wyliczenia dryfu. Nie rysujemy pozornych pasków postępu.</p></GlassCard>
     <GlassCard className="glass-load">
-      <div className="glass-section-title"><h2>Obciążenie</h2><span className="glass-pill">7 DNI / 4 TYG.</span></div>
+      <div className="glass-section-title"><h2>Obciążenie</h2><span className="glass-pill">HR · TRIMP</span></div>
       <div className="glass-gauge"><svg viewBox="0 0 240 140" aria-hidden="true">
         <path d="M20 120 A100 100 0 0 1 220 120" className="gauge-track" pathLength="1"/>
         {ratio !== null && <>
           {[[0,.4,'blue'],[.4,.25,'green'],[.65,.1,'yellow'],[.75,.25,'red']].map(([start,length,tone]) => <path key={start} d="M20 120 A100 100 0 0 1 220 120" className="gauge-zone" pathLength="1" stroke={`var(--glass-${tone})`} strokeDasharray={`${length} ${1-length}`} strokeDashoffset={-start} />)}
-          <path d="M120 120 L120 35" className="gauge-needle" transform={`rotate(${-90 + Math.min(2,ratio)*90} 120 120)`}/>
+          <path d="M120 91 L120 35" className="gauge-needle" transform={`rotate(${-90 + Math.min(2,ratio)*90} 120 120)`}/>
         </>}
         <text x="81" y="13">0,8</text><text x="162" y="20">1,3</text><text x="198" y="47">1,5</text>
       </svg><strong>{ratio === null ? '—' : num(ratio,2)}</strong></div>
-      <p>{ratio === null ? 'Kalibracja lub niepełne RPE/sRPE w historii.' : 'sRPE ostatnich 7 dni / średnia tygodniowa z 28 dni.'}</p>
-      <details className="glass-method"><summary>Źródło i ograniczenia</summary><p>To obciążenie z RPE × czasu, nie Garmin Load. Znaczniki 0,8 / 1,3 / 1,5 nie są granicami bezpieczeństwa. Potrzebne: co najmniej 28 dni historii i kompletność sRPE zapisanych sesji. Nie dowodzi to, że wszystkie treningi zostały zaimportowane.</p></details>
+      <p className="hr-load-status">{load.status === 'calibration' ? `Kalibracja ${load.historyDays} z 28 dni` : load.status === 'partial' ? 'Niepełne dane HR — wskaźnik wstrzymany' : ratio === null ? 'Brak danych do wskaźnika' : `${load.zone} · zakres wskaźnika`}</p>
+      <p className="glass-caption">7 dni: {num(load.acute,1)} · 28 dni: {num(load.total28,1)} TRIMP · sesje z HR: {num(load.hrCoverage,0)}%</p>
+      <p className="glass-caption">TCX: {load.atomicCount} · szacunek ze średniego HR: {load.estimateCount}{load.historyDays >= 21 && load.historyDays < 28 ? ' · historia częściowa' : ''}</p>
+      <details className="glass-method"><summary>sRPE osobno · siła i sesje bez HR</summary><p>7 dni: {num(load.srpe7,0)} AU · 28 dni: {num(load.srpe28,0)} AU. Brak RPE/czasu: {load.srpeMissing} sesji. Nie dodajemy AU do TRIMP.</p></details>
+      <details className="glass-method"><summary>Źródło i ograniczenia</summary>
+        <p>Banister TRIMP (mężczyźni). HRmax: {HR_LOAD_CONFIG.hrMax} bpm. Próbka HR jest właścicielem czasu do następnej próbki; ostatnia nie dostaje czasu. Pomijamy luki ponad 30 s i brak HR, uwzględniamy postoje z pomiarem. HR poniżej HRrest daje 0 TRIMP. Odczyty ponad HRmax nie są obcinane.</p>
+        <p>HRrest: pomiar leżąc z dnia sesji → RHR z tego dnia → 50 bpm. Nowy TCX zachowuje użyty HRrest i źródło w zapisie importu. Szacunki używają dostępnych obecnie danych tego dnia. Średnie HR nie odtwarza zmienności treningu.</p>
+        <p>7 dni / (28 dni ÷ 4). Od 21 dni historii wskaźnik może się pojawić; do 28 dni jest wstępny. Liczymy dni kalendarzowe od pierwszej zapisanej sesji, nie dni treningowe. Dni bez wpisów traktujemy jako bez sesji — to nie dowód kompletnego importu. Sesje z HR: odsetek wszystkich zapisanych sesji w 28 dniach, włącznie z siłą.</p>
+        <p>„Optymalne” to tylko nazwa umownego zakresu 0,8–1,3, nie gwarancja bezpieczeństwa ani decyzja treningowa. Upał, odwodnienie i stres podczas boksu mogą podnosić HR bez zmiany wykonanej pracy. TRIMP nie mierzy uderzeń ani obciążenia mięśni; sRPE uzupełnia ocenę.</p>
+        {load.sessions.map((session, index) => <p key={`${session.sessionId}-${index}`}>{shortDay(session.date)} · {session.name || 'Sesja'}: {session.trimp === null ? (session.srpe === null ? 'brak danych' : `sRPE ${num(session.srpe,0)} AU`) : `${num(session.trimp,1)} TRIMP · ${session.kind === 'atomic' ? 'próbki TCX' : 'szacunek'} · HRrest ${session.rest.value} (${session.rest.source})`}{session.coverage !== undefined ? ` · przeanalizowano ${num(session.coverage*100,1)}% czasu odstępów` : ''}{session.aboveMax ? ' · HR ponad 210: sprawdź pomiar/HRmax' : ''}</p>)}
+      </details>
     </GlassCard>
     <GlassCard><h2>Regeneracja · odczyty</h2><div className="glass-metric-grid">{[['Tętno spoczynkowe',read(rawRow,'rawRhr'),'bpm',glassDay(rawRow)],['HRV nocne · 7 dni',read(feedRow,'hrv7d'),'ms',glassDay(feedRow)],['Jakość snu',read(rawRow,'rawSleepScore'),'/100',glassDay(rawRow)]].map(([label,value,unit,date]) => <div key={label}><span>{label}</span><strong>{num(value,0)}</strong><small>{unit} · {date ? shortDay(date) : 'brak daty'}</small></div>)}</div><p className="glass-caption">Ostatnie zapisane odczyty, nie automatyczna ocena zdrowia. Nocnego HRV nie łączymy z porannym rMSSD.</p></GlassCard>
     <button className="glass-text-button" type="button" onClick={onArchive}>EPA · analizy historyczne →</button>

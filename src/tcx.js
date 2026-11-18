@@ -37,6 +37,15 @@ export function parseTcxLaps(tcxText) {
     .filter(Boolean));
 }
 
+// Load has its own 30 s gap policy. Preserve missing HR to avoid bridging holes.
+export function parseTcxHrTimeline(tcxText) {
+  return blocks(tcxText, 'Trackpoint').map(xml => {
+    const timeMs = Date.parse(textValue(xml, 'Time'));
+    const hr = textValue(blocks(xml, 'HeartRateBpm')[0], 'Value');
+    return { timeMs, heartRate: hr ? Number(hr) : null };
+  });
+}
+
 function requireFiniteNumber(value, label) {
   const number = Number(value);
   if (!Number.isFinite(number)) throw new TypeError(`${label} musi być liczbą.`);

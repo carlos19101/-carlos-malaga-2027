@@ -4,6 +4,7 @@ import { isStagedTcxImportSchema, reconcileTcxImport, resolvePlanStagedTarget } 
 import { stringifyHrTargetStages } from '../../src/hrTargetStages.js';
 import { planDailyCheckinUpsert } from '../../src/dailyCheckin.js';
 import { planStravaActivityAppend } from '../../src/stravaImport.js';
+import { attachHrLoad } from '../../src/hrLoadImport.js';
 
 let tokenCache = null;
 
@@ -322,6 +323,15 @@ export async function updateTcxImport(envelope, options = {}) {
     reconciliation = reconcileTcxImport(table, envelope, { allowStageBootstrap: true });
   } else {
     reconciliation = reconcileTcxImport(table, envelope);
+  }
+  if (envelope.hrLoadEvidence && ['update', 'noop'].includes(reconciliation.action)) {
+    const rawResponse = await fetchImpl(`${valuesUrl(env.GOOGLE_SHEET_ID, DAILY_CHECKIN_TABLE_RANGE)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!rawResponse.ok) throw new Error(`google-raw-read-${rawResponse.status}`);
+    const rawValues = await responseValues(rawResponse, 'google-raw-invalid-response');
+    const rawRows = rawValues.slice(1).map(row => Object.fromEntries((rawValues[0] || []).map((header, i) => [header, row[i] ?? ''])));
+    reconciliation = attachHrLoad(reconciliation, table, envelope.hrLoadEvidence, rawRows, envelope.timing.localDate);
   }
   if (reconciliation.action !== 'update') return reconciliation;
 

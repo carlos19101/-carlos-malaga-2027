@@ -1,8 +1,34 @@
 const { test, expect } = require('playwright/test');
 // Entirely synthetic measurements: tests never access or write the real Sheet.
 const morning = date => ({ Date: date, HRV_orthostatic_rMSSD_ms: '60', HR_lying_bpm: '52', HR_standing_bpm: '70', Sleep_min: '465', Wellbeing: 'GOOD', Symptom_Dizziness: 'NO', Symptom_Palpitations: 'NO', Symptom_Chest_Pain: 'NO', Symptom_Illness: 'NO', Checkin_Saved_At: `${date}T07:00:00Z`, RHR_bpm: '49', Sleep_score: '84' });
-const run = (date, km, duration) => ({ Date: date, Time: '10:00', Session_ID: `test-run-${date}`, Type: 'Bieg', Name: 'Bieg testowy', Distance: String(km), Duration: duration, Status: 'DONE', RPE: '3', sRPE: '150', HR_avg: '150', HR_max: '165' });
+const run = (date, km, duration) => ({ Date: date, Time: '10:00', Session_ID: `test-run-${date}`, Type: 'Bieg', Name: 'Bieg testowy', Distance: String(km), Duration: duration, Status: 'DONE', RPE: '3', sRPE: '150', 'HR avg': '150', 'HR max': '165' });
 const fixture = { raw: [13,14,15,16,17].map(day => morning(`2026-11-${day}`)), log: [run('2026-10-01',10,'55:00'),run('2026-10-15',10,'53:00'),run('2026-10-28',12,'70:00'),run('2026-11-10',10,'51:00'),run('2026-11-17',14,'82:00')] };
+
+test('HR load gauge at 390px: mixed evidence, separate strength and truthful provenance',async({page})=>{
+  const {hrEvidence,loadFromEvidence}=await import('../../src/hrLoad.js');
+  const evidence=hrEvidence(Array.from({length:121},(_,i)=>({timeMs:i*30000,heartRate:150})));
+  const stored=loadFromEvidence(evidence,{value:52,source:'HR_lying_bpm',date:'2026-11-17'});
+  const {errors,writes}=await open(page,{
+    raw:[morning('2026-11-17')],
+    log:[...['2026-10-21','2026-10-28','2026-11-04','2026-11-11'].map(day=>run(day,8,'60:00')),
+      {...run('2026-11-17',8,'60:00'),Coach_Load_Notes:JSON.stringify(stored)},
+      {...run('2026-11-16',0,'45:00'),Type:'Siła',Name:'Siła testowa',RPE:'4'}],
+  });
+  await page.getByRole('navigation',{name:'Dolna nawigacja'}).getByRole('button',{name:'Postęp'}).click();
+  const card=page.locator('.glass-load');
+  await expect(card.locator('.glass-gauge strong')).not.toHaveText('—');
+  await expect(card).toContainText('HR · TRIMP');
+  await expect(card).toContainText('sesje z HR: 83%');
+  await expect(card).toContainText('TCX: 1 · szacunek ze średniego HR: 4');
+  await card.getByText('sRPE osobno · siła i sesje bez HR',{exact:true}).click();
+  await expect(card).toContainText('7 dni: 180 AU');
+  await card.evaluate(el=>window.scrollTo(0,el.getBoundingClientRect().top+window.scrollY-35));
+  await page.screenshot({path:'test-results/hr-load-390.png',fullPage:false});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=390)).toBe(true);
+  await card.getByText('Źródło i ograniczenia',{exact:true}).click();
+  await expect(card).toContainText('HRrest 52 (HR_lying_bpm)');
+  expect(errors).toEqual([]);expect(writes).toEqual([]);
+});
 async function open(page, data = fixture, date = '2026-11-17') {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { SHEET_CONTRACTS } = await import('../../src/schema.js');

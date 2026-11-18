@@ -22,7 +22,7 @@ export default async function handler(request, response) {
   }
 
   try {
-    const envelope = await readJson(request, 8192);
+    const envelope = await readJson(request, 16384);
     const validation = validateTcxImportEnvelope(envelope);
     if (validation.action !== 'valid') {
       sendJson(response, 422, {

@@ -1,7 +1,8 @@
 import { isNullish, normalize, parseDate, parseNumber } from './parse.js';
 import { stringifyHrTargetStages, tryParseHrTargetStages, HR_TARGET_OBSERVATION_SCHEMA } from './hrTargetStages.js';
 import { createStageAnalysis, validateStageAnalysis } from './stageAnalysis.js';
-import { analyzeTcx, analyzeTcxStages, formatTcxActivityTiming } from './tcx.js';
+import { analyzeTcx, analyzeTcxStages, formatTcxActivityTiming, parseTcxHrTimeline } from './tcx.js';
+import { hrEvidence, validHrEvidence } from './hrLoad.js';
 import { isRunnaDate, RUNNA_TARGET_PENDING } from './runnaPolicy.js';
 
 export const TCX_IMPORT_SCHEMA = 'carlos.tcx-import.v1';
@@ -116,6 +117,7 @@ export function createTcxImport(tcxText, options = {}) {
     sourceSha256: sourceSha256 || null,
     idempotencyKey,
     timing,
+    ...(options.includeHrLoad ? { hrLoadEvidence: hrEvidence(parseTcxHrTimeline(tcxText), sourceSha256 || null) } : {}),
     methodology: {
       intervalOwner: 'previous-trackpoint',
       ...(observed ? { targetBoundaryMode: 'per-stage' } : { inclusiveTarget: true }),
@@ -165,6 +167,11 @@ export function validateTcxImportEnvelope(envelope = {}) {
   }
   const timing = validateTiming(envelope.timing);
   if (!timing.valid) return result('contract-error', { reason: 'Nieprawidłowy czas rozpoczęcia TCX.' });
+  if (envelope.hrLoadEvidence !== undefined && (!validHrEvidence(envelope.hrLoadEvidence)
+    || envelope.hrLoadEvidence.sourceSha256 !== envelope.sourceSha256 || !timing.value
+    || formatTcxActivityTiming(timing.value.startedAt).localDate !== timing.value.localDate)) {
+    return result('contract-error', { reason: 'Nieprawidłowy zapis próbek obciążenia HR.' });
+  }
 
   const atomicHeaders = staged ? TCX_STAGED_ATOMIC_HEADERS : TCX_IMPORT_HEADERS;
   const proposed = atomicHeaders.map((header) => envelope.atomic?.[header]);

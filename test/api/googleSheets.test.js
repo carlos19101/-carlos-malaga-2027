@@ -22,6 +22,28 @@ const HEADERS = [
 ];
 
 describe('Google Sheets service account', () => {
+  it.each([false, true])('HR import resolves rest on server and fails closed on Raw_Data failure=%s', async (failRaw) => {
+    const { privateKey } = keyPair();
+    const envelope = createTcxImport('<Trackpoint><Time>2026-08-25T10:00:00Z</Time><HeartRateBpm><Value>150</Value></HeartRateBpm></Trackpoint><Trackpoint><Time>2026-08-25T10:00:05Z</Time><HeartRateBpm><Value>150</Value></HeartRateBpm></Trackpoint>', {
+      sessionId:'test-hr-run', targetMin:145, targetMax:160, includeHrLoad:true, sourceSha256:'C'.repeat(64),
+    });
+    const atomic = Object.keys(envelope.atomic);
+    const headers=['Date','Session_ID',...atomic,'Coach_Load_AU','Coach_Load_Method','Coach_Load_Notes'];
+    const row=['2026-08-25','test-hr-run',...atomic.map(()=>''),'','',''];
+    const fetchImpl=vi.fn()
+      .mockResolvedValueOnce(jsonResponse(200,{access_token:'test-hr-import',expires_in:3600}))
+      .mockResolvedValueOnce(jsonResponse(200,{values:[headers,row]}))
+      .mockResolvedValueOnce(jsonResponse(failRaw?503:200,{values:[['Date','HR_lying_bpm','RHR_bpm'],['2026-08-25',58,43]]}))
+      .mockResolvedValueOnce(jsonResponse(200,{responses:[]}));
+    const promise=updateTcxImport(envelope,{env:{GOOGLE_SERVICE_ACCOUNT_EMAIL:`hr-${failRaw}@example.test`,GOOGLE_PRIVATE_KEY:privateKey,GOOGLE_SHEET_ID:'test-sheet'},fetchImpl});
+    if(failRaw){await expect(promise).rejects.toThrow('google-raw-read-503');expect(fetchImpl).toHaveBeenCalledTimes(3);return;}
+    expect((await promise).action).toBe('update');
+    expect(decodeURIComponent(fetchImpl.mock.calls[2][0])).toContain("'Raw_Data'!A1:BI1000");
+    const body=JSON.parse(fetchImpl.mock.calls[3][1].body);
+    expect(body.data).toHaveLength(4);
+    expect(JSON.parse(body.data.at(-1).values[0][0]).rest).toMatchObject({value:58,source:'HR_lying_bpm'});
+    expect(body.data.every(update=>update.range.startsWith("'Training Log'!"))).toBe(true);
+  });
   it.each([1, 0])('aktualizuje istniejący licznik logowania do %s przez PUT z RAW', async (failures) => {
     const { privateKey } = keyPair();
     const fetchImpl = vi.fn(async (url, options = {}) => {
@@ -272,4 +294,3 @@ describe('Google Sheets service account', () => {
     expect(body).toMatchObject({ majorDimension: 'ROWS', values: [expect.arrayContaining(['Mobilizacja', 'Strava', 'strava-123456789'])] });
   });
 });
-

@@ -13,7 +13,7 @@ export async function prepareTcxImport(tcxText, options = {}, cryptoImpl = globa
   const source = String(tcxText ?? '');
   if (!source.trim()) throw new Error('Plik TCX jest pusty.');
   const sourceSha256 = await sha256Hex(source, cryptoImpl);
-  return createTcxImport(source, { ...options, sourceSha256 });
+  return createTcxImport(source, { ...options, sourceSha256, includeHrLoad: true });
 }
 
 export function tcxImportPreview(envelope = {}) {
