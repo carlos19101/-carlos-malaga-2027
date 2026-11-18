@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>CARLOS — Postęp, wersja szklana</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#060912}
+a{color:#FF9A5C}a:hover{color:#FFC29A}
+@keyframes drift1{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,60px) scale(1.15)}}
+@keyframes drift2{0%{transform:translate(0,0) scale(1.1)}100%{transform:translate(-50px,-30px) scale(.95)}}
+@keyframes ringIn{from{stroke-dashoffset:377}to{stroke-dashoffset:var(--to)}}
+@keyframes draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes barIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes needle{from{transform:rotate(-96deg)}to{transform:rotate(0deg)}}
+@media (prefers-reduced-motion: reduce){*{animation:none !important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 1480px; box-sizing: border-box; position: relative; overflow: hidden; background: #060912; color: #F5F7FA; font-family: Inter, system-ui, sans-serif">
+
+  <div aria-hidden="true" style="position: absolute; width: 380px; height: 380px; right: -150px; top: -100px; border-radius: 50%; background: radial-gradient(circle, rgba(70,120,255,.5), rgba(70,120,255,0) 70%); filter: blur(32px); animation: drift2 18s ease-in-out infinite alternate"></div>
+  <div aria-hidden="true" style="position: absolute; width: 400px; height: 400px; left: -170px; top: 560px; border-radius: 50%; background: radial-gradient(circle, rgba(255,140,70,.45), rgba(255,140,70,0) 70%); filter: blur(34px); animation: drift1 20s ease-in-out infinite alternate"></div>
+  <div aria-hidden="true" style="position: absolute; width: 360px; height: 360px; right: -140px; top: 1080px; border-radius: 50%; background: radial-gradient(circle, rgba(160,90,255,.35), rgba(160,90,255,0) 70%); filter: blur(34px); animation: drift2 23s ease-in-out infinite alternate"></div>
+
+  <div style="position: relative; box-sizing: border-box; padding: 26px 16px 110px; display: flex; flex-direction: column; gap: 14px">
+
+    <header style="display: flex; justify-content: space-between; align-items: center; animation: rise .6s ease-out both">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 13px; color: rgba(245,247,250,.72)">Półmaraton Málaga · 7 marca</span>
+        <h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 32px; font-weight: 600; letter-spacing: -0.6px">Postęp</h1>
+      </div>
+      <span style="padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); font-size: 13px; font-weight: 600">cel 1:45:00</span>
+    </header>
+
+    <section aria-label="Odliczanie" style="border-radius: 28px; padding: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); display: flex; gap: 16px; align-items: center; animation: rise .7s .05s ease-out both">
+      <div style="position: relative; width: 130px; height: 130px; flex: none">
+        <svg role="img" aria-label="Tydzień 1 z 16" width="130" height="130" viewBox="0 0 136 136">
+          <defs><linearGradient id="gOrange" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC29A"></stop><stop offset="1" stop-color="#FF6A3D"></stop></linearGradient></defs>
+          <circle cx="68" cy="68" r="60" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="12"></circle>
+          <circle cx="68" cy="68" r="60" fill="none" stroke="url(#gOrange)" stroke-width="12" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="353" transform="rotate(-90 68 68)" style="--to: 353; animation: ringIn 1.4s .2s cubic-bezier(.2,.8,.2,1) both"></circle>
+        </svg>
+        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; font-weight: 600">110</span>
+          <span style="font-size: 11px; color: rgba(245,247,250,.72)">dni do startu</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+        <span style="font-size: 13px; color: rgba(245,247,250,.72)">Tydzień 1 z 16</span>
+        <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; font-weight: 600; line-height: 1">4:58<span style="font-size: 14px; color: rgba(245,247,250,.65)">/km</span></span>
+        <span style="font-size: 13px; line-height: 1.4; color: rgba(245,247,250,.78)">3 lutego test 30 min: 4:45/km albo szybciej, cel 1:45.</span>
+      </div>
+    </section>
+
+    <section aria-label="Wykres" style="border-radius: 28px; padding: 18px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); display: flex; flex-direction: column; gap: 12px; animation: rise .7s .1s ease-out both">
+      <div role="group" aria-label="Wybór wykresu" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.06)">
+        <button aria-pressed="{{is10k}}" onClick="{{pick10k}}" style="height: 40px; border: 0; border-radius: 11px; background: {{bg10k}}; color: {{fg10k}}; font-family: Inter, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer">Czas na 10 km</button>
+        <button aria-pressed="{{isLong}}" onClick="{{pickLong}}" style="height: 40px; border: 0; border-radius: 11px; background: {{bgLong}}; color: {{fgLong}}; font-family: Inter, sans-serif; font-size: 13px; font-weight: 600; cursor: pointer">Długi bieg</button>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <span style="font-size: 13px; color: rgba(245,247,250,.78)">{{chartTitle}}</span>
+        <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 20px; font-weight: 600; color: #FFC29A">{{chartNow}}</span>
+      </div>
+      <svg role="img" aria-label="{{chartAria}}" width="100%" viewBox="0 0 340 170" style="display: block">
+        <defs>
+          <linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,154,92,.35)"></stop><stop offset="1" stop-color="rgba(255,154,92,0)"></stop></linearGradient>
+        </defs>
+        <sc-for list="{{grid}}" as="g" hint-placeholder-count="3">
+          <line x1="44" x2="334" y1="{{g.y}}" y2="{{g.y}}" stroke="rgba(255,255,255,.08)" stroke-width="1"></line>
+          <text x="0" y="{{g.ty}}" fill="rgba(245,247,250,.6)" font-size="11" font-family="Inter, sans-serif">{{g.label}}</text>
+        </sc-for>
+        <path d="{{areaD}}" fill="url(#gArea)"></path>
+        <path d="{{lineD}}" fill="none" stroke="#FF9A5C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" style="animation: draw 1.4s .25s ease-out both"></path>
+        <path d="{{goalD}}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-dasharray="5 6"></path>
+        <sc-for list="{{pts}}" as="p" hint-placeholder-count="3">
+          <circle cx="{{p.x}}" cy="{{p.y}}" r="5" fill="#060912" stroke="#FF9A5C" stroke-width="3" style="transform-box: fill-box; transform-origin: center; animation: pop .5s {{p.delay}} ease-out both"></circle>
+        </sc-for>
+        <circle cx="{{goalX}}" cy="{{goalY}}" r="6" fill="#F5F7FA"></circle>
+        <sc-for list="{{xlabels}}" as="l" hint-placeholder-count="3">
+          <text x="{{l.x}}" y="166" fill="rgba(245,247,250,.6)" font-size="11" font-family="Inter, sans-serif" text-anchor="middle">{{l.t}}</text>
+        </sc-for>
+      </svg>
+      <span style="font-size: 12px; color: rgba(245,247,250,.65)">{{chartNote}}</span>
+    </section>
+
+    <section aria-label="Wytrzymałość tlenowa" style="border-radius: 28px; padding: 18px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; gap: 12px; animation: rise .7s .15s ease-out both">
+      <span style="font-size: 13px; color: rgba(245,247,250,.72)">Spadek tempa przy stałym tętnie</span>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; justify-content: space-between; font-size: 12px"><span style="color: rgba(245,247,250,.72)">wrzesień · 9 km</span><span style="font-weight: 600">16%</span></div>
+        <div aria-hidden="true" style="height: 10px; border-radius: 5px; background: rgba(255,255,255,.08); overflow: hidden"><div style="height: 100%; width: 100%; border-radius: 5px; background: rgba(255,255,255,.35); transform-origin: left; animation: barIn 1s .3s ease-out both"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; justify-content: space-between; font-size: 12px"><span style="color: rgba(245,247,250,.72)">15 listopada · 15 km</span><span style="font-weight: 600; color: #6EE7A8">7%</span></div>
+        <div aria-hidden="true" style="height: 10px; border-radius: 5px; background: rgba(255,255,255,.08); overflow: hidden"><div style="height: 100%; width: 44%; border-radius: 5px; background: linear-gradient(90deg,#6EE7A8,#A7F3D0); transform-origin: left; animation: barIn 1s .5s ease-out both"></div></div>
+      </div>
+      <span style="font-size: 12px; color: rgba(245,247,250,.65)">Mniej znaczy lepiej: dłuższy bieg, a tempo trzyma się lepiej.</span>
+    </section>
+
+    <section aria-label="Obciążenie" style="border-radius: 28px; padding: 18px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; gap: 6px; align-items: center; animation: rise .7s .2s ease-out both">
+      <span style="align-self: flex-start; font-size: 13px; color: rgba(245,247,250,.72)">Obciążenie: 7 dni do 4 tygodni</span>
+      <svg role="img" aria-label="Wskaźnik obciążenia 1,3, górna granica strefy optymalnej" width="240" height="130" viewBox="0 0 220 120">
+        <circle cx="110" cy="100" r="80" fill="none" stroke="#7FB2FF" stroke-width="14" stroke-dasharray="49 503" stroke-dashoffset="0" transform="rotate(180 110 100)"></circle>
+        <circle cx="110" cy="100" r="80" fill="none" stroke="#6EE7A8" stroke-width="14" stroke-dasharray="82 503" stroke-dashoffset="-51" transform="rotate(180 110 100)"></circle>
+        <circle cx="110" cy="100" r="80" fill="none" stroke="#FDE047" stroke-width="14" stroke-dasharray="31 503" stroke-dashoffset="-135" transform="rotate(180 110 100)"></circle>
+        <circle cx="110" cy="100" r="80" fill="none" stroke="#FF7B7B" stroke-width="14" stroke-dasharray="83 503" stroke-dashoffset="-168" transform="rotate(180 110 100)"></circle>
+        <g style="transform-origin: 110px 100px; animation: needle 1.4s .3s cubic-bezier(.2,.8,.2,1) both">
+          <line x1="110" y1="100" x2="116.7" y2="36.4" stroke="#F5F7FA" stroke-width="4" stroke-linecap="round"></line>
+        </g>
+        <circle cx="110" cy="100" r="8" fill="#F5F7FA"></circle>
+      </svg>
+      <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; font-weight: 600; margin-top: -6px">1,3</span>
+      <span style="font-size: 12px; color: rgba(245,247,250,.72); text-align: center">621 / 470 · górna granica strefy optymalnej (Garmin, 17.11)</span>
+    </section>
+
+    <section aria-label="Garmin dziś" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; animation: rise .7s .25s ease-out both">
+      <div style="border-radius: 20px; padding: 14px 10px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; align-items: center; gap: 2px">
+        <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">48</span>
+        <span style="font-size: 11px; color: rgba(245,247,250,.65); text-align: center">tętno spocz.</span>
+      </div>
+      <div style="border-radius: 20px; padding: 14px 10px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; align-items: center; gap: 2px">
+        <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">50</span>
+        <span style="font-size: 11px; color: rgba(245,247,250,.65); text-align: center">HRV nocne, 7 dni</span>
+      </div>
+      <div style="border-radius: 20px; padding: 14px 10px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; align-items: center; gap: 2px">
+        <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">76</span>
+        <span style="font-size: 11px; color: rgba(245,247,250,.65); text-align: center">jakość snu</span>
+      </div>
+    </section>
+  </div>
+
+  <nav aria-label="Nawigacja" style="position: absolute; left: 14px; right: 14px; bottom: 18px; height: 70px; border-radius: 26px; background: rgba(20,24,34,.55); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center">
+    <a href="SzklanyDzis.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: rgba(245,247,250,.65); font-size: 11px; font-weight: 500">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      Dziś
+    </a>
+    <a href="Tydzien.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: rgba(245,247,250,.65); font-size: 11px; font-weight: 500">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+      Tydzień
+    </a>
+    <a href="SzklanyPostep.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #FF9A5C; font-size: 11px; font-weight: 600">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"></path><path d="M15 7h6v6"></path></svg>
+      Postęp
+    </a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: rgba(245,247,250,.65); font-size: 11px; font-weight: 500">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+      Log
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1480}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: '10k' };
+  }
+  renderVals() {
+    const mode = this.state.mode;
+    const C = {
+      '10k': {
+        title: 'Czas na 10 km', now: '51:00',
+        aria: 'Czas na 10 km: marzec 53:18, październik 51:29 i 51:00, potrzebne na 1:45 ok. 47:30',
+        note: 'Linia przerywana: forma potrzebna na półmaraton w 1:45 (ok. 47:30 na 10 km).',
+        pts: [[50, 128], [222, 96.9], [236, 88.6]], goal: [330, 28.6],
+        grid: [[140, '54:00'], [88.6, '51:00'], [37.1, '48:00']],
+        xl: [[50, 'mar'], [229, 'paź'], [330, 'mar 27']]
+      },
+      'long': {
+        title: 'Najdłuższy bieg', now: '15 km',
+        aria: 'Długi bieg: październik 10 km, 15 listopada 15 km, cel w lutym 18 km',
+        note: 'Każdy bieg najwyżej o 10% dłuższy niż najdłuższy z ostatnich 30 dni.',
+        pts: [[60, 118.2], [90, 118.2], [170, 63.6]], goal: [330, 30.9],
+        grid: [[118.2, '10 km'], [74.5, '14 km'], [30.9, '18 km']],
+        xl: [[75, 'paź'], [170, 'lis'], [330, 'lut']]
+      }
+    };
+    const c = C[mode];
+    const lineD = 'M' + c.pts.map((p) => p[0] + ' ' + p[1]).join(' L');
+    const last = c.pts[c.pts.length - 1];
+    const areaD = lineD + ' L' + last[0] + ' 150 L' + c.pts[0][0] + ' 150 Z';
+    const goalD = 'M' + last[0] + ' ' + last[1] + ' L' + c.goal[0] + ' ' + c.goal[1];
+    const on = 'rgba(255,255,255,.92)', off = 'transparent';
+    return {
+      is10k: mode === '10k', isLong: mode === 'long',
+      bg10k: mode === '10k' ? on : off, fg10k: mode === '10k' ? '#060912' : 'rgba(245,247,250,.8)',
+      bgLong: mode === 'long' ? on : off, fgLong: mode === 'long' ? '#060912' : 'rgba(245,247,250,.8)',
+      pick10k: () => this.setState({ mode: '10k' }),
+      pickLong: () => this.setState({ mode: 'long' }),
+      chartTitle: c.title, chartNow: c.now, chartAria: c.aria, chartNote: c.note,
+      lineD, areaD, goalD, goalX: c.goal[0], goalY: c.goal[1],
+      pts: c.pts.map((p, i) => ({ x: p[0], y: p[1], delay: (0.4 + i * 0.25) + 's' })),
+      grid: c.grid.map((g) => ({ y: g[0], ty: g[0] + 4, label: g[1] })),
+      xlabels: c.xl.map((l) => ({ x: l[0], t: l[1] }))
+    };
+  }
+}
+</script>
+</body>
+</html>

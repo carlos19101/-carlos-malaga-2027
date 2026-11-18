@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>CARLOS — Dziś, wersja szklana</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#060912}
+a{color:#FF9A5C}a:hover{color:#FFC29A}
+@keyframes drift1{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,60px) scale(1.15)}}
+@keyframes drift2{0%{transform:translate(0,0) scale(1.1)}100%{transform:translate(-50px,-30px) scale(0.95)}}
+@keyframes ringIn{from{stroke-dashoffset:377}to{stroke-dashoffset:var(--to)}}
+@keyframes barIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,154,92,.55)}100%{box-shadow:0 0 0 12px rgba(255,154,92,0)}}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:rgba(255,255,255,.14)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-9px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(255,154,92,.28)}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:rgba(255,255,255,.14)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(255,154,92,.28)}
+@media (prefers-reduced-motion: reduce){*{animation:none !important}}
+</style>
+</helmet>
+<div style="width: 390px; height: 1500px; box-sizing: border-box; position: relative; overflow: hidden; background: #060912; color: #F5F7FA; font-family: Inter, system-ui, sans-serif">
+
+  <div aria-hidden="true" style="position: absolute; width: 360px; height: 360px; left: -120px; top: -80px; border-radius: 50%; background: radial-gradient(circle, rgba(255,140,70,.55), rgba(255,140,70,0) 70%); filter: blur(30px); animation: drift1 16s ease-in-out infinite alternate"></div>
+  <div aria-hidden="true" style="position: absolute; width: 420px; height: 420px; right: -180px; top: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(70,120,255,.45), rgba(70,120,255,0) 70%); filter: blur(34px); animation: drift2 19s ease-in-out infinite alternate"></div>
+  <div aria-hidden="true" style="position: absolute; width: 380px; height: 380px; left: -140px; top: 1000px; border-radius: 50%; background: radial-gradient(circle, rgba(160,90,255,.35), rgba(160,90,255,0) 70%); filter: blur(34px); animation: drift1 22s ease-in-out infinite alternate"></div>
+
+  <div style="position: relative; box-sizing: border-box; padding: 26px 16px 110px; display: flex; flex-direction: column; gap: 14px">
+
+    <header style="display: flex; justify-content: space-between; align-items: center; animation: rise .6s ease-out both">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 13px; color: rgba(245,247,250,.72)">Wtorek, 17 listopada</span>
+        <h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 32px; font-weight: 600; letter-spacing: -0.6px">Dziś</h1>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px)">
+        <span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FF9A5C; animation: pulse 1.8s ease-out infinite"></span>
+        <span style="font-size: 13px; font-weight: 600">110 dni do Málagi</span>
+      </div>
+    </header>
+
+    <section aria-label="Decyzja na dziś" style="border-radius: 28px; padding: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); display: flex; flex-direction: column; gap: 16px; animation: rise .7s .05s ease-out both">
+      <div style="display: flex; gap: 16px; align-items: center">
+        <div style="position: relative; width: 136px; height: 136px; flex: none">
+          <svg role="img" aria-label="Kalibracja: 1 z 7 pomiarów" width="136" height="136" viewBox="0 0 136 136">
+            <circle cx="68" cy="68" r="60" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="12"></circle>
+            <circle cx="68" cy="68" r="60" fill="none" stroke="{{ringColor}}" stroke-width="12" stroke-linecap="round" stroke-dasharray="377" stroke-dashoffset="{{ringOffset}}" transform="rotate(-90 68 68)" style="--to: {{ringOffset}}; animation: ringIn 1.4s .2s cubic-bezier(.2,.8,.2,1) both"></circle>
+          </svg>
+          <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px">
+            <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; font-weight: 600">{{ringValue}}</span>
+            <span style="font-size: 11px; color: rgba(245,247,250,.72)">{{ringLabel}}</span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <span style="align-self: flex-start; font-size: 12px; font-weight: 700; color: #060912; background: {{ringColor}}; padding: 4px 10px; border-radius: 999px">{{statusPill}}</span>
+          <h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 23px; font-weight: 600; line-height: 1.15">{{statusTitle}}</h2>
+          <p style="margin: 0; font-size: 13px; line-height: 1.45; color: rgba(245,247,250,.78)">{{statusLine}}</p>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <sc-for list="{{signals}}" as="s" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 13px">
+              <span style="color: rgba(245,247,250,.78)">{{s.label}}</span>
+              <span><span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600">{{s.value}}</span> <span style="font-size: 12px; color: rgba(245,247,250,.6)">{{s.note}}</span></span>
+            </div>
+            <div aria-hidden="true" style="height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden">
+              <div style="height: 100%; width: {{s.width}}; border-radius: 4px; background: {{s.color}}; transform-origin: left; animation: barIn 1.1s .35s cubic-bezier(.2,.8,.2,1) both"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-label="Plan dnia" style="border-radius: 28px; padding: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); display: flex; flex-direction: column; gap: 14px; animation: rise .7s .1s ease-out both">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="font-size: 13px; color: rgba(245,247,250,.72)">Plan dnia</span>
+        <span style="font-size: 12px; color: rgba(245,247,250,.72)">teraz 15:30</span>
+      </div>
+      <h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">Boks grupowy · 20:00</h2>
+      <div style="display: flex; flex-direction: column; gap: 0">
+        <sc-for list="{{timeline}}" as="t" hint-placeholder-count="5">
+          <div style="display: flex; gap: 12px; align-items: stretch">
+            <div style="width: 16px; flex: none; display: flex; flex-direction: column; align-items: center">
+              <span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; margin-top: 4px; background: {{t.dot}}; border: 2px solid {{t.ring}}; animation: {{t.anim}}"></span>
+              <span aria-hidden="true" style="flex: 1; width: 2px; background: {{t.line}}; min-height: 18px"></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; flex: 1; gap: 8px; padding-bottom: 10px">
+              <span style="font-size: 14px; font-weight: {{t.weight}}">{{t.what}}</span>
+              <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 14px; color: rgba(245,247,250,.72)">{{t.time}}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border-radius: 18px; padding: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <label for="rpe" style="font-size: 13px; color: rgba(245,247,250,.78)">Po treningu: jak ciężko było?</label>
+          <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 18px; font-weight: 600; color: {{rpeColor}}">RPE {{rpe}}</span>
+        </div>
+        <input id="rpe" type="range" min="1" max="10" step="1" value="{{rpe}}" onInput="{{onRpe}}">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: rgba(245,247,250,.6)"><span>lekko</span><span>{{rpeWord}}</span><span>maksimum</span></div>
+      </div>
+      <button style="height: 50px; border: 0; border-radius: 16px; background: linear-gradient(135deg, #FF9A5C, #FF6A3D); color: #1A0B04; font-family: Inter, sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 30px rgba(255,120,60,.35)">Zamknij trening</button>
+    </section>
+
+    <section aria-label="Poranny pomiar" style="border-radius: 28px; padding: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); display: flex; flex-direction: column; gap: 14px; animation: rise .7s .15s ease-out both">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="font-size: 13px; color: rgba(245,247,250,.72)">Poranny pomiar</span>
+        <span style="font-size: 12px; color: #6EE7A8">zapisano 7:03</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <div style="border-radius: 16px; padding: 12px 10px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 2px; align-items: center">
+          <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">55</span>
+          <span style="font-size: 11px; color: rgba(245,247,250,.65)">HRV, ms</span>
+        </div>
+        <div style="border-radius: 16px; padding: 12px 10px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 2px; align-items: center">
+          <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">58</span>
+          <span style="font-size: 11px; color: rgba(245,247,250,.65)">leżąc</span>
+        </div>
+        <div style="border-radius: 16px; padding: 12px 10px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 2px; align-items: center">
+          <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; font-weight: 600">+37</span>
+          <span style="font-size: 11px; color: rgba(245,247,250,.65)">stojąc − leżąc</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <label for="feel" style="font-size: 13px; color: rgba(245,247,250,.78)">Samopoczucie</label>
+          <span style="font-size: 14px; font-weight: 600">{{feelWord}}</span>
+        </div>
+        <input id="feel" type="range" min="1" max="5" step="1" value="{{feel}}" onInput="{{onFeel}}">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: rgba(245,247,250,.6)"><span>słabo</span><span>normalnie</span><span>świetnie</span></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <label for="sore" style="font-size: 13px; color: rgba(245,247,250,.78)">Bolesność mięśni</label>
+          <span style="font-size: 14px; font-weight: 600">{{sore}} / 10</span>
+        </div>
+        <input id="sore" type="range" min="0" max="10" step="1" value="{{sore}}" onInput="{{onSore}}">
+      </div>
+    </section>
+
+    <section aria-label="Tydzień" style="border-radius: 28px; padding: 18px 16px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.15); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); display: flex; flex-direction: column; gap: 12px; animation: rise .7s .2s ease-out both">
+      <div style="display: flex; justify-content: space-between; font-size: 13px; color: rgba(245,247,250,.72)"><span>Tydzień 1 z 16</span><span>jutro: test 30 min</span></div>
+      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px">
+        <sc-for list="{{week}}" as="d" hint-placeholder-count="7">
+          <div style="border-radius: 14px; padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 4px; background: {{d.bg}}; border: 1px solid {{d.border}}">
+            <span style="font-size: 11px; color: {{d.color}}">{{d.day}}</span>
+            <span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 15px; font-weight: 600; color: {{d.color}}">{{d.date}}</span>
+            <span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: {{d.dot}}"></span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+
+  <nav aria-label="Nawigacja" style="position: absolute; left: 14px; right: 14px; bottom: 18px; height: 70px; border-radius: 26px; background: rgba(20,24,34,.55); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(24px) saturate(150%); -webkit-backdrop-filter: blur(24px) saturate(150%); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center">
+    <a href="SzklanyDzis.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #FF9A5C; font-size: 11px; font-weight: 600">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      Dziś
+    </a>
+    <a href="Tydzien.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: rgba(245,247,250,.65); font-size: 11px; font-weight: 500">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"></rect><path d="M3 9h18M8 2v4M16 2v4"></path></svg>
+      Tydzień
+    </a>
+    <a href="SzklanyPostep.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: rgba(245,247,250,.65); font-size: 11px; font-weight: 500">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"></path><path d="M15 7h6v6"></path></svg>
+      Postęp
+    </a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: rgba(245,247,250,.65); font-size: 11px; font-weight: 500">
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+      Log
+    </a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"status":{"editor":"enum","options":["kalibracja","zielony","żółty","czerwony"],"default":"kalibracja"},"$preview":{"width":390,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { rpe: 6, feel: 3, sore: 2 };
+  }
+  renderVals() {
+    const status = this.props.status ?? 'kalibracja';
+    const S = {
+      'kalibracja': { color: '#7FB2FF', pill: 'Kalibracja', title: 'Trenuj według planu', line: 'Reguła dnia ruszy po 7 pomiarach. Do tego czasu liczą się tylko objawy.', value: '1/7', label: 'pomiarów', progress: 1 / 7 },
+      'zielony': { color: '#6EE7A8', pill: 'Zielony', title: 'Trenuj według planu', line: 'Najwyżej jeden słabszy sygnał.', value: '0/3', label: 'sygnałów', progress: 1 },
+      'żółty': { color: '#FDE047', pill: 'Żółty', title: 'Lżej o ok. 30%', line: 'Dwa słabsze sygnały. Bez maksymalnych wysiłków.', value: '2/3', label: 'sygnały', progress: 0.55 },
+      'czerwony': { color: '#FF7B7B', pill: 'Czerwony', title: 'Dziś odpoczynek', line: 'Trzy sygnały albo objaw. Wolne albo spacer.', value: '3/3', label: 'sygnały', progress: 0.15 }
+    };
+    const st = S[status] || S['kalibracja'];
+    const ringOffset = Math.round(377 * (1 - st.progress));
+    const signals = [
+      { label: 'HRV rMSSD', value: '55 ms', note: 'norma od 7 dni', width: '60%', color: 'linear-gradient(90deg,#7FB2FF,#A7C8FF)' },
+      { label: 'Stojąc − leżąc', value: '+37', note: 'norma od 7 dni', width: '74%', color: 'linear-gradient(90deg,#7FB2FF,#A7C8FF)' },
+      { label: 'Sen', value: '6:56 h', note: 'cel 7:30', width: '92%', color: 'linear-gradient(90deg,#FDE047,#FFB45C)' }
+    ];
+    const tl = [
+      ['17:00', 'Posiłek z węglowodanami', 'next'], ['19:15', 'Kolagen, kreatyna, beta', 'plan'],
+      ['20:00', 'Boks grupowy', 'main'], ['22:00', 'Mleko 250 ml, kolacja', 'plan'], ['23:00', 'Sen', 'plan']
+    ];
+    const timeline = tl.map(([time, what, s], i) => ({
+      time, what,
+      dot: s === 'main' ? '#FF9A5C' : 'transparent',
+      ring: s === 'plan' ? 'rgba(255,255,255,.35)' : '#FF9A5C',
+      anim: s === 'next' ? 'pulse 1.8s ease-out infinite' : 'none',
+      line: i === tl.length - 1 ? 'transparent' : 'rgba(255,255,255,.14)',
+      weight: s === 'main' ? 700 : 500
+    }));
+    const days = [['pn', '16', 'done'], ['wt', '17', 'today'], ['śr', '18', 'hard'], ['cz', '19', 'plan'], ['pt', '20', 'rest'], ['sb', '21', 'hard'], ['nd', '22', 'hard']];
+    const week = days.map(([day, date, s]) => ({
+      day, date,
+      bg: s === 'today' ? 'rgba(255,154,92,.18)' : 'rgba(255,255,255,.05)',
+      border: s === 'today' ? 'rgba(255,154,92,.6)' : 'rgba(255,255,255,.08)',
+      color: s === 'today' ? '#FFC29A' : 'rgba(245,247,250,.85)',
+      dot: s === 'done' ? '#6EE7A8' : (s === 'hard' ? '#FF9A5C' : (s === 'rest' ? 'rgba(255,255,255,.25)' : '#7FB2FF'))
+    }));
+    const rpe = this.state.rpe;
+    const words = ['', 'bardzo lekko', 'lekko', 'lekko', 'umiarkowanie', 'umiarkowanie', 'średnio ciężko', 'ciężko', 'bardzo ciężko', 'prawie maksimum', 'maksimum'];
+    const rpeColor = rpe <= 4 ? '#6EE7A8' : (rpe <= 7 ? '#FDE047' : '#FF7B7B');
+    const feelWords = ['', 'słabo', 'raczej słabo', 'normalnie', 'dobrze', 'świetnie'];
+    return {
+      ringColor: st.color, ringOffset, ringValue: st.value, ringLabel: st.label,
+      statusPill: st.pill, statusTitle: st.title, statusLine: st.line,
+      signals, timeline, week,
+      rpe, rpeWord: words[rpe], rpeColor,
+      feel: this.state.feel, feelWord: feelWords[this.state.feel],
+      sore: this.state.sore,
+      onRpe: (e) => this.setState({ rpe: Number(e.target.value) }),
+      onFeel: (e) => this.setState({ feel: Number(e.target.value) }),
+      onSore: (e) => this.setState({ sore: Number(e.target.value) })
+    };
+  }
+}
+</script>
+</body>
+</html>

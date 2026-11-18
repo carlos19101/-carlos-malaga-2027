@@ -1,0 +1,112 @@
+/* Glass V1. Local fonts keep the existing self-only CSP and work offline. */
+@font-face { font-family: Inter; src: url('/fonts/inter-latin.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: Inter; src: url('/fonts/inter-latin-ext.woff2') format('woff2'); font-weight: 100 900; font-display: swap; unicode-range: U+0100-02FF,U+1E00-1EFF; }
+@font-face { font-family: 'Space Grotesk'; src: url('/fonts/space-grotesk-latin.woff2') format('woff2'); font-weight: 300 700; font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; src: url('/fonts/space-grotesk-latin-ext.woff2') format('woff2'); font-weight: 300 700; font-display: swap; unicode-range: U+0100-02FF,U+1E00-1EFF; }
+:root {
+  --bg: #060912; --glass: rgba(255,255,255,.07); --glass-line: rgba(255,255,255,.15); --glass-radius: 28px;
+  --glass-text: #F5F7FA; --glass-secondary: rgba(245,247,250,.72); --glass-tertiary: rgba(245,247,250,.6);
+  --glass-accent: #FF9A5C; --glass-accent-end: #FF6A3D; --glass-blue: #7FB2FF; --glass-green: #6EE7A8; --glass-yellow: #FDE047; --glass-red: #FF7B7B;
+  --muted: var(--glass-secondary); --muted-2: var(--glass-secondary); --orange: var(--glass-accent); --green: var(--glass-green); --yellow: var(--glass-yellow); --red: var(--glass-red);
+  --glass-nav-height: 76px; --mobile-nav-clearance: calc(var(--glass-nav-height) + 48px + env(safe-area-inset-bottom, 0px));
+}
+body { background: var(--bg); color: var(--glass-text); }
+.glass-shell { isolation: isolate; }
+.glass-ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.glass-ambient i { position: absolute; width: min(78vw,700px); height: min(90vw,700px); border-radius: 50%; filter: blur(32px); animation: glass-drift 19s ease-in-out infinite alternate; }
+.glass-ambient i:nth-child(1) { top: -110px; left: -150px; background: radial-gradient(ellipse,rgba(255,140,70,.55),transparent 68%); animation-duration: 16s; }
+.glass-ambient i:nth-child(2) { top: 18vh; right: -150px; background: radial-gradient(ellipse,rgba(70,120,255,.45),transparent 68%); animation-duration: 23s; animation-delay: -7s; }
+.glass-ambient i:nth-child(3) { top: 65vh; left: -90px; background: radial-gradient(ellipse,rgba(160,90,255,.35),transparent 68%); animation-duration: 21s; animation-delay: -12s; }
+.glass-shell .topbar { position: relative; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border: 0; max-width: 1100px; margin: auto; }
+.glass-shell .brand-mark { color: var(--glass-accent); background: var(--glass); }
+.glass-shell .brand small { color: var(--glass-secondary); }
+.glass-shell .desktop-nav { display: none; }
+.glass-shell .topbar { grid-template-columns: 1fr auto; }
+.glass-shell .sync-strip { max-width: 1000px; margin: 0 auto; background: transparent; border: 0; padding: 4px 24px 12px; color: var(--glass-secondary); font-size: 11px; }
+.glass-shell .sync-strip strong { font-size: 11px; }
+.glass-shell main { max-width: 1000px; margin: auto; padding: 16px 24px var(--mobile-nav-clearance); }
+.glass-shell .app-footer { padding-bottom: var(--mobile-nav-clearance); color: var(--glass-secondary); }
+.glass-page { display: grid; gap: 20px; }
+.glass-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 4px 8px; }
+.glass-page-heading p { color: var(--glass-secondary); font-size: 13px; margin: 0 0 8px; text-transform: capitalize; }
+.glass-page-heading h1 { margin: 0; font: 600 46px/1.05 'Space Grotesk',sans-serif; letter-spacing: -.05em; }
+.glass-pill { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 999px; padding: 10px 13px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.pulse-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--glass-accent); animation: glass-pulse 3s ease-in-out infinite; }
+.glass-card { position: relative; min-width: 0; padding: 26px; border-radius: var(--glass-radius); border: 1px solid var(--glass-line); background: var(--glass); box-shadow: inset 0 1px 0 rgba(255,255,255,.12),0 14px 40px rgba(0,0,0,.12); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); animation: glass-rise .5s both; }
+.glass-page > :nth-child(2) { animation-delay: 50ms; }.glass-page > :nth-child(3) { animation-delay: 100ms; }.glass-page > :nth-child(4) { animation-delay: 150ms; }.glass-page > :nth-child(5) { animation-delay: 200ms; }
+.glass-shell .glass-card h2 { font: 600 24px/1.2 'Space Grotesk',sans-serif; letter-spacing: -.035em; margin: 0 0 14px; }
+.glass-shell .glass-card h3 { font: 600 23px/1.25 'Space Grotesk',sans-serif; margin: 15px 0 8px; }
+.glass-card p { color: var(--glass-secondary); font-size: 14px; line-height: 1.65; }
+.glass-card small, .glass-caption { color: var(--glass-secondary); font-size: 12px; line-height: 1.6; }
+.glass-eyebrow { display: block; color: var(--glass-secondary); font-size: 10px; font-weight: 600; letter-spacing: .12em; margin-bottom: 18px; }
+.glass-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.glass-section-title h2, .glass-section-title .glass-eyebrow { margin: 0 !important; }
+.glass-shell button, .glass-shell summary { cursor: pointer; }
+.glass-shell button, .glass-shell summary, .glass-shell input:not([type=checkbox]), .glass-shell select { min-height: 44px; }
+.glass-shell button:focus-visible, .glass-shell input:focus-visible, .glass-shell summary:focus-visible, .glass-shell select:focus-visible { outline: 2px solid var(--glass-accent); outline-offset: 4px; }
+.glass-primary, .glass-shell .checkin-submit-row button, .glass-shell .feedback-action-buttons button:not(.feedback-secondary) { background: linear-gradient(110deg,var(--glass-accent),var(--glass-accent-end)); color: #251308; border: 0; border-radius: 16px; padding: 14px 20px; font-weight: 700; min-height: 48px; }
+.glass-text-button, .glass-section-title button { border: 0; background: transparent; color: var(--glass-accent); padding: 10px 0; font-size: 12px; font-weight: 600; }
+.glass-primary { width: 100%; }.glass-text-button { display: block; }
+.tone-blue { --tone: var(--glass-blue); }.tone-green { --tone: var(--glass-green); }.tone-yellow { --tone: var(--glass-yellow); }.tone-red { --tone: var(--glass-red); }.tone-accent { --tone: var(--glass-accent); }
+.glass-decision-main { display: grid; grid-template-columns: 150px 1fr; gap: 26px; align-items: center; margin: 8px 0 22px; }
+.glass-ring { position: relative; width: 140px; height: 140px; flex: 0 0 auto; }
+.glass-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.glass-ring circle { fill: none; stroke-width: 8px; }.ring-track { stroke: rgba(255,255,255,.09); }
+.ring-fill { stroke: var(--tone); stroke-linecap: round; animation: glass-ring 1.3s ease-out both; }
+.glass-ring > div { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; }
+.glass-ring strong { font: 600 36px/1 'Space Grotesk',sans-serif; letter-spacing: -.05em; }.glass-ring span { font-size: 11px; color: var(--glass-secondary); }
+.glass-status { display: inline-flex; color: var(--tone); border: 1px solid currentColor; border-radius: 99px; padding: 5px 9px; font-size: 10px; font-weight: 700; letter-spacing: .04em; margin-bottom: 12px; }
+.glass-decision-main p { margin: 0; }.glass-signals { display: grid; gap: 0; border-top: 1px solid var(--glass-line); }
+.glass-signal { border-bottom: 1px solid var(--glass-line); }.glass-signal summary { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 14px 0; list-style: none; }
+.glass-signal summary::-webkit-details-marker { display: none; }.signal-title { font-size: 13px; font-weight: 600; }.glass-signal strong { font: 500 13px 'Space Grotesk',sans-serif; }
+.glass-signal small, .glass-signal em, .signal-track { grid-column: 1/-1; }.glass-signal em { font-size: 11px; font-style: normal; color: var(--glass-secondary); }
+.signal-track { display: block; height: 4px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; margin: 3px 0; }
+.signal-track i { display: block; width: 100%; height: 100%; transform-origin: left; animation: glass-bar 1s ease both; background: var(--glass-blue); }.signal-track .clear { opacity: .4; }.signal-track .active { background: var(--glass-yellow); }
+.glass-method { margin-top: 14px; }.glass-method summary, .glass-source-details > summary, .glass-checkin-editor > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--glass-secondary); font-size: 12px; }
+.glass-method summary::after,.glass-source-details > summary::after,.glass-checkin-editor > summary::after { content: '+'; font-size: 20px; color: var(--glass-text); }
+.glass-method[open] summary::after,.glass-source-details[open] > summary::after,.glass-checkin-editor[open] > summary::after { content: '−'; }
+.glass-warning { padding: 14px; margin-top: 16px; border: 1px solid var(--glass-red); border-radius: 14px; color: var(--glass-red) !important; font-size: 13px; line-height: 1.6; }
+.glass-boxing { display: grid; gap: 4px; border: 1px solid var(--glass-line); padding: 14px; border-radius: 16px; }.glass-boxing b { color: var(--glass-accent); }.glass-boxing span { font-size: 12px; }
+.glass-timeline { margin: 24px 0; padding: 0; list-style: none; }.glass-timeline li { position: relative; display: grid; grid-template-columns: 42px 1fr; gap: 20px; padding-bottom: 22px; }
+.glass-timeline li > span { font-size: 11px; color: var(--glass-secondary); padding-top: 3px; }.glass-timeline li > div { display: grid; gap: 4px; }.glass-timeline li b { font-size: 13px; }
+.glass-timeline li::before { position: absolute; content: ''; left: 48px; top: 5px; width: 6px; height: 6px; background: #62697b; border-radius: 50%; }.glass-timeline li:not(:last-child)::after { content: ''; position: absolute; left: 50px; top: 15px; bottom: 3px; width: 1px; background: var(--glass-line); }
+.glass-timeline li.is-next::before { background: var(--glass-accent); animation: glass-pulse 3s ease infinite; }
+.glass-shell .morning-checkin { margin: 0; }.glass-shell .morning-checkin .compact-section-heading { align-items: start; gap: 10px; margin-bottom: 12px; }.glass-shell .morning-checkin h2 { font-size: 24px; }
+.glass-shell .morning-checkin .compact-section-heading > div > span { color: var(--glass-secondary); font-size: 10px; letter-spacing: .1em; }.glass-shell .morning-checkin .compact-section-heading > small { max-width: 105px; text-align: right; }
+.glass-shell .morning-checkin-form { background: none; border: none; padding: 0; box-shadow: none; }
+.glass-shell input:not([type=checkbox]):not([type=range]), .glass-shell select, .glass-shell textarea { background: rgba(6,9,18,.55); border: 1px solid var(--glass-line); border-radius: 12px; color: var(--glass-text); font-size: 16px; }
+.glass-shell input[type=range] { appearance: auto; accent-color: var(--tone,var(--glass-accent)); padding: 0; border: none; background: transparent; width: 100%; }
+.glass-shell input[type=checkbox] { accent-color: var(--glass-accent); flex: 0 0 20px; width: 20px; height: 20px; }
+.glass-shell .checkin-symptoms { padding: 14px; border: 1px solid var(--glass-line); border-radius: 16px; }.glass-shell .checkin-symptoms label { min-height: 44px; align-items: center; }
+.glass-shell .checkin-derived { background: rgba(127,178,255,.08); border-color: var(--glass-line); }.glass-shell .checkin-submit-row { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }.glass-shell .checkin-submit-row small { max-width: none; }
+.glass-feeling-options { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }.glass-feeling-options button { background: transparent; border: 1px solid var(--glass-line); color: var(--glass-secondary); border-radius: 12px; font-size: 12px; }.glass-feeling-options button[aria-pressed=true] { color: var(--glass-text); background: rgba(255,154,92,.14); border-color: var(--glass-accent); }
+.glass-metric-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 16px; }.glass-metric-grid > div { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }.glass-metric-grid span { font-size: 11px; color: var(--glass-secondary); }.glass-metric-grid strong { font: 600 28px/1 'Space Grotesk',sans-serif; }.glass-metric-grid small { font-size: 10px; }
+.glass-week-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 7px; }.glass-week-grid button { min-width: 0; background: rgba(255,255,255,.04); border: 1px solid var(--glass-line); color: var(--glass-text); border-radius: 16px; padding: 12px 0; display: grid; place-items: center; gap: 9px; }.glass-week-grid button span { font-size: 10px; color: var(--glass-secondary); }.glass-week-grid button b { font: 500 20px 'Space Grotesk',sans-serif; }.glass-week-grid button.is-selected { border-color: var(--glass-accent); background: rgba(255,154,92,.1); }.glass-week-grid .is-today b { color: var(--glass-accent); }
+.week-dot { width: 5px; height: 5px; border-radius: 50%; background: #858895; }.week-dot.done { background: var(--glass-green); }.week-dot.hard { background: var(--glass-yellow); }.week-dot.planned { background: var(--glass-blue); }.week-dot.unknown { background: transparent; border: 1px solid #858895; }
+.glass-race-card { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 20px; }.glass-race-card .glass-method { grid-column: 1/-1; margin: 0; }.glass-targets { display: flex; gap: 28px; }.glass-targets > div { display: grid; gap: 5px; }.glass-targets strong { color: var(--glass-accent); font: 600 25px 'Space Grotesk',sans-serif; }
+.glass-segmented { display: flex; padding: 4px; border-radius: 16px; background: rgba(6,9,18,.4); border: 1px solid var(--glass-line); }.glass-segmented button { flex: 1; border: 0; background: transparent; border-radius: 12px; color: var(--glass-secondary); font-size: 12px; padding: 10px; }.glass-segmented button[aria-pressed=true] { color: var(--glass-text); background: rgba(255,255,255,.1); }
+.glass-chart-readout { display: grid; gap: 8px; margin: 24px 0 8px; }.glass-chart-readout strong { font: 600 40px 'Space Grotesk',sans-serif; letter-spacing: -.04em; }.glass-chart-readout span { font-size: 12px; color: var(--glass-secondary); }
+.glass-chart { width: 100%; overflow: visible; margin: 10px 0; }.glass-chart text { fill: var(--glass-secondary); font-size: 11px; }.chart-grid { stroke: rgba(255,255,255,.08); stroke-width: 1; }.chart-goal { stroke: var(--glass-blue); stroke-dasharray: 4 5; opacity: .8; }.chart-line { stroke: var(--glass-accent); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; animation: glass-line 1.5s ease both; }.chart-point { fill: var(--glass-accent); stroke: #151b2a; stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: glass-pop .6s .5s both; }
+.glass-chart-picker { display: flex; gap: 8px; overflow-x: auto; padding: 6px 4px; }.glass-chart-picker button { flex: 0 0 auto; display: grid; gap: 4px; background: rgba(255,255,255,.04); border: 1px solid var(--glass-line); color: var(--glass-secondary); border-radius: 12px; padding: 8px 12px; font-size: 11px; }.glass-chart-picker button[aria-pressed=true] { border-color: var(--glass-accent); }.glass-chart-picker b { color: var(--glass-text); }
+.glass-empty { padding: 24px 12px; text-align: center; }.glass-empty > span { display: inline-grid; place-items: center; width: 48px; height: 48px; border-radius: 16px; background: rgba(127,178,255,.1); color: var(--glass-blue); font-size: 28px; }.glass-empty h3 { font-size: 21px !important; }.glass-empty strong { font: 500 34px 'Space Grotesk',sans-serif; }.glass-empty.compact { padding: 12px; }
+.glass-gauge { position: relative; max-width: 280px; margin: 12px auto 0; }.glass-gauge svg { width: 100%; }.glass-gauge path { fill: none; stroke-width: 12px; stroke-linecap: round; }.gauge-track { stroke: rgba(255,255,255,.09); }.gauge-fill { stroke: var(--glass-accent); }.glass-gauge .gauge-needle { stroke-width: 2; stroke: var(--glass-text); }.glass-gauge strong { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font: 600 29px 'Space Grotesk',sans-serif; }.glass-gauge-scale { display: flex; justify-content: space-around; max-width: 280px; margin: auto; color: var(--glass-secondary); font-size: 12px; }.glass-load > p { text-align: center; }
+.glass-gauge .gauge-zone { stroke-linecap: butt; opacity: .55; }.glass-gauge text { fill: var(--glass-secondary); font-size: 10px; }
+.glass-shell .mobile-nav { display: flex; position: fixed; z-index: 70; top: auto; bottom: calc(14px + env(safe-area-inset-bottom,0px)); left: 50%; right: auto; transform: translateX(-50%); width: min(440px,calc(100% - 32px)); height: var(--glass-nav-height); padding: 7px; border-radius: 25px; border: 1px solid var(--glass-line); background: rgba(24,29,43,.84); box-shadow: inset 0 1px 0 rgba(255,255,255,.12),0 16px 45px rgba(0,0,0,.45); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); }
+.glass-shell .mobile-nav button { flex: 1; min-width: 44px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; border: 0; border-radius: 18px; background: transparent; color: var(--glass-secondary); padding: 5px; }.glass-shell .mobile-nav button.active { background: rgba(255,154,92,.12); color: var(--glass-accent); }.glass-shell .mobile-nav small { font-size: 10px; }.glass-shell .mobile-nav button::before,.glass-shell .mobile-nav button::after { display: none; }
+.glass-shell .feedback-card { background: transparent; border-color: var(--glass-line); padding: 16px; }.glass-close > summary { background: linear-gradient(110deg,var(--glass-accent),var(--glass-accent-end)); border-radius: 16px; color: #251308; padding: 16px; font-size: 14px; font-weight: 700; }.glass-close .feedback-section { margin-top: 24px; }.glass-close .feedback-section h2 { font-size: 22px; }.glass-close .feedback-scales { grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .glass-shell main { padding: 10px 16px var(--mobile-nav-clearance); }.glass-shell .topbar { min-height: 66px; padding: calc(10px + env(safe-area-inset-top,0px)) 18px 8px; gap: 10px; grid-template-columns: 1fr auto; }.glass-shell .desktop-nav { display: none; }.glass-shell .brand-mark { width: 35px; height: 35px; border-radius: 12px; }.glass-shell .brand strong { font-size: 12px; }.glass-shell .brand small { font-size: 8px; }.glass-shell .refresh-button b { display: none; }.glass-shell .refresh-button { padding: 0; width: 44px; }.glass-shell .sync-strip { padding: 0 20px 10px; flex-wrap: wrap; gap: 4px 8px; }.glass-shell .sync-strip > span:last-child { width: 100%; font-size: 10px; }
+  .glass-page { gap: 16px; }.glass-page-heading { gap: 8px; }.glass-page-heading h1 { font-size: 38px; }.glass-page-heading p { font-size: 11px; }.glass-page-heading .glass-pill { font-size: 10px; padding: 9px; }
+  .glass-card { padding: 20px; }.glass-decision-main { grid-template-columns: 110px 1fr; gap: 14px; }.glass-ring { width: 110px; height: 110px; }.glass-ring strong { font-size: 30px; }.glass-decision-main h2 { font-size: 23px !important; }.glass-decision-main p { font-size: 12px; }.glass-status { font-size: 9px; }.glass-signal summary { grid-template-columns: 1fr; }.glass-signal strong { grid-row: 2; }.glass-race-card { grid-template-columns: 110px 1fr; gap: 15px; }.glass-race-card h2 { font-size: 23px !important; }.glass-race-card p { font-size: 11px; }.glass-targets { gap: 13px; }.glass-targets strong { font-size: 20px; }.glass-targets small { font-size: 10px; }.glass-section-title { gap: 8px; }.glass-section-title h2 { font-size: 23px !important; }.glass-section-title .glass-pill { font-size: 9px; padding: 7px; }
+  .glass-week { padding: 20px 12px; }.glass-week .glass-section-title,.glass-week-description,.glass-week > small { margin-left: 8px; margin-right: 8px; }.glass-week-grid { gap: 3px; }.glass-week-grid button { min-height: 80px; border-radius: 13px; }.glass-week-grid button b { font-size: 18px; }.glass-week-grid button span { font-size: 9px; }.glass-week > small { display: block; }.glass-metric-grid { gap: 6px; }.glass-metric-grid > div { padding: 13px 8px; }.glass-metric-grid strong { font-size: 26px; }.glass-shell .checkin-grid { grid-template-columns: 1fr; }.glass-shell .checkin-field { min-width: 0; }.glass-shell .section-heading { flex-wrap: wrap; }
+}
+@media (max-width: 360px) { .glass-decision-main { grid-template-columns: 90px 1fr; }.glass-ring { width: 90px; height: 90px; }.glass-ring strong { font-size: 27px; }.glass-card { padding: 16px; }.glass-week { padding: 16px 5px; }.glass-week-grid { grid-template-columns: repeat(7,minmax(44px,1fr)); overflow-x: auto; padding-bottom: 8px; }.glass-page-heading .glass-pill { font-size: 9px; }.glass-race-card { grid-template-columns: 90px 1fr; } }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .glass-card { background: #171d2b; }.glass-shell .mobile-nav { background: #171d2b; } }
+@keyframes glass-drift { to { transform: translate(30px,45px) scale(1.08); } }
+@keyframes glass-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes glass-ring { from { stroke-dashoffset: 1; } to { stroke-dashoffset: var(--ring-to); } }
+@keyframes glass-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes glass-line { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes glass-pop { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
+@keyframes glass-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }.glass-ambient i { transform: none; } }

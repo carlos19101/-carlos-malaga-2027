@@ -61,6 +61,9 @@ import { RunnaToday } from './RunnaToday.jsx';
 import { isRunnaDate, isRunnaSession, RUNNA_TARGET_PENDING } from './runnaPolicy.js';
 import { RUNNA_REFERENCE_KEY } from './runnaReference.js';
 import './styles.css';
+import { GlassProgress } from './GlassProgress.jsx';
+import { GlassIcon, completedRows, glassDay } from './glassUi.jsx';
+import './theme.css';
 
 const APPLICATION_TABLE_COUNT = 4;
 const APP_VERSION = 'FINAL 6.3';
@@ -74,9 +77,9 @@ const EMPTY_DATA = { feed: [], log: [], plan: [], raw: [] };
 
 const TABS = [
   { id: 'dashboard', label: 'Dziś', icon: '●' },
-  { id: 'epa', label: 'EPA', icon: '◆' },
+  { id: 'plan', label: 'Tydzień', icon: '◇' },
+  { id: 'progress', label: 'Postęp', icon: '↗' },
   { id: 'log', label: 'Log', icon: '≡' },
-  { id: 'plan', label: 'Plan', icon: '◇' },
 ];
 
 function v(row, field, fallback = '') {
@@ -1277,7 +1280,7 @@ function PostRunCompletionPanel({ target, feedbackStatus, tcxStatus, tcxRequired
   );
 }
 
-function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel, onSaved, onBusy }) {
+function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel, onSaved, onBusy, compact = false }) {
   const [passcode, setPasscode] = useState('');
   const [values, setValues] = useState({ rpe: '', pain: '', legFatigue: '', notes: '' });
   const [state, setState] = useState({ busy: false, message: '' });
@@ -1342,7 +1345,7 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
   return (
     <section className="section-block feedback-section">
       <div className="section-heading">
-        <div><span className="eyebrow">PO TRENINGU</span><h2>Oceń bieg</h2></div>
+        <div><span className="eyebrow">PO TRENINGU</span><h2>{compact ? 'Zamknij trening' : 'Oceń bieg'}</h2></div>
         <span className="section-aside">{queueCount ? `${queueCount} oczekuje` : sessionLabel}</span>
       </div>
       {!access.authenticated ? (
@@ -1364,7 +1367,7 @@ function FeedbackPanel({ target, access, queueCount, onLogin, onSubmit, onCancel
             ].map(([field, label, note, minimum]) => (
               <label key={field}>
                 <span>{label}</span>
-                <input type="number" min={minimum} max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => updateField(field, event.target.value)} disabled={state.busy} required />
+                {compact && field === 'rpe' ? <><output>{values.rpe || 'Wybierz RPE'}</output><input className={`glass-rpe ${Number(values.rpe) <= 4 ? 'tone-green' : Number(values.rpe) <= 7 ? 'tone-yellow' : 'tone-red'}`} type="range" min="1" max="10" step="0.5" value={values.rpe || 1} aria-valuetext={values.rpe ? `${values.rpe} z 10` : 'Nie wybrano'} onChange={(event) => updateField(field, event.target.value)} disabled={state.busy} /><button type="button" className="glass-text-button" onClick={() => updateField(field, values.rpe || '1')} disabled={state.busy}>Potwierdź RPE {values.rpe || '1'}</button></> : <input type="number" min={minimum} max="10" step={field === 'rpe' ? '0.5' : '1'} inputMode="decimal" value={values[field]} onChange={(event) => updateField(field, event.target.value)} disabled={state.busy} required />}
                 <small>{note}</small>
               </label>
             ))}
@@ -1771,19 +1774,28 @@ function Plan({ rows, logRows, loading, now, dataReady, onShowLog }) {
   );
 }
 
-function RunnaDashboard({ feed, log, raw, plan, now, ...props }) {
+function TodayQuickClose({ rows, now, access, onLogin, onSubmit, onShowLog }) {
+  const candidates = feedbackCandidates(completedRows(rows, warsawDate(now)).filter(row => glassDay(row) === warsawDate(now)).map(row => ({ id: v(row, 'logSessionId', ''), running: isRunLogRow(row), row })));
+  const [id, setId] = useState('');
+  const target = candidates.find(c => c.id === id) || (candidates.length === 1 ? candidates[0] : null);
+  if (!candidates.length) return <><button className="glass-primary" type="button" onClick={onShowLog}>Zamknij trening →</button><small className="glass-caption">Najpierw wybierz lub zaimportuj aktywność w Logu. Nie przypisujemy RPE do samego planu.</small></>;
+  return <details className="glass-close"><summary>Zamknij trening · RPE i odczucia</summary>{candidates.length > 1 && <label>Wybierz dzisiejszy bieg<select value={id} onChange={e => setId(e.target.value)}><option value="">Wybierz</option>{candidates.map(c => <option key={c.id} value={c.id}>{v(c.row,'logName',c.id)} · {v(c.row,'logTime','')}</option>)}</select></label>}{target && <FeedbackPanel compact target={target.row} access={access} onLogin={onLogin} onSubmit={onSubmit} queueCount={0} />}</details>;
+}
+
+function RunnaDashboard({ feed, log, raw, plan, now, feedbackAccess, onFeedbackLogin, onFeedbackSubmit, ...props }) {
   const row = latestRow(feed);
   const validation = validateFeed(row, resolveWeight(row, raw, now)?.value || '');
   const endDate = v(row, 'date', '') || now;
   const mismatches = crossValidate(computeVerifierMetrics(verifierTrainingRecords(log), verifierWeightRecords(raw), endDate), verifierFeedMetrics(row));
   const issues = auditTrainingLogTimes(log.map(r => ({ date: v(r, 'date', ''), time: v(r, 'logTime', ''), name: v(r, 'logName', ''), requiresTimestamp: isRunLogRow(r) })));
   const snapshot = computeWeeklySnapshot(weeklySnapshotRecords(log, plan), now);
-  return <RunnaToday {...props} feed={feed} raw={raw} now={now} validation={validation} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} activitySummary={<details className="joint-source-archive"><summary>Wykonanie · ostatnie 7 dni</summary><p className="method-note">Źródło: zapisany Training Log, nie terminy kalendarza ani sama lista pobrana ze Stravy. Nowe cele Runny nie są jeszcze powiązane z wykonaniem.</p><WeeklySnapshot snapshot={snapshot} /></details>} />;
+  return <RunnaToday {...props} feed={feed} log={log} raw={raw} now={now} validation={validation} quickClose={<TodayQuickClose rows={log} now={now} access={feedbackAccess} onLogin={onFeedbackLogin} onSubmit={onFeedbackSubmit} onShowLog={props.onShowLog} />} integrity={<><VerifierBanner mismatches={mismatches} /><TrainingLogTimingStatus issues={issues} /></>} activitySummary={<details className="joint-source-archive"><summary>Wykonanie · ostatnie 7 dni</summary><p className="method-note">Źródło: zapisany Training Log, nie terminy kalendarza ani sama lista pobrana ze Stravy. Nowe cele Runny nie są jeszcze powiązane z wykonaniem.</p><WeeklySnapshot snapshot={snapshot} /></details>} />;
 }
 
 function App() {
   const [logoutState, setLogoutState] = useState({ busy: false, error: '' });
   const [tab, setTab] = useState('dashboard');
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [tab]);
   const [data, setData] = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [checkedAt, setCheckedAt] = useState(null);
@@ -2083,13 +2095,14 @@ function App() {
   const status = offline ? 'offline' : freshness.state === 'stale' ? 'stale' : freshness.state === 'previous-day' || freshness.state === 'future' || freshness.state === 'unknown' ? 'partial' : errorCount ? 'partial' : 'live';
   const statusLabel = {
     live: 'Dane aktualne',
-    partial: hasTodayCheckin ? 'Check-in zapisany · APP_FEED starszy' : freshness.state === 'previous-day' ? 'Brak dzisiejszego check-inu' : 'Dane częściowe',
-    stale: hasTodayCheckin ? 'Check-in zapisany · APP_FEED starszy' : 'Dane źródłowe są stare',
+    partial: hasTodayCheckin ? 'Pomiar zapisany · część danych starsza' : freshness.state === 'previous-day' ? 'Brak dzisiejszego check-inu' : 'Dane częściowe',
+    stale: hasTodayCheckin ? 'Pomiar zapisany · część danych starsza' : 'Dane źródłowe są stare',
     offline: 'Offline — lokalna kopia',
   }[status];
 
   return (
-    <div className="app-shell">
+    <div className="app-shell glass-shell">
+      <div className="glass-ambient" aria-hidden="true"><i /><i /><i /></div>
       <header className="topbar">
         <button className="brand" onClick={() => setTab('dashboard')} aria-label="Dashboard">
           <span className="brand-mark">C</span><span><strong>CARLOS</strong><small>MÁLAGA 2027</small></span>
@@ -2115,7 +2128,8 @@ function App() {
       {errorCount ? <div className="error-banner" role="status"><strong>{offline ? 'Brak połączenia ze źródłem.' : 'Nie wszystkie arkusze zostały odświeżone.'}</strong><span>{Object.values(errors).join(' · ')}</span>{fromCache ? <span>Pokazuję ostatnią lokalną kopię.</span> : null}</div> : null}
 
       <main>
-        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} plan={data.plan} now={calendarNow} freshnessState={freshness.state} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} onCheckinSubmit={submitDailyCheckin} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
+        {tab === 'dashboard' && (isRunnaDate(calendarNow) ? <RunnaDashboard feed={data.feed} log={data.log} raw={data.raw || []} plan={data.plan} now={calendarNow} freshnessState={freshness.state} feedbackAccess={feedbackAccess} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onShowLog={() => setTab('log')} onShowPlan={() => setTab('plan')} onCheckinSubmit={submitDailyCheckin} /> : <Dashboard feed={data.feed} log={data.log} plan={data.plan} raw={data.raw || []} loading={loading} freshnessState={freshness.state} verifierReady={!loading && !errorCount} transportMeta={transportMeta} now={calendarNow} />)}
+        {tab === 'progress' && <GlassProgress log={data.log} raw={data.raw} feed={data.feed} now={calendarNow} onArchive={() => setTab('epa')} />}
         {tab === 'epa' && (isRunnaDate(calendarNow) ? <><section className="section-hero"><span className="eyebrow">EPA · ARCHIWUM</span><h1>Jeden plan. Runna.</h1><p>Sztab CARLOS nie wydaje konkurencyjnych zaleceń biegowych. Bieżące wykonanie, feedback i porównanie Stravy znajdziesz w Logu.</p><button type="button" onClick={() => setTab('log')}>Pokaż wykonanie</button></section><details className="joint-source-archive"><summary>Analizy historyczne do 23.09 — nie zalecenia na dziś</summary><EpaPanel feed={data.feed.filter(r => !isRunnaSession(r))} log={data.log.filter(r => !isRunnaSession(r))} plan={data.plan.filter(r => !isRunnaSession(r))} loading={loading} access={feedbackAccess} now={new Date('2026-09-23T12:00:00+02:00')} onShowDecision={() => setTab('dashboard')} /></details></> : <EpaPanel feed={data.feed} log={data.log} plan={data.plan} loading={loading} access={feedbackAccess} now={calendarNow} onShowDecision={() => setTab('dashboard')} />)}
         {tab === 'log' && <Log rows={data.log} planRows={data.plan} loading={loading} feedbackAccess={feedbackAccess} feedbackQueueCount={feedbackQueueCount} onFeedbackLogin={loginFeedback} onFeedbackSubmit={submitFeedback} onTcxImport={submitTcxImport} onStravaImport={submitStravaImport} />}
         {tab === 'plan' && <Plan rows={data.plan} logRows={data.log} loading={loading} now={calendarNow} dataReady={!loading && !errorCount && !fromCache} onShowLog={() => setTab('log')} />}
@@ -2126,7 +2140,7 @@ function App() {
       <nav className="mobile-nav" aria-label="Dolna nawigacja">
         {TABS.map((item) => (
           <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>
-            <span aria-hidden="true">{item.icon}</span><small>{item.label}</small>
+            <GlassIcon name={item.id} /><small>{item.label}</small>
           </button>
         ))}
       </nav>

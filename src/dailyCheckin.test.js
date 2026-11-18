@@ -45,6 +45,14 @@ describe('poranny check-in', () => {
     });
   });
 
+  it('akceptuje polski przecinek dziesiętny i zapisuje 6,9 h jako 414 minut', () => {
+    const result = validateDailyCheckin(checkin({ sleepHours: '6,9', hrvOrthostatic: '55,5', weightKg: '90,2' }), {
+      now: new Date('2026-11-17T10:00:00Z'),
+    });
+    expect(result.ok).toBe(true);
+    expect(result.value).toMatchObject({ sleepMinutes: 414, hrvOrthostatic: 55.5, weightKg: 90.2 });
+  });
+
   it('odrzuca nieprawidłowe liczby, przyszłą datę, brak odczucia i niepotwierdzone objawy', () => {
     const result = validateDailyCheckin(checkin({ date: '2026-11-18', hrLying: '900', wellbeing: '', symptomsConfirmed: false }), {
       now: new Date('2026-11-17T10:00:00Z'),
